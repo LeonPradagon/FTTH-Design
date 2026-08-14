@@ -1,0 +1,11 @@
+shapely
+simplekml
+osmnx
+scikit-learn
+numpy
+fastapi
+uvicorn
+python-multipart
+
+openai
+python-dotenv

@@ -1,0 +1,9 @@
+.env
+.DS_Store
+__pycache__/
+cache/
+dashboard/public/data/design_ftth_regen_*.kmz
+dashboard/public/data/design_ftth_regen_*.kml
+dashboard/public/data/design_ftth_*.kmz
+dashboard/public/data/design_ftth_*.kml
+dashboard/public/data/app.log
