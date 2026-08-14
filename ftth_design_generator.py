@@ -787,6 +787,37 @@ def build_feeder_chain(pop, odcs, road_graph=None):
     return segments, ordered
 
 
+def build_feeder_segments_preserving_order(pop, odcs, road_graph=None):
+    """Bangun rute feeder dari POP ke ODC TANPA mengubah urutan ODC.
+    Dipakai oleh regenerate_cables_only: urutan ODC sudah benar dari cache
+    (sudah di-sort & renumber saat generate pertama), jadi tidak perlu
+    menjalankan ulang order_odcs_chain + 2-opt yang bisa menghasilkan
+    urutan berbeda.
+
+    Return: (feeder_segments, odcs)
+      feeder_segments: list of dict {'from_label', 'to_label', 'coords'}
+      odcs: list ODC dengan urutan yang tidak berubah
+    """
+    segments = []
+    current_label = pop["name"]
+    current_latlon = (pop["lat"], pop["lon"])
+    for odc in odcs:
+        target_latlon = (odc.lat, odc.lon)
+        path = None
+        if road_graph is not None:
+            try:
+                path = route_along_road(road_graph, current_latlon, target_latlon)
+            except Exception as e:
+                print(f"  Peringatan: gagal routing jalan {current_label}->{odc.id} ({e}), pakai garis lurus.")
+        if not path:
+            path = [current_latlon, target_latlon]
+        segments.append({"from_label": current_label, "to_label": odc.id, "coords": path})
+        current_label = odc.id
+        current_latlon = target_latlon
+
+    return segments, odcs
+
+
 # =============================================================================
 # 3. CAPACITATED CLUSTERING (nearest-neighbor murni, tanpa KMeans)
 # =============================================================================
@@ -1236,8 +1267,8 @@ def regenerate_cables_only(output_path, include_homepass=False):
     total_houses = sum(len(odp.houses) for odc in odcs for odp in odc.odps)
     print(f"  Loaded: {len(odcs)} ODC, {total_odp} ODP, {total_houses} rumah")
 
-    # Re-route feeder chain (POP -> ODC1 -> ODC2 -> ...)
-    feeder_segments, odcs = build_feeder_chain(pop, odcs, road_graph=road_graph)
+    # Route feeder tanpa mengubah urutan ODC (sudah benar dari cache)
+    feeder_segments, odcs = build_feeder_segments_preserving_order(pop, odcs, road_graph=road_graph)
 
     # Export KMZ dengan routing kabel baru
     export_kmz(
