@@ -7,6 +7,7 @@ from backend.services.generator.models import Splitter, ODP, ODC
 from backend.services.generator.osm_client import fetch_road_graph
 from backend.services.generator.routing import build_feeder_segments_preserving_order, build_feeder_chain
 from backend.services.generator.kml_builder import export_kmz
+from backend.services.generator.csv_exporter import export_csv
 from backend.services.generator.kml_parser import read_custom_mapped_kml
 from backend.utils.geometry import haversine_m
 
@@ -107,7 +108,7 @@ def load_road_graph():
         return pickle.load(f)
 
 
-def regenerate_cables_only(output_path, include_homepass=False):
+def regenerate_cables_only(output_path, include_homepass=False, output_csv=None):
     """Regenerate HANYA jalur kabel (feeder, distribusi, drop) tanpa mengubah
     posisi ODC/ODP/tiang/rumah. Membaca posisi dari design state cache dan
     road graph dari pickle cache, lalu menjalankan routing + export KMZ.
@@ -169,17 +170,18 @@ def regenerate_cables_only(output_path, include_homepass=False):
     feeder_segments, odcs = build_feeder_segments_preserving_order(pop, odcs, road_graph=road_graph)
 
     # Export KMZ dengan routing kabel baru
-    export_kmz(
-        pop, odcs, feeder_segments, output_path,
-        include_homepass=include_homepass,
-        road_graph=road_graph,
-        road_feeder=(road_graph is not None),
-    )
+    export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=include_homepass, road_graph=road_graph, road_feeder=True)
+    if output_csv:
+        try:
+            export_csv(pop, odcs, feeder_segments, output_csv)
+        except Exception as e:
+            logger.warning(f"Gagal generate CSV: {e}")
+    print(f"Selesai! File KMZ disimpan di {output_path}")
 
     return output_path
 
 
-def generate_cables_from_custom_points(file_path, output_path, include_homepass=True):
+def generate_cables_from_custom_points(file_path, output_path, include_homepass=False, output_csv=None):
     """
     Men-generate jalur kabel (routing mengikuti jalan OSM) dari file KML custom 
     yang sudah berisi titik-titik mapping OLT, ODC, ODP, dan RUMAH.

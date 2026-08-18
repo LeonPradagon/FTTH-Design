@@ -14,12 +14,13 @@ from backend.services.generator.clustering import build_design
 from backend.services.generator.routing import build_feeder_chain, enforce_min_distance_between_odcs
 from backend.services.generator.core_logic import save_design_state
 from backend.services.generator.kml_builder import export_kmz
+from backend.services.generator.csv_exporter import export_csv
 import math
 
 router = APIRouter()
 
 # Helper for the main generation logic
-def _run_generator_logic(boundary_path, pop_path, output_kmz):
+def _run_generator_logic(boundary_path, pop_path, output_kmz, output_csv=None):
     boundary = read_boundary(boundary_path)
     pop_points = read_points(pop_path)
     pop = pop_points[0]
@@ -43,7 +44,12 @@ def _run_generator_logic(boundary_path, pop_path, output_kmz):
     except Exception as e:
         logger.warning(f"Gagal menyimpan design state ({e})")
         
-    export_kmz(pop, odcs, feeder_segments, output_kmz, include_homepass=False, road_graph=road_graph, road_feeder=True)
+    export_kmz(pop, odcs, feeder_segments, output_kmz, include_homepass=True, road_graph=road_graph, road_feeder=True)
+    if output_csv:
+        try:
+            export_csv(pop, odcs, feeder_segments, output_csv)
+        except Exception as e:
+            logger.warning(f"Gagal generate CSV ({e})")
 
 
 @router.post("/generate")
@@ -72,18 +78,21 @@ async def generate_design(
         raise HTTPException(status_code=404, detail=f"POP file not found: {pop_path}")
 
     timestamp = int(time.time())
-    output_kmz = f"design_ftth_{timestamp}.kmz"
+    output_kmz_name = f"design_ftth_{timestamp}.kmz"
+    output_kmz_path = f"dashboard/public/data/{output_kmz_name}"
     output_kml = f"dashboard/public/data/design_ftth_{timestamp}.kml"
+    output_csv_name = f"design_ftth_{timestamp}.csv"
+    output_csv_path = f"dashboard/public/data/{output_csv_name}"
 
     try:
         # Run generator in a thread to avoid blocking the event loop
-        logger.info(f"Running FTTH generation: boundary={boundary_path}, pop={pop_path}, output={output_kmz}")
-        await asyncio.to_thread(_run_generator_logic, boundary_path, pop_path, output_kmz)
+        logger.info(f"Running FTTH generation: boundary={boundary_path}, pop={pop_path}, output={output_kmz_path}")
+        await asyncio.to_thread(_run_generator_logic, boundary_path, pop_path, output_kmz_path, output_csv_path)
 
-        if not os.path.exists(output_kmz):
+        if not os.path.exists(output_kmz_path):
             raise HTTPException(status_code=500, detail="Script ran successfully but KMZ output not found.")
 
-        with zipfile.ZipFile(output_kmz, 'r') as z:
+        with zipfile.ZipFile(output_kmz_path, 'r') as z:
             kml_name = next((n for n in z.namelist() if n.lower().endswith(".kml")), None)
             if not kml_name:
                 raise HTTPException(status_code=500, detail="No KML found inside generated KMZ")
@@ -93,8 +102,14 @@ async def generate_design(
             with open(output_kml, "wb") as f:
                 f.write(kml_content)
 
-        os.remove(output_kmz)
-        return {"status": "success", "message": "FTTH design generated successfully", "url": f"http://localhost:8000/data/design_ftth_{timestamp}.kml"}
+        # Do not delete KMZ so user can download it
+        return {
+            "status": "success", 
+            "message": "FTTH design generated successfully", 
+            "url": f"http://localhost:8000/data/design_ftth_{timestamp}.kml",
+            "kmz_url": f"http://localhost:8000/data/{output_kmz_name}",
+            "csv_url": f"http://localhost:8000/data/{output_csv_name}"
+        }
 
     except Exception as e:
         logger.exception("Exception during generation")
@@ -104,17 +119,20 @@ async def generate_design(
 @router.post("/regenerate-cables")
 async def regenerate_cables():
     timestamp = int(time.time())
-    output_kmz = f"design_ftth_regen_{timestamp}.kmz"
+    output_kmz_name = f"design_ftth_regen_{timestamp}.kmz"
+    output_kmz_path = f"dashboard/public/data/{output_kmz_name}"
     output_kml = f"dashboard/public/data/design_ftth_regen_{timestamp}.kml"
+    output_csv_name = f"design_ftth_regen_{timestamp}.csv"
+    output_csv_path = f"dashboard/public/data/{output_csv_name}"
 
     try:
-        logger.info(f"Starting regenerate_cables_only -> {output_kmz}")
-        await asyncio.to_thread(regenerate_cables_only, output_path=output_kmz, include_homepass=False)
+        logger.info(f"Starting regenerate_cables_only -> {output_kmz_path}")
+        await asyncio.to_thread(regenerate_cables_only, output_path=output_kmz_path, include_homepass=True, output_csv=output_csv_path)
 
-        if not os.path.exists(output_kmz):
+        if not os.path.exists(output_kmz_path):
             raise HTTPException(status_code=500, detail="Regenerate succeeded but KMZ output not found.")
 
-        with zipfile.ZipFile(output_kmz, 'r') as z:
+        with zipfile.ZipFile(output_kmz_path, 'r') as z:
             kml_name = next((n for n in z.namelist() if n.lower().endswith(".kml")), None)
             if not kml_name:
                 raise HTTPException(status_code=500, detail="No KML found inside regenerated KMZ")
@@ -124,8 +142,13 @@ async def regenerate_cables():
             with open(output_kml, "wb") as f:
                 f.write(kml_content)
 
-        os.remove(output_kmz)
-        return {"status": "success", "message": "Kabel berhasil di-regenerate", "url": f"http://localhost:8000/data/design_ftth_regen_{timestamp}.kml"}
+        return {
+            "status": "success", 
+            "message": "Kabel berhasil di-regenerate", 
+            "url": f"http://localhost:8000/data/design_ftth_regen_{timestamp}.kml",
+            "kmz_url": f"http://localhost:8000/data/{output_kmz_name}",
+            "csv_url": f"http://localhost:8000/data/{output_csv_name}"
+        }
 
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -140,20 +163,23 @@ async def generate_custom(
 ):
     timestamp = int(time.time())
     custom_path = f"dashboard/public/data/custom_mapping_{timestamp}.kml"
-    output_kmz = f"design_ftth_custom_{timestamp}.kmz"
+    output_kmz_name = f"design_ftth_custom_{timestamp}.kmz"
+    output_kmz_path = f"dashboard/public/data/{output_kmz_name}"
     output_kml = f"dashboard/public/data/design_ftth_{timestamp}.kml"
+    output_csv_name = f"design_ftth_custom_{timestamp}.csv"
+    output_csv_path = f"dashboard/public/data/{output_csv_name}"
 
     os.makedirs("dashboard/public/data", exist_ok=True)
     with open(custom_path, "wb") as buffer:
         shutil.copyfileobj(customFile.file, buffer)
 
     try:
-        await asyncio.to_thread(generate_cables_from_custom_points, file_path=custom_path, output_path=output_kmz, include_homepass=True)
+        await asyncio.to_thread(generate_cables_from_custom_points, file_path=custom_path, output_path=output_kmz_path, include_homepass=True, output_csv=output_csv_path)
 
-        if not os.path.exists(output_kmz):
+        if not os.path.exists(output_kmz_path):
             raise HTTPException(status_code=500, detail="Generate succeeded but KMZ output not found.")
 
-        with zipfile.ZipFile(output_kmz, 'r') as z:
+        with zipfile.ZipFile(output_kmz_path, 'r') as z:
             kml_name = next((n for n in z.namelist() if n.lower().endswith(".kml")), None)
             if not kml_name:
                 raise HTTPException(status_code=500, detail="No KML found inside regenerated KMZ")
@@ -162,8 +188,13 @@ async def generate_custom(
             with open(output_kml, "wb") as f:
                 f.write(kml_content)
 
-        os.remove(output_kmz)
-        return {"status": "success", "message": "Jalur kabel berhasil dibuat dari custom mapping KML.", "url": f"http://localhost:8000/data/design_ftth_{timestamp}.kml"}
+        return {
+            "status": "success", 
+            "message": "Jalur kabel berhasil dibuat dari custom mapping KML.", 
+            "url": f"http://localhost:8000/data/design_ftth_{timestamp}.kml",
+            "kmz_url": f"http://localhost:8000/data/{output_kmz_name}",
+            "csv_url": f"http://localhost:8000/data/{output_csv_name}"
+        }
 
     except Exception as e:
         logger.exception("Exception during custom cable generation")
