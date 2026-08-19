@@ -106,11 +106,14 @@ async def generate_design(
         return {
             "status": "success", 
             "message": "FTTH design generated successfully", 
-            "url": f"http://localhost:8000/data/design_ftth_{timestamp}.kml",
-            "kmz_url": f"http://localhost:8000/data/{output_kmz_name}",
-            "csv_url": f"http://localhost:8000/data/{output_csv_name}"
+            "url": f"/data/design_ftth_{timestamp}.kml",
+            "kmz_url": f"/data/{output_kmz_name}",
+            "csv_url": f"/data/{output_csv_name}"
         }
 
+    except ValueError as e:
+        logger.warning(f"Validation error during generation: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.exception("Exception during generation")
         raise HTTPException(status_code=500, detail=str(e))
@@ -145,9 +148,9 @@ async def regenerate_cables():
         return {
             "status": "success", 
             "message": "Kabel berhasil di-regenerate", 
-            "url": f"http://localhost:8000/data/design_ftth_regen_{timestamp}.kml",
-            "kmz_url": f"http://localhost:8000/data/{output_kmz_name}",
-            "csv_url": f"http://localhost:8000/data/{output_csv_name}"
+            "url": f"/data/design_ftth_regen_{timestamp}.kml",
+            "kmz_url": f"/data/{output_kmz_name}",
+            "csv_url": f"/data/{output_csv_name}"
         }
 
     except FileNotFoundError as e:
@@ -191,11 +194,14 @@ async def generate_custom(
         return {
             "status": "success", 
             "message": "Jalur kabel berhasil dibuat dari custom mapping KML.", 
-            "url": f"http://localhost:8000/data/design_ftth_{timestamp}.kml",
-            "kmz_url": f"http://localhost:8000/data/{output_kmz_name}",
-            "csv_url": f"http://localhost:8000/data/{output_csv_name}"
+            "url": f"/data/design_ftth_{timestamp}.kml",
+            "kmz_url": f"/data/{output_kmz_name}",
+            "csv_url": f"/data/{output_csv_name}"
         }
 
+    except ValueError as e:
+        logger.warning(f"Validation error during generation: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.exception("Exception during custom cable generation")
         raise HTTPException(status_code=500, detail=str(e))

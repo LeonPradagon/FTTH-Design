@@ -9,8 +9,12 @@ def fetch_houses_in_boundary(polygon):
     import osmnx as ox
 
     print("Mengambil data bangunan dari OpenStreetMap...")
-    gdf = ox.features_from_polygon(polygon, tags={"building": True})
-    gdf = gdf[gdf.geometry.type.isin(["Polygon", "MultiPolygon", "Point"])]
+    try:
+        gdf = ox.features_from_polygon(polygon, tags={"building": True})
+        gdf = gdf[gdf.geometry.type.isin(["Polygon", "MultiPolygon", "Point"])]
+    except Exception as e:
+        print(f"OSMnx error saat mengambil bangunan: {e}")
+        return []
 
     houses = []
     for _, row in gdf.iterrows():

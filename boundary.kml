@@ -1,55 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2" xmlns:kml="http://www.opengis.net/kml/2.2" xmlns:atom="http://www.w3.org/2005/Atom">
-<Document>
-	<name>boundary.kml</name>
-	<StyleMap id="m_ylw-pushpin">
-		<Pair>
-			<key>normal</key>
-			<styleUrl>#s_ylw-pushpin</styleUrl>
-		</Pair>
-		<Pair>
-			<key>highlight</key>
-			<styleUrl>#s_ylw-pushpin_hl</styleUrl>
-		</Pair>
-	</StyleMap>
-	<Style id="s_ylw-pushpin">
-		<IconStyle>
-			<scale>1.1</scale>
-			<Icon>
-				<href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
-			</Icon>
-			<hotSpot x="20" y="2" xunits="pixels" yunits="pixels"/>
-		</IconStyle>
-		<PolyStyle>
-			<color>330000ff</color>
-		</PolyStyle>
-	</Style>
-	<Style id="s_ylw-pushpin_hl">
-		<IconStyle>
-			<scale>1.3</scale>
-			<Icon>
-				<href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
-			</Icon>
-			<hotSpot x="20" y="2" xunits="pixels" yunits="pixels"/>
-		</IconStyle>
-		<PolyStyle>
-			<color>330000ff</color>
-		</PolyStyle>
-	</Style>
-	<Placemark>
-		<name>Boundary</name>
-		<styleUrl>#m_ylw-pushpin</styleUrl>
-		<Polygon>
-			<tessellate>1</tessellate>
-			<outerBoundaryIs>
-				<LinearRing>
-					<coordinates>
-						112.7283044228299,-7.352581252576186,0 112.7272440843326,-7.352390440467345,0 112.7267904973301,-7.352383342948641,0 112.7264944639466,-7.352397539258702,0 112.725149885204,-7.352111864756314,0 112.7249005858175,-7.35248958038236,0 112.7246019226737,-7.353878890350457,0 112.7248719740031,-7.354004465522438,0 112.7254838672721,-7.354240387653118,0 112.7258814564919,-7.354389753360786,0 112.7261532621003,-7.354538069417194,0 112.7265278761526,-7.354856930321945,0 112.7266168592182,-7.354907500805186,0 112.7271019331031,-7.355114416484066,0 112.7292134949828,-7.355259048215913,0 112.7292577213914,-7.352642406761275,0 112.7283044228299,-7.352581252576186,0 
-					</coordinates>
-				</LinearRing>
-			</outerBoundaryIs>
-		</Polygon>
-		<atom:link rel="app" href="https://www.google.com/earth/about/versions/#earth-pro" title="Google Earth Pro 7.3.7.1155"></atom:link>
-	</Placemark>
-</Document>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <Placemark>
+      <name>Boundary</name>
+      <Polygon>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates>
+              118.01,-2.54,0
+              118.02,-2.54,0
+              118.02,-2.55,0
+              118.01,-2.55,0
+              118.01,-2.54,0
+            </coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+      </Polygon>
+    </Placemark>
+  </Document>
 </kml>
