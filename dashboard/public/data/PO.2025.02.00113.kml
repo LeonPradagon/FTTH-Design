@@ -1,0 +1,5529 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2" xmlns:kml="http://www.opengis.net/kml/2.2" xmlns:atom="http://www.w3.org/2005/Atom">
+<Document>
+	<name>PO.2025.02.00113.kml</name>
+	<Schema name="NEW-COVERAGE" id="S_NEW_COVERAGE_DDS">
+		<SimpleField type="double" name="Longitude">
+			<displayName>&lt;b&gt;Longitude&lt;/b&gt;</displayName>
+		</SimpleField>
+		<SimpleField type="double" name="Latitude">
+			<displayName>&lt;b&gt;Latitude&lt;/b&gt;</displayName>
+		</SimpleField>
+		<SimpleField type="string" name="Description">
+			<displayName>&lt;b&gt;Description&lt;/b&gt;</displayName>
+		</SimpleField>
+	</Schema>
+	<StyleMap id="failed06010">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#failed135000</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#failed13420</styleUrl>
+		</Pair>
+	</StyleMap>
+	<Style id="failed13420">
+		<IconStyle>
+			<Icon>
+				<href>http://maps.google.com/mapfiles/kml/shapes/electronics.png</href>
+			</Icon>
+			<hotSpot x="0.5" y="0" xunits="fraction" yunits="fraction"/>
+		</IconStyle>
+	</Style>
+	<Style id="failed135000">
+		<IconStyle>
+			<Icon>
+				<href>http://maps.google.com/mapfiles/kml/shapes/electronics.png</href>
+			</Icon>
+			<hotSpot x="0.5" y="0" xunits="fraction" yunits="fraction"/>
+		</IconStyle>
+	</Style>
+	<Style id="hlightPointStyle18305">
+		<IconStyle>
+			<Icon>
+				<href>https://maps.google.com/mapfiles/kml/shapes/placemark_circle_highlight.png</href>
+			</Icon>
+		</IconStyle>
+		<BalloonStyle>
+			<text><![CDATA[<table border="0">
+  <tr><td><b>Longitude</b></td><td>$[NEW-COVERAGE/Longitude]</td></tr>
+  <tr><td><b>Latitude</b></td><td>$[NEW-COVERAGE/Latitude]</td></tr>
+  <tr><td><b>Description</b></td><td>$[NEW-COVERAGE/Description]</td></tr>
+</table>]]></text>
+		</BalloonStyle>
+	</Style>
+	<StyleMap id="inline1101102">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197326</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213222</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline11011100">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197313</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline321326</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline11011101">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197300</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline321320</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101111">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197323</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213229</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline11011110">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197322</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213219</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101112">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline19738</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213225</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101113">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197324</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213223</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101114">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline19739</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213226</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101115">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197316</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213227</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101116">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197328</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213230</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101117">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197317</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213213</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101118">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline19734</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213211</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101119">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197329</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline321325</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101120">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline19735</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213221</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline11011200">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197321</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline321328</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101121">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197330</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213214</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101122">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline19737</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213217</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101123">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197327</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline321324</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101124">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197310</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213210</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101125">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline19731</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213200</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101126">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197314</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213216</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101127">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline19733</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline321327</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101128">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197320</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213220</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101129">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197318</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213218</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101130">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197311</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213224</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline11011300">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197315</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213212</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101140">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline19736</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline321323</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101150">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197331</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline321322</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101160">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197312</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline321329</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline110117">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197325</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213228</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101180">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline19732</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline321321</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline110119">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline197319</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213215</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline110131">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline1932101</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline32130101</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101310">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline19321</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline321301</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101311">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline1932100</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3213010</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1101312">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline193210</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline32130100</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1102100">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline191410</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline321412</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline11021000">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline1914110</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline321411</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline110211">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline191413</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3214100</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline110212">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline191412</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3214110</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline110311">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline1927118</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline32127123</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1103110">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline192716</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3212719</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1103111">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline19271</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3212718</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline11031110">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline1927116</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline32127113</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline11031111">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline1927117</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline32127117</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline11031112">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline192717</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline32127111</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline11031113">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline1927111</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3212714</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline11031114">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline1927122</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline32127121</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline11031115">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline1927113</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline32127116</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline11031116">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline192713</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3212713</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline11031117">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline192718</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline32127110</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline11031118">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline192710</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3212711</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline11031119">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline192715</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline32127114</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1103112">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline192711</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline32127115</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline11031120">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline1927115</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline32127112</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline11031121">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline192714</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3212717</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline11031122">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline1927123</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline32127122</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline11031123">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline1927120</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3212712</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1103113">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline192712</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline32127120</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1103114">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline1927110</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline32127119</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1103115">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline1927121</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline321271</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1103116">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline1927114</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3212716</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1103117">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline192719</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline32127118</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1103118">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline1927112</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3212715</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline1103119">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline1927119</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline3212710</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="inline14728870302">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#inline49041251400102</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#inline904000751006002</styleUrl>
+		</Pair>
+	</StyleMap>
+	<Style id="inline191410">
+		<LineStyle>
+			<color>ffff00aa</color>
+			<width>3</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline1914110">
+		<LineStyle>
+			<color>ffff00aa</color>
+			<width>3</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline191412">
+		<LineStyle>
+			<color>ffff00aa</color>
+			<width>3</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline191413">
+		<LineStyle>
+			<color>ffff00aa</color>
+			<width>3</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline19271">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline192710">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline192711">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline1927110">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline1927111">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline1927112">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline1927113">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline1927114">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline1927115">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline1927116">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline1927117">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline1927118">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline1927119">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline192712">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline1927120">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline1927121">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline1927122">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline1927123">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline192713">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline192714">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline192715">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline192716">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline192717">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline192718">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline192719">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline19321">
+		<LineStyle>
+			<color>ffff00aa</color>
+			<width>3</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline193210">
+		<LineStyle>
+			<color>ffff00aa</color>
+			<width>3</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline1932100">
+		<LineStyle>
+			<color>ffff00aa</color>
+			<width>3</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline1932101">
+		<LineStyle>
+			<color>ffff00aa</color>
+			<width>3</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197300">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline19731">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197310">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197311">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197312">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197313">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197314">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197315">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197316">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197317">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197318">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197319">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline19732">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197320">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197321">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197322">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197323">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197324">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197325">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197326">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197327">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197328">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197329">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline19733">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197330">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline197331">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline19734">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline19735">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline19736">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline19737">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline19738">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline19739">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline321271">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3212710">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3212711">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline32127110">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline32127111">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline32127112">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline32127113">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline32127114">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline32127115">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline32127116">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline32127117">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline32127118">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline32127119">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3212712">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline32127120">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline32127121">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline32127122">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline32127123">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3212713">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3212714">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3212715">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3212716">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3212717">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3212718">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3212719">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline321301">
+		<LineStyle>
+			<color>ffff00aa</color>
+			<width>3</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213010">
+		<LineStyle>
+			<color>ffff00aa</color>
+			<width>3</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline32130100">
+		<LineStyle>
+			<color>ffff00aa</color>
+			<width>3</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline32130101">
+		<LineStyle>
+			<color>ffff00aa</color>
+			<width>3</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline321320">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213200">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline321321">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213210">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213211">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213212">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213213">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213214">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213215">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213216">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213217">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213218">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213219">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline321322">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213220">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213221">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213222">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213223">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213224">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213225">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213226">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213227">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213228">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213229">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline321323">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3213230">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline321324">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline321325">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline321326">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline321327">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline321328">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline321329">
+		<LineStyle>
+			<color>ffff00ff</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3214100">
+		<LineStyle>
+			<color>ffff00aa</color>
+			<width>3</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline321411">
+		<LineStyle>
+			<color>ffff00aa</color>
+			<width>3</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline3214110">
+		<LineStyle>
+			<color>ffff00aa</color>
+			<width>3</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline321412">
+		<LineStyle>
+			<color>ffff00aa</color>
+			<width>3</width>
+		</LineStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="inline49041251400102">
+		<LineStyle>
+			<color>ffff00aa</color>
+			<width>4</width>
+		</LineStyle>
+	</Style>
+	<Style id="inline904000751006002">
+		<LineStyle>
+			<color>ffff00aa</color>
+			<width>4</width>
+		</LineStyle>
+	</Style>
+	<StyleMap id="msn_triangle12128">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#sn_triangle2754</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#sh_triangle19113</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="msn_triangle20017">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#sn_triangle2649</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#sh_triangle3633</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="msn_triangle4187">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#sn_triangle21910</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#sh_triangle31109</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="msn_triangle4522">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#sn_triangle3059</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#sh_triangle21127</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="msn_triangle9412">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#sn_triangle2452</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#sh_triangle4719</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="msn_ylw-pushpin1114000">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#sn_ylw-pushpin14411</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#sh_ylw-pushpin10602</styleUrl>
+		</Pair>
+	</StyleMap>
+	<Style id="normPointStyle1745">
+		<IconStyle>
+			<Icon>
+				<href>https://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href>
+			</Icon>
+		</IconStyle>
+		<BalloonStyle>
+			<text><![CDATA[<table border="0">
+  <tr><td><b>Longitude</b></td><td>$[NEW-COVERAGE/Longitude]</td></tr>
+  <tr><td><b>Latitude</b></td><td>$[NEW-COVERAGE/Latitude]</td></tr>
+  <tr><td><b>Description</b></td><td>$[NEW-COVERAGE/Description]</td></tr>
+</table>]]></text>
+		</BalloonStyle>
+	</Style>
+	<StyleMap id="pointStyleMap173012">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#normPointStyle1745</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#hlightPointStyle18305</styleUrl>
+		</Pair>
+	</StyleMap>
+	<Style id="sh_triangle19113">
+		<IconStyle>
+			<color>ffff383c</color>
+			<scale>1.4</scale>
+			<Icon>
+				<href>https://maps.google.com/mapfiles/kml/shapes/triangle.png</href>
+			</Icon>
+		</IconStyle>
+		<LineStyle>
+			<color>fff39621</color>
+			<width>4</width>
+		</LineStyle>
+		<PolyStyle>
+			<color>fff39621</color>
+		</PolyStyle>
+	</Style>
+	<Style id="sh_triangle21127">
+		<IconStyle>
+			<color>ffff383c</color>
+			<scale>1.16667</scale>
+			<Icon>
+				<href>https://maps.google.com/mapfiles/kml/shapes/triangle.png</href>
+			</Icon>
+		</IconStyle>
+		<LineStyle>
+			<color>fff39621</color>
+			<width>4</width>
+		</LineStyle>
+		<PolyStyle>
+			<color>fff39621</color>
+		</PolyStyle>
+	</Style>
+	<Style id="sh_triangle31109">
+		<IconStyle>
+			<color>ff3200ff</color>
+			<scale>1.4</scale>
+			<Icon>
+				<href>https://maps.google.com/mapfiles/kml/shapes/triangle.png</href>
+			</Icon>
+		</IconStyle>
+		<LineStyle>
+			<color>ff3643f4</color>
+			<width>4</width>
+		</LineStyle>
+		<PolyStyle>
+			<color>ff3643f4</color>
+		</PolyStyle>
+	</Style>
+	<Style id="sh_triangle3633">
+		<IconStyle>
+			<color>ff3200ff</color>
+			<scale>1.4</scale>
+			<Icon>
+				<href>https://maps.google.com/mapfiles/kml/shapes/triangle.png</href>
+			</Icon>
+		</IconStyle>
+		<LineStyle>
+			<color>ff3643f4</color>
+			<width>4</width>
+		</LineStyle>
+		<PolyStyle>
+			<color>ff3643f4</color>
+		</PolyStyle>
+	</Style>
+	<Style id="sh_triangle4719">
+		<IconStyle>
+			<color>ffff383c</color>
+			<scale>1.4</scale>
+			<Icon>
+				<href>https://maps.google.com/mapfiles/kml/shapes/triangle.png</href>
+			</Icon>
+		</IconStyle>
+		<LineStyle>
+			<color>fff39621</color>
+			<width>4</width>
+		</LineStyle>
+		<PolyStyle>
+			<color>fff39621</color>
+		</PolyStyle>
+	</Style>
+	<Style id="sh_ylw-pushpin10602">
+		<IconStyle>
+			<scale>1.3</scale>
+			<Icon>
+				<href>https://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+			</Icon>
+			<hotSpot x="20" y="2" xunits="pixels" yunits="pixels"/>
+		</IconStyle>
+		<LineStyle>
+			<color>ffff0000</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<color>40ff0000</color>
+		</PolyStyle>
+	</Style>
+	<Style id="sn_triangle21910">
+		<IconStyle>
+			<color>ff3200ff</color>
+			<scale>1.2</scale>
+			<Icon>
+				<href>https://maps.google.com/mapfiles/kml/shapes/triangle.png</href>
+			</Icon>
+		</IconStyle>
+		<LineStyle>
+			<color>ff3643f4</color>
+			<width>4</width>
+		</LineStyle>
+		<PolyStyle>
+			<color>ff3643f4</color>
+		</PolyStyle>
+	</Style>
+	<Style id="sn_triangle2452">
+		<IconStyle>
+			<color>ffff383c</color>
+			<scale>1.2</scale>
+			<Icon>
+				<href>https://maps.google.com/mapfiles/kml/shapes/triangle.png</href>
+			</Icon>
+		</IconStyle>
+		<LineStyle>
+			<color>fff39621</color>
+			<width>4</width>
+		</LineStyle>
+		<PolyStyle>
+			<color>fff39621</color>
+		</PolyStyle>
+	</Style>
+	<Style id="sn_triangle2649">
+		<IconStyle>
+			<color>ff3200ff</color>
+			<scale>1.2</scale>
+			<Icon>
+				<href>https://maps.google.com/mapfiles/kml/shapes/triangle.png</href>
+			</Icon>
+		</IconStyle>
+		<LineStyle>
+			<color>ff3643f4</color>
+			<width>4</width>
+		</LineStyle>
+		<PolyStyle>
+			<color>ff3643f4</color>
+		</PolyStyle>
+	</Style>
+	<Style id="sn_triangle2754">
+		<IconStyle>
+			<color>ffff383c</color>
+			<scale>1.2</scale>
+			<Icon>
+				<href>https://maps.google.com/mapfiles/kml/shapes/triangle.png</href>
+			</Icon>
+		</IconStyle>
+		<LineStyle>
+			<color>fff39621</color>
+			<width>4</width>
+		</LineStyle>
+		<PolyStyle>
+			<color>fff39621</color>
+		</PolyStyle>
+	</Style>
+	<Style id="sn_triangle3059">
+		<IconStyle>
+			<color>ffff383c</color>
+			<Icon>
+				<href>https://maps.google.com/mapfiles/kml/shapes/triangle.png</href>
+			</Icon>
+		</IconStyle>
+		<LineStyle>
+			<color>fff39621</color>
+			<width>4</width>
+		</LineStyle>
+		<PolyStyle>
+			<color>fff39621</color>
+		</PolyStyle>
+	</Style>
+	<Style id="sn_ylw-pushpin14411">
+		<IconStyle>
+			<scale>1.1</scale>
+			<Icon>
+				<href>https://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+			</Icon>
+			<hotSpot x="20" y="2" xunits="pixels" yunits="pixels"/>
+		</IconStyle>
+		<LineStyle>
+			<color>ffff0000</color>
+			<width>2</width>
+		</LineStyle>
+		<PolyStyle>
+			<color>40ff0000</color>
+		</PolyStyle>
+	</Style>
+	<Folder>
+		<name>PO.2025.02.00113</name>
+		<visibility>0</visibility>
+		<Folder>
+			<name>OLT</name>
+			<visibility>0</visibility>
+			<Placemark id="11F3FA59622398EB87756">
+				<name>RBS ST MADIUN</name>
+				<visibility>0</visibility>
+				<styleUrl>#failed06010</styleUrl>
+				<Point>
+					<coordinates>111.5264223416798,-7.619141992806875,0</coordinates>
+				</Point>
+			</Placemark>
+		</Folder>
+		<Folder>
+			<name>BOUNDARY</name>
+			<visibility>0</visibility>
+			<Placemark id="65215B169F398EB87756">
+				<name>RW 03</name>
+				<visibility>0</visibility>
+				<styleUrl>#msn_ylw-pushpin1114000</styleUrl>
+				<Polygon>
+					<tessellate>1</tessellate>
+					<outerBoundaryIs>
+						<LinearRing>
+							<coordinates>
+								111.528819371391,-7.618869443756876,0 111.528134227064,-7.61880703185371,0 111.5277150817534,-7.619631109396109,0 111.5276547803687,-7.619626162925386,0 111.5277315510814,-7.619401310966903,0 111.5275072564508,-7.619280240664111,0 111.5271741331955,-7.619668526632231,0 111.5273889891023,-7.620053066365275,0 111.5273931542824,-7.620147646814827,0 111.5276561473218,-7.620170108775601,0 111.527626221429,-7.619676949398679,0 111.5279675948647,-7.619708679863835,0 111.5285381785967,-7.619822214630484,0 111.528819371391,-7.618869443756876,0 
+							</coordinates>
+						</LinearRing>
+					</outerBoundaryIs>
+				</Polygon>
+			</Placemark>
+		</Folder>
+		<Folder>
+			<name>LINE FEEDER</name>
+			<visibility>0</visibility>
+			<Placemark id="1479EB41532398EB87756">
+				<name>2C FEEDER LINE 1</name>
+				<visibility>0</visibility>
+				<styleUrl>#inline14728870302</styleUrl>
+				<LineString>
+					<tessellate>1</tessellate>
+					<coordinates>
+						111.5264084559386,-7.619079821894937,0 111.5264192102094,-7.618773522266205,0 111.5268976376101,-7.618759936325535,0 111.5272763647741,-7.618750411367315,0 111.5276182736912,-7.618756291560633,0 111.5280000504718,-7.618755899876132,0 111.5282993333154,-7.618748437454248,0 111.5284189289532,-7.619161184783447,0 111.5278432087075,-7.619370045080265,0 
+					</coordinates>
+				</LineString>
+			</Placemark>
+		</Folder>
+		<Folder>
+			<name>TIANG</name>
+			<visibility>0</visibility>
+		</Folder>
+		<Folder>
+			<name>HC</name>
+			<visibility>0</visibility>
+			<Folder>
+				<name>HOME CONNECT</name>
+				<visibility>0</visibility>
+				<Placemark id="4FEDA99F952398EB8776E">
+					<name>NN 62</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61943</SimpleData>
+							<SimpleData name="Description">NN 62</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52767442167,-7.619434840859814,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="4C13D5E284A398EB8776E">
+					<name>NN 59</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61957</SimpleData>
+							<SimpleData name="Description">NN 59</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52763117105,-7.619565108652006,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="50B4F25DA6A398EB8776E">
+					<name>NN 63</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.527</SimpleData>
+							<SimpleData name="Latitude">-7.61955</SimpleData>
+							<SimpleData name="Description">NN 63</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52737061042,-7.619548809715207,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="5190CE15440398EB8776E">
+					<name>NN 64</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.527</SimpleData>
+							<SimpleData name="Latitude">-7.6197</SimpleData>
+							<SimpleData name="Description">NN 64</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52722519612,-7.619701651749815,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="49E595896D6398EB8776E">
+					<name>NN 56</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.527</SimpleData>
+							<SimpleData name="Latitude">-7.6197</SimpleData>
+							<SimpleData name="Description">NN 56</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52733277529,-7.619695376404591,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="52B39464821398EB8776E">
+					<name>NN 65</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.527</SimpleData>
+							<SimpleData name="Latitude">-7.61972</SimpleData>
+							<SimpleData name="Description">NN 65</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52741324157,-7.619715647658487,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="43BA424594D398EB8776E">
+					<name>NN 50</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61978</SimpleData>
+							<SimpleData name="Description">NN 50</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52759160846,-7.619776793729893,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="451D8CD6F90398EB8776E">
+					<name>NN 52</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.527</SimpleData>
+							<SimpleData name="Latitude">-7.61981</SimpleData>
+							<SimpleData name="Description">NN 52</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52749270201,-7.619811022233385,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="47448C44255398EB8776E">
+					<name>NN 54</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.527</SimpleData>
+							<SimpleData name="Latitude">-7.61993</SimpleData>
+							<SimpleData name="Description">NN 54</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52748230845,-7.619933978971196,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="480F0C68313398EB8776E">
+					<name>NN 55</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.527</SimpleData>
+							<SimpleData name="Latitude">-7.62001</SimpleData>
+							<SimpleData name="Description">NN 55</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.5274900198,-7.620008749943111,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="4B8CEFDEEF0398EB8776E">
+					<name>NN 58</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.527</SimpleData>
+							<SimpleData name="Latitude">-7.62006</SimpleData>
+							<SimpleData name="Description">NN 58</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52746789157,-7.620063914296315,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="444ED6AE295398EB8776E">
+					<name>NN 51</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61995</SimpleData>
+							<SimpleData name="Description">NN 51</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52757484466,-7.619947603904798,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="4668D3CF548398EB8776E">
+					<name>NN 53</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.62001</SimpleData>
+							<SimpleData name="Description">NN 53</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52757048607,-7.620006756050719,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="4A022A492EF398EB8776E">
+					<name>NN 57</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.62004</SimpleData>
+							<SimpleData name="Description">NN 57</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52754176183,-7.620042486154295,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="4D9EA484ADC398EB8776E">
+					<name>NN 60</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.62009</SimpleData>
+							<SimpleData name="Description">NN 60</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52758724988,-7.62009016720878,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="4E1C4173D40398EB8776E">
+					<name>NN 61</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.62016</SimpleData>
+							<SimpleData name="Description">NN 61</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52759227902,-7.620161282685388,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="35D48D8E12E398EB8776E">
+					<name>NN 36</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61948</SimpleData>
+							<SimpleData name="Description">NN 36</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52839459479,-7.619477377286095,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="3794C6B96CF398EB8776E">
+					<name>NN 38</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61948</SimpleData>
+							<SimpleData name="Description">NN 38</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52833055705,-7.619482029707402,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="387583B2DA6398EB8776E">
+					<name>NN 39</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61944</SimpleData>
+							<SimpleData name="Description">NN 39</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52826249599,-7.619443481071699,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="396D8DC5969398EB8776E">
+					<name>NN 40</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61947</SimpleData>
+							<SimpleData name="Description">NN 40</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.5282202512,-7.619470066338088,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="3A255189906398EB8776E">
+					<name>NN 41</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61939</SimpleData>
+							<SimpleData name="Description">NN 41</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52816191316,-7.619387319690993,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="3B4BEE7DDA1398EB8776E">
+					<name>NN 42</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61941</SimpleData>
+							<SimpleData name="Description">NN 42</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.5280911291,-7.619414280416485,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="3CC07A2512B398EB8776E">
+					<name>NN 43</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61937</SimpleData>
+							<SimpleData name="Description">NN 43</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52797832914,-7.619368884567386,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="3D82CE6CC6A398EB8776E">
+					<name>NN 44</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61937</SimpleData>
+							<SimpleData name="Description">NN 44</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52788698673,-7.619365386842096,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="3E8D8BBD1F0398EB8776E">
+					<name>NN 45</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61946</SimpleData>
+							<SimpleData name="Description">NN 45</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52786821127,-7.619462090758391,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="191F0AD2539398EB8776E">
+					<name>NN 8</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61962</SimpleData>
+							<SimpleData name="Description">NN 8</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52786016464,-7.619616617589482,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="18640F14E32398EB8776E">
+					<name>NN 7</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61964</SimpleData>
+							<SimpleData name="Description">NN 7</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52793996036,-7.619638550425609,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="178557C30CC398EB8776E">
+					<name>NN 6</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61964</SimpleData>
+							<SimpleData name="Description">NN 6</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52801472694,-7.619644199792184,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="3F9BEBBADF0398EB8776E">
+					<name>NN 46</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61966</SimpleData>
+							<SimpleData name="Description">NN 46</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52811430395,-7.619656827788113,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="40BF7132021398EB8776E">
+					<name>NN 47</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61968</SimpleData>
+							<SimpleData name="Description">NN 47</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52824506164,-7.619683745356887,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="41EB92862EB398EB8776E">
+					<name>NN 48</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61973</SimpleData>
+							<SimpleData name="Description">NN 48</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52833625674,-7.619733260386504,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="140789E22A5398EB8776E">
+					<name>NN 3</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61976</SimpleData>
+							<SimpleData name="Description">NN 3</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52841303498,-7.619763168790796,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="138CC70EC4A398EB8776E">
+					<name>NN 2</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.529</SimpleData>
+							<SimpleData name="Latitude">-7.61907</SimpleData>
+							<SimpleData name="Description">NN 2</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52872785926,-7.619074942646202,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="1534746C3C0398EB8776E">
+					<name>NN 4</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.529</SimpleData>
+							<SimpleData name="Latitude">-7.61916</SimpleData>
+							<SimpleData name="Description">NN 4</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.5287017781,-7.619162459942393,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="164D64F2DD0398EB8776E">
+					<name>NN 5</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.529</SimpleData>
+							<SimpleData name="Latitude">-7.61922</SimpleData>
+							<SimpleData name="Description">NN 5</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52867823839,-7.6192244848769,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="3234BCEDB40398EB8776E">
+					<name>NN 33</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.529</SimpleData>
+							<SimpleData name="Latitude">-7.61933</SimpleData>
+							<SimpleData name="Description">NN 33</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52859140188,-7.619333484514417,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="3468A49F1CB398EB8776E">
+					<name>NN 35</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.529</SimpleData>
+							<SimpleData name="Latitude">-7.61942</SimpleData>
+							<SimpleData name="Description">NN 35</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52864540667,-7.619424557768615,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="367DC379533398EB8776E">
+					<name>NN 37</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61938</SimpleData>
+							<SimpleData name="Description">NN 37</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52848780155,-7.619378347162014,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="3374914DFD4398EB8776E">
+					<name>NN 34</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.529</SimpleData>
+							<SimpleData name="Latitude">-7.61952</SimpleData>
+							<SimpleData name="Description">NN 34</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52857463807,-7.619518916760795,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="42B74AE15F8398EB8776E">
+					<name>NN 49</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.529</SimpleData>
+							<SimpleData name="Latitude">-7.61979</SimpleData>
+							<SimpleData name="Description">NN 49</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52850956485,-7.619785389841496,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="29872A4D508398EB8776E">
+					<name>NN 24</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61925</SimpleData>
+							<SimpleData name="Description">NN 24</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52831614017,-7.619248411629,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="2B430D79DF1398EB8776E">
+					<name>NN 26</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61912</SimpleData>
+							<SimpleData name="Description">NN 26</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52826510357,-7.619122160164618,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="2D7A1BE6542398EB8776E">
+					<name>NN 28</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61911</SimpleData>
+							<SimpleData name="Description">NN 28</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52818806469,-7.619108838889694,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="2F3C023D2A2398EB8776E">
+					<name>NN 30</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61912</SimpleData>
+							<SimpleData name="Description">NN 30</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52805261314,-7.61912146690131,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="31D519F468A398EB8776E">
+					<name>NN 32</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61921</SimpleData>
+							<SimpleData name="Description">NN 32</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52797549963,-7.619211524552307,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="30538C0334B398EB8776E">
+					<name>NN 31</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61923</SimpleData>
+							<SimpleData name="Description">NN 31</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52806032449,-7.6192307988811,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="2EEF8B73199398EB8776E">
+					<name>NN 29</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61925</SimpleData>
+							<SimpleData name="Description">NN 29</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52815252542,-7.619253396368801,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="2CFF1714EBB398EB8776E">
+					<name>NN 27</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61921</SimpleData>
+							<SimpleData name="Description">NN 27</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52822058648,-7.6192082013921,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="1A6F6BAB647398EB8776E">
+					<name>NN 9</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61884</SimpleData>
+							<SimpleData name="Description">NN 9</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52817834169,-7.618838665815182,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="1BE8E70C95C398EB8776E">
+					<name>NN 10</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61885</SimpleData>
+							<SimpleData name="Description">NN 10</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52828060091,-7.618846641406609,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="1D03B09A0B4398EB8776E">
+					<name>NN 12</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61893</SimpleData>
+							<SimpleData name="Description">NN 12</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52813676745,-7.618934705217892,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="1E5C1D9B7FE398EB8776E">
+					<name>NN 13</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61902</SimpleData>
+							<SimpleData name="Description">NN 13</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52812838554,-7.619021107430317,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="1F1F34B4CBA398EB8776E">
+					<name>NN 14</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61896</SimpleData>
+							<SimpleData name="Description">NN 14</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52828127146,-7.618955641140188,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="2AC0834E849398EB8776E">
+					<name>NN 25</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61905</SimpleData>
+							<SimpleData name="Description">NN 25</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52826920152,-7.619045366509902,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="1CB2FDEE5B8398EB8776E">
+					<name>NN 11</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61888</SimpleData>
+							<SimpleData name="Description">NN 11</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52837682515,-7.618876882189108,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="20B68BEAAD0398EB8776E">
+					<name>NN 15</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61895</SimpleData>
+							<SimpleData name="Description">NN 15</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52836743742,-7.618947000918411,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="2285D3E4C53398EB8776E">
+					<name>NN 17</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61894</SimpleData>
+							<SimpleData name="Description">NN 17</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52848981321,-7.618936366799085,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="23E25B7A488398EB8776E">
+					<name>NN 18</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61902</SimpleData>
+							<SimpleData name="Description">NN 18</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52848042548,-7.619015125739315,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="21AA018EDEB398EB8776E">
+					<name>NN 16</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61902</SimpleData>
+							<SimpleData name="Description">NN 16</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52836341411,-7.619021772062686,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="26BB14DD91E398EB8776E">
+					<name>NN 21</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.6191</SimpleData>
+							<SimpleData name="Description">NN 21</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52839262459,-7.619101615728006,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="2472B3ED7AC398EB8776E">
+					<name>NN 19</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61918</SimpleData>
+							<SimpleData name="Description">NN 19</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52847070247,-7.619175634420601,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="25EDAE6A74D398EB8776E">
+					<name>NN 20</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61917</SimpleData>
+							<SimpleData name="Description">NN 20</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52836844325,-7.619169320415602,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="27E9E5EB680398EB8776E">
+					<name>NN 22</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61926</SimpleData>
+							<SimpleData name="Description">NN 22</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52845494449,-7.61926103963652,0</coordinates>
+					</Point>
+				</Placemark>
+				<Placemark id="28FE59AC3ED398EB8776E">
+					<name>NN 23</name>
+					<visibility>0</visibility>
+					<styleUrl>#pointStyleMap173012</styleUrl>
+					<Style id="inline">
+						<IconStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+							<Icon>
+								<href>https://maps.google.com/mapfiles/kml/shapes/homegardenbusiness.png</href>
+							</Icon>
+						</IconStyle>
+						<LineStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</LineStyle>
+						<PolyStyle>
+							<color>ffffffff</color>
+							<colorMode>normal</colorMode>
+						</PolyStyle>
+					</Style>
+					<ExtendedData>
+						<SchemaData schemaUrl="#S_NEW_COVERAGE_DDS">
+							<SimpleData name="Longitude">111.528</SimpleData>
+							<SimpleData name="Latitude">-7.61925</SimpleData>
+							<SimpleData name="Description">NN 23</SimpleData>
+						</SchemaData>
+					</ExtendedData>
+					<Point>
+						<coordinates>111.52837984264,-7.619252399420898,0</coordinates>
+					</Point>
+				</Placemark>
+			</Folder>
+			<Folder>
+				<name>NOT COVER</name>
+				<visibility>0</visibility>
+			</Folder>
+		</Folder>
+		<Folder>
+			<name>ODC</name>
+			<visibility>0</visibility>
+			<Folder id="20367EB987E398EB87756">
+				<name>W1_MN_EJ.TBM_001</name>
+				<visibility>0</visibility>
+				<Folder id="2189D310D40398EB87756">
+					<name>ODC</name>
+					<visibility>0</visibility>
+					<Placemark>
+						<name>W1_MN_EJ.TBM_001</name>
+						<visibility>0</visibility>
+						<LookAt>
+							<gx:TimeSpan>
+								<begin>2025-10-11T05:03:10Z</begin>
+								<end>2025-10-11T05:56:15Z</end>
+							</gx:TimeSpan>
+							<longitude>111.5284282948858</longitude>
+							<latitude>-7.619263225867429</latitude>
+							<altitude>0</altitude>
+							<heading>1.272221872585407e-14</heading>
+							<tilt>0</tilt>
+							<range>92.24923945858397</range>
+							<gx:altitudeMode>relativeToSeaFloor</gx:altitudeMode>
+						</LookAt>
+						<styleUrl>#msn_triangle20017</styleUrl>
+						<Point>
+							<gx:drawOrder>1</gx:drawOrder>
+							<coordinates>111.528419,-7.61916,0</coordinates>
+						</Point>
+					</Placemark>
+				</Folder>
+				<Folder id="22378DBB53C398EB87756">
+					<name>ODP</name>
+					<visibility>0</visibility>
+					<Placemark>
+						<name>W1_MN_EJ.TBM_001_L1</name>
+						<visibility>0</visibility>
+						<description>1:8</description>
+						<LookAt>
+							<gx:TimeSpan>
+								<begin>2025-10-11T05:03:10Z</begin>
+								<end>2025-10-11T05:56:15Z</end>
+							</gx:TimeSpan>
+							<longitude>111.5285259892547</longitude>
+							<latitude>-7.61890685635451</latitude>
+							<altitude>0</altitude>
+							<heading>-1.499212850452889e-06</heading>
+							<tilt>0</tilt>
+							<range>72.38835699608744</range>
+							<gx:altitudeMode>relativeToSeaFloor</gx:altitudeMode>
+						</LookAt>
+						<styleUrl>#msn_triangle4522</styleUrl>
+						<Point>
+							<gx:drawOrder>1</gx:drawOrder>
+							<coordinates>111.528352,-7.618720999999999,0</coordinates>
+						</Point>
+					</Placemark>
+					<Placemark>
+						<name>W1_MN_EJ.TBM_001_L2</name>
+						<visibility>0</visibility>
+						<description>1:8</description>
+						<LookAt>
+							<gx:TimeSpan>
+								<begin>2025-10-11T05:03:10Z</begin>
+								<end>2025-10-11T05:56:15Z</end>
+							</gx:TimeSpan>
+							<longitude>111.5284282948858</longitude>
+							<latitude>-7.619263225867429</latitude>
+							<altitude>0</altitude>
+							<heading>1.272221872585407e-14</heading>
+							<tilt>0</tilt>
+							<range>92.24923945858397</range>
+							<gx:altitudeMode>relativeToSeaFloor</gx:altitudeMode>
+						</LookAt>
+						<styleUrl>#msn_triangle4522</styleUrl>
+						<Point>
+							<gx:drawOrder>1</gx:drawOrder>
+							<coordinates>111.52841,-7.61916,0</coordinates>
+						</Point>
+					</Placemark>
+					<Placemark>
+						<name>W1_MN_EJ.TBM_001_L3</name>
+						<visibility>0</visibility>
+						<description>1:8</description>
+						<LookAt>
+							<gx:TimeSpan>
+								<begin>2025-10-11T05:03:10Z</begin>
+								<end>2025-10-11T05:56:15Z</end>
+							</gx:TimeSpan>
+							<longitude>111.5284458905957</longitude>
+							<latitude>-7.619252919939961</latitude>
+							<altitude>0</altitude>
+							<heading>9.119377129085695e-06</heading>
+							<tilt>0</tilt>
+							<range>72.38835699619524</range>
+							<gx:altitudeMode>relativeToSeaFloor</gx:altitudeMode>
+						</LookAt>
+						<styleUrl>#msn_triangle4522</styleUrl>
+						<Point>
+							<gx:drawOrder>1</gx:drawOrder>
+							<coordinates>111.528293,-7.619143,0</coordinates>
+						</Point>
+					</Placemark>
+					<Placemark>
+						<name>W1_MN_EJ.TBM_001_L4</name>
+						<visibility>0</visibility>
+						<description>1:8</description>
+						<LookAt>
+							<gx:TimeSpan>
+								<begin>2025-10-11T05:03:10Z</begin>
+								<end>2025-10-11T05:56:15Z</end>
+							</gx:TimeSpan>
+							<longitude>111.528507513224</longitude>
+							<latitude>-7.619377878807583</latitude>
+							<altitude>0</altitude>
+							<heading>9.491094938479115e-07</heading>
+							<tilt>0</tilt>
+							<range>72.38835699707182</range>
+							<gx:altitudeMode>relativeToSeaFloor</gx:altitudeMode>
+						</LookAt>
+						<styleUrl>#msn_triangle4522</styleUrl>
+						<Point>
+							<gx:drawOrder>1</gx:drawOrder>
+							<coordinates>111.528642,-7.619437,0</coordinates>
+						</Point>
+					</Placemark>
+				</Folder>
+				<Folder>
+					<name>LINE DISTRIBUSI</name>
+					<visibility>0</visibility>
+					<Folder>
+						<name>patchcore</name>
+						<visibility>0</visibility>
+						<Folder>
+							<name>3M</name>
+							<visibility>0</visibility>
+							<Placemark id="284222A9973398EB87756">
+								<name>DISTRIBUSI 1C LINE 1/02</name>
+								<visibility>0</visibility>
+								<description>3M</description>
+								<styleUrl>#inline1101312</styleUrl>
+								<LineString>
+									<tessellate>1</tessellate>
+									<coordinates>
+										111.5284185737502,-7.619159015500598,0 111.528407266848,-7.619162377618486,0 
+									</coordinates>
+								</LineString>
+							</Placemark>
+						</Folder>
+					</Folder>
+					<Folder>
+						<name>Precon</name>
+						<visibility>0</visibility>
+						<Folder>
+							<name>50M</name>
+							<visibility>0</visibility>
+							<Placemark id="29DDEF43337398EB87756">
+								<name>DISTRIBUSI 1C LINE 1/03</name>
+								<visibility>0</visibility>
+								<description>21M</description>
+								<styleUrl>#inline110131</styleUrl>
+								<LineString>
+									<tessellate>1</tessellate>
+									<coordinates>
+										111.5284112242661,-7.619165179387699,0 111.528292682114,-7.619146452677591,0 
+									</coordinates>
+								</LineString>
+							</Placemark>
+						</Folder>
+						<Folder>
+							<name>100M</name>
+							<visibility>0</visibility>
+							<Placemark id="2A59089C678398EB87756">
+								<name>DISTRIBUSI 1C LINE 1/04</name>
+								<visibility>0</visibility>
+								<description>60M</description>
+								<styleUrl>#inline1101311</styleUrl>
+								<LineString>
+									<tessellate>1</tessellate>
+									<coordinates>
+										111.5284191390923,-7.619160136207928,0 111.5287144296007,-7.619310075947749,0 111.5286556337064,-7.619464173255118,0 111.5286398040229,-7.619438957336695,0 
+									</coordinates>
+								</LineString>
+							</Placemark>
+							<Placemark id="27BE80B43E9398EB87756">
+								<name>DISTRIBUSI 1C LINE 1/01</name>
+								<visibility>0</visibility>
+								<description>60M</description>
+								<styleUrl>#inline1101310</styleUrl>
+								<LineString>
+									<tessellate>1</tessellate>
+									<coordinates>
+										111.5284170579136,-7.619164383962713,0 111.5284249728345,-7.61882368888214,0 111.528351297746,-7.61872081880579,0 
+									</coordinates>
+								</LineString>
+							</Placemark>
+						</Folder>
+						<Folder>
+							<name>150M</name>
+							<visibility>0</visibility>
+						</Folder>
+					</Folder>
+				</Folder>
+				<Folder id="2B454C9CF7C398EB87756">
+					<name>DROP WIRE</name>
+					<visibility>0</visibility>
+					<Folder>
+						<name>W1_MN_EJ.TBM_001_L1</name>
+						<visibility>0</visibility>
+						<Placemark id="2C3E548285D398EB87756">
+							<name>DISTRIBUSI 1C LINE 1/01</name>
+							<visibility>0</visibility>
+							<description>20 Meter</description>
+							<styleUrl>#inline11011200</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5283518631002,-7.618721939523838,0 111.5281830388307,-7.618822099681146,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="2D68C2857C2398EB87756">
+							<name>DISTRIBUSI 1C LINE 1/02</name>
+							<visibility>0</visibility>
+							<description>11 Meter</description>
+							<styleUrl>#inline1101117</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5283512977468,-7.618722499881813,0 111.5282782913501,-7.618820680491148,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="2ED36FCC602398EB87756">
+							<name>DISTRIBUSI 1C LINE 1/03</name>
+							<visibility>0</visibility>
+							<description>13 Meter</description>
+							<styleUrl>#inline1101115</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5283518631011,-7.618723620583062,0 111.5283780512128,-7.61886804267608,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="2F7BD6CC222398EB87756">
+							<name>DISTRIBUSI 1C LINE 1/04</name>
+							<visibility>0</visibility>
+							<description>19 Meter</description>
+							<styleUrl>#inline1101118</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5283518631002,-7.618721939523838,0 111.5283636565901,-7.618935904905546,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="30FAC144B79398EB87756">
+							<name>DISTRIBUSI 1C LINE 1/05</name>
+							<visibility>0</visibility>
+							<description>20 Meter</description>
+							<styleUrl>#inline1101121</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.528350732405,-7.618723620581682,0 111.5282879321226,-7.618927798206428,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="319AC5CD63E398EB87756">
+							<name>DISTRIBUSI 1C LINE 1/06</name>
+							<visibility>0</visibility>
+							<description>29 Meter</description>
+							<styleUrl>#inline1101114</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5283512977468,-7.618722499881813,0 111.5281377492426,-7.618910800503411,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="32BBE02F312398EB87756">
+							<name>DISTRIBUSI 1C LINE 1/07</name>
+							<visibility>0</visibility>
+							<description>36 Meter</description>
+							<styleUrl>#inline1101116</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.528348471023,-7.618721379160968,0 111.5281372426527,-7.619002197845343,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="334C7EC8877398EB87756">
+							<name>DISTRIBUSI 1C LINE 1/08</name>
+							<visibility>0</visibility>
+							<description>31 Meter</description>
+							<styleUrl>#inline1101113</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5283524284413,-7.618719137747878,0 111.5282766003638,-7.619031366131037,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+					</Folder>
+					<Folder>
+						<name>W1_MN_EJ.TBM_001_L2</name>
+						<visibility>0</visibility>
+						<Placemark id="3410835EEC2398EB87756">
+							<name>DISTRIBUSI 1C LINE 2/01</name>
+							<visibility>0</visibility>
+							<description>3 Meter</description>
+							<styleUrl>#inline1101125</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5284123549509,-7.619163498327311,0 111.5283712694885,-7.619164571589771,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="3562C3A26CB398EB87756">
+							<name>DISTRIBUSI 1C LINE 2/02</name>
+							<visibility>0</visibility>
+							<description>27 Meter</description>
+							<styleUrl>#inline1101128</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5284140509888,-7.619165179388577,0 111.5284863081618,-7.618933287026378,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="36E3C25C6F8398EB87756">
+							<name>DISTRIBUSI 1C LINE 2/03</name>
+							<visibility>0</visibility>
+							<description>8 Meter</description>
+							<styleUrl>#inline1101127</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5284151816736,-7.61916349832819,0 111.5283927111556,-7.619094800235498,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="06053AF38E398EB87757">
+							<name>DISTRIBUSI 1C LINE 2/04</name>
+							<visibility>0</visibility>
+							<description>17 Meter</description>
+							<styleUrl>#inline1101122</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5284134856469,-7.619162937974084,0 111.5283622864693,-7.619024467444052,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="12ABCE63AA398EB87757">
+							<name>DISTRIBUSI 1C LINE 2/05</name>
+							<visibility>0</visibility>
+							<description>20 Meter</description>
+							<styleUrl>#inline1101126</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5284140509891,-7.61916293797426,0 111.5284826785876,-7.619012076936997,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="2305C8D8FF398EB87757">
+							<name>DISTRIBUSI 1C LINE 2/06</name>
+							<visibility>0</visibility>
+							<description>8 Meter</description>
+							<styleUrl>#inline11011300</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5284146163312,-7.619164058681594,0 111.5284753627138,-7.619169763399704,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="3DFB262434398EB87757">
+							<name>DISTRIBUSI 1C LINE 2/07</name>
+							<visibility>0</visibility>
+							<description>10 Meter</description>
+							<styleUrl>#inline1101123</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5284146163314,-7.619162937974435,0 111.5284564483982,-7.619248505059041,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="4C5A7AB1AD398EB87757">
+							<name>DISTRIBUSI 1C LINE 2/08</name>
+							<visibility>0</visibility>
+							<description>6 Meter</description>
+							<styleUrl>#inline1101129</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5284117896083,-7.619165739741457,0 111.5283887975468,-7.619239762157552,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+					</Folder>
+					<Folder>
+						<name>W1_MN_EJ.TBM_001_L3</name>
+						<visibility>0</visibility>
+						<Placemark id="542D040A2A398EB87757">
+							<name>DISTRIBUSI 1C LINE 3/01</name>
+							<visibility>0</visibility>
+							<description>4 meter</description>
+							<styleUrl>#inline1101140</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5282915514288,-7.619145892326801,0 111.5282288716727,-7.619206349758453,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="6BD161B9B6398EB87757">
+							<name>DISTRIBUSI 1C LINE 3/02</name>
+							<visibility>0</visibility>
+							<description>12 Meter</description>
+							<styleUrl>#inline1101120</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5282921167714,-7.619144771619489,0 111.5281506938936,-7.619241604241254,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="70A9B58D59398EB87757">
+							<name>DISTRIBUSI 1C LINE 3/03</name>
+							<visibility>0</visibility>
+							<description>19 Meter</description>
+							<styleUrl>#inline11011100</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5282921167714,-7.619144771619489,0 111.5280785721351,-7.619221403835317,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="883652A4CC398EB87757">
+							<name>DISTRIBUSI 1C LINE 3/04</name>
+							<visibility>0</visibility>
+							<description>30 Meter</description>
+							<styleUrl>#inline11011110</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5282921167715,-7.619144211261378,0 111.5279831896285,-7.619188060397888,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="9714374B27398EB87757">
+							<name>DISTRIBUSI 1C LINE 3/05</name>
+							<visibility>0</visibility>
+							<description>7 Meter</description>
+							<styleUrl>#inline1101112</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5282915514288,-7.619145331968684,0 111.5283178947578,-7.619237684999942,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="AC8DF58DF9398EB87757">
+							<name>DISTRIBUSI 1C LINE 3/06</name>
+							<visibility>0</visibility>
+							<description>10 Meter</description>
+							<styleUrl>#inline1101111</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5282909860863,-7.619143090552433,0 111.5282678454401,-7.619120920613447,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="BB34BB6BA3398EB87757">
+							<name>DISTRIBUSI 1C LINE 3/07</name>
+							<visibility>0</visibility>
+							<description>14 Meter</description>
+							<styleUrl>#inline1101160</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5282938128107,-7.619144211262983,0 111.5281896779295,-7.61911486013444,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="C97167B90D398EB87757">
+							<name>DISTRIBUSI 1C LINE 3/08</name>
+							<visibility>0</visibility>
+							<description>25 Meter</description>
+							<styleUrl>#inline1101124</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5282921167714,-7.619145892327333,0 111.5280531151676,-7.619118282626749,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+					</Folder>
+					<Folder>
+						<name>W1_MN_EJ.TBM_001_L4</name>
+						<visibility>0</visibility>
+						<Placemark id="DFEC958436398EB87757">
+							<name>DISTRIBUSI 1C LINE 4/01</name>
+							<visibility>0</visibility>
+							<description>21 Meter</description>
+							<styleUrl>#inline1101119</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5286403693648,-7.619437276275561,0 111.528476762383,-7.619382545823151,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="E2DE155D02398EB87757">
+							<name>DISTRIBUSI 1C LINE 4/02</name>
+							<visibility>0</visibility>
+							<description>45 Meter</description>
+							<styleUrl>#inline1101102</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5287384342148,-7.61906560727815,0 111.5286415000505,-7.61943727627547,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="F064A66AA5398EB87757">
+							<name>DISTRIBUSI 1C LINE 4/03</name>
+							<visibility>0</visibility>
+							<description>5 Meter</description>
+							<styleUrl>#inline110117</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5286409347077,-7.619437276275518,0 111.5286415565803,-7.619423365410446,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="10F04DBE419398EB87757">
+							<name>DISTRIBUSI 1C LINE 4/04</name>
+							<visibility>0</visibility>
+							<description>16 meter</description>
+							<styleUrl>#inline1101150</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5286403693663,-7.619440078044056,0 111.5285956330915,-7.619330029976431,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="11441C708CE398EB87757">
+							<name>DISTRIBUSI 1C LINE 4/05</name>
+							<visibility>0</visibility>
+							<description>35 Meter</description>
+							<styleUrl>#inline1101130</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5286392386697,-7.619440638397838,0 111.5287023211811,-7.619159591403913,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="12056BE66FB398EB87757">
+							<name>DISTRIBUSI 1C LINE 4/06</name>
+							<visibility>0</visibility>
+							<description>24 Meter</description>
+							<styleUrl>#inline1101180</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5286392386663,-7.619433914153523,0 111.5286769344443,-7.619244492618865,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="13F0BEF3B9F398EB87757">
+							<name>DISTRIBUSI 1C LINE 4/07</name>
+							<visibility>0</visibility>
+							<description>9 Meter</description>
+							<styleUrl>#inline11011101</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.528640934708,-7.619437836629213,0 111.5285749914644,-7.619502799611111,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="141D9C62FC5398EB87757">
+							<name>DISTRIBUSI 1C LINE 4/08</name>
+							<visibility>0</visibility>
+							<description>35 Meter</description>
+							<styleUrl>#inline110119</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.528640934708,-7.619437836629213,0 111.5285242294414,-7.619769731028226,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+					</Folder>
+				</Folder>
+				<Folder>
+					<name>SLACK/COIL</name>
+					<visibility>0</visibility>
+				</Folder>
+				<Folder>
+					<name>COVERAGE</name>
+					<visibility>0</visibility>
+				</Folder>
+			</Folder>
+			<Folder id="151116E3D0A398EB87757">
+				<name>W1_MN_EJ.TBM_002</name>
+				<visibility>0</visibility>
+				<Folder id="164727817F7398EB87757">
+					<name>ODC</name>
+					<visibility>0</visibility>
+					<Placemark>
+						<name>W1_MN_EJ.TBM_002</name>
+						<visibility>0</visibility>
+						<LookAt>
+							<gx:TimeSpan>
+								<begin>2025-10-11T05:03:10Z</begin>
+								<end>2025-10-11T05:56:15Z</end>
+							</gx:TimeSpan>
+							<longitude>111.5281299507338</longitude>
+							<latitude>-7.619220085202547</latitude>
+							<altitude>0</altitude>
+							<heading>3.955749147338803e-05</heading>
+							<tilt>0</tilt>
+							<range>92.24923944233284</range>
+							<gx:altitudeMode>relativeToSeaFloor</gx:altitudeMode>
+						</LookAt>
+						<styleUrl>#msn_triangle4187</styleUrl>
+						<Point>
+							<gx:drawOrder>1</gx:drawOrder>
+							<coordinates>111.527846,-7.619357999999999,0</coordinates>
+						</Point>
+					</Placemark>
+				</Folder>
+				<Folder id="171E181DA9E398EB87757">
+					<name>ODP</name>
+					<visibility>0</visibility>
+					<Placemark>
+						<name>W1_MN_EJ.TBM_002_L1</name>
+						<visibility>0</visibility>
+						<description>1:8</description>
+						<LookAt>
+							<gx:TimeSpan>
+								<begin>2025-10-11T05:03:10Z</begin>
+								<end>2025-10-11T05:56:15Z</end>
+							</gx:TimeSpan>
+							<longitude>111.5282383939076</longitude>
+							<latitude>-7.619445833413288</latitude>
+							<altitude>0</altitude>
+							<heading>-3.46422950840262e-05</heading>
+							<tilt>0</tilt>
+							<range>75.34579894906415</range>
+							<gx:altitudeMode>relativeToSeaFloor</gx:altitudeMode>
+						</LookAt>
+						<styleUrl>#msn_triangle9412</styleUrl>
+						<Point>
+							<gx:drawOrder>1</gx:drawOrder>
+							<coordinates>111.528239,-7.619381000000001,0</coordinates>
+						</Point>
+					</Placemark>
+					<Placemark>
+						<name>W1_MN_EJ.TBM_002_L2</name>
+						<visibility>0</visibility>
+						<description>1:8</description>
+						<LookAt>
+							<gx:TimeSpan>
+								<begin>2025-10-11T05:03:10Z</begin>
+								<end>2025-10-11T05:56:15Z</end>
+							</gx:TimeSpan>
+							<longitude>111.527977125374</longitude>
+							<latitude>-7.619413171637107</latitude>
+							<altitude>0</altitude>
+							<heading>3.101040814426928e-14</heading>
+							<tilt>0</tilt>
+							<range>75.34579895073534</range>
+							<gx:altitudeMode>relativeToSeaFloor</gx:altitudeMode>
+						</LookAt>
+						<styleUrl>#msn_triangle9412</styleUrl>
+						<Point>
+							<gx:drawOrder>1</gx:drawOrder>
+							<coordinates>111.527846,-7.619361,0</coordinates>
+						</Point>
+					</Placemark>
+					<Placemark>
+						<name>W1_MN_EJ.TBM_002_L3</name>
+						<visibility>0</visibility>
+						<description>1:8</description>
+						<LookAt>
+							<gx:TimeSpan>
+								<begin>2025-10-11T05:03:10Z</begin>
+								<end>2025-10-11T05:56:15Z</end>
+							</gx:TimeSpan>
+							<longitude>111.5278281191085</longitude>
+							<latitude>-7.619562209910915</latitude>
+							<altitude>0</altitude>
+							<heading>8.52490538970371e-06</heading>
+							<tilt>5.29806844289979</tilt>
+							<range>95.15235154200853</range>
+							<gx:altitudeMode>relativeToSeaFloor</gx:altitudeMode>
+						</LookAt>
+						<styleUrl>#msn_triangle9412</styleUrl>
+						<Point>
+							<gx:drawOrder>1</gx:drawOrder>
+							<coordinates>111.527652,-7.619628,0</coordinates>
+						</Point>
+					</Placemark>
+					<Placemark>
+						<name>W1_MN_EJ.TBM_002_L4</name>
+						<visibility>0</visibility>
+						<description>1:8</description>
+						<LookAt>
+							<gx:TimeSpan>
+								<begin>2025-03-14T05:33:20Z</begin>
+								<end>2025-10-11T05:56:15Z</end>
+							</gx:TimeSpan>
+							<longitude>111.5278452126789</longitude>
+							<latitude>-7.619942970748409</latitude>
+							<altitude>0</altitude>
+							<heading>7.569985999362309e-05</heading>
+							<tilt>0</tilt>
+							<range>132.6156309430007</range>
+							<gx:altitudeMode>relativeToSeaFloor</gx:altitudeMode>
+						</LookAt>
+						<styleUrl>#msn_triangle12128</styleUrl>
+						<Point>
+							<gx:drawOrder>1</gx:drawOrder>
+							<coordinates>111.5275458907963,-7.620002511285755,0</coordinates>
+						</Point>
+					</Placemark>
+				</Folder>
+				<Folder>
+					<name>LINE DISTRIBUSI</name>
+					<visibility>0</visibility>
+					<Folder>
+						<name>patchcore</name>
+						<visibility>0</visibility>
+						<Folder>
+							<name>3M</name>
+							<visibility>0</visibility>
+							<Placemark id="1C2D388BFCB398EB87757">
+								<name>DISTRIBUSI 1C LINE 2/02</name>
+								<visibility>0</visibility>
+								<description>3M</description>
+								<styleUrl>#inline110212</styleUrl>
+								<LineString>
+									<tessellate>1</tessellate>
+									<coordinates>
+										111.5278435489245,-7.61936651190734,0 111.5278447258125,-7.619355430206544,0 
+									</coordinates>
+								</LineString>
+							</Placemark>
+						</Folder>
+					</Folder>
+					<Folder>
+						<name>Precon</name>
+						<visibility>0</visibility>
+						<Folder>
+							<name>50M</name>
+							<visibility>0</visibility>
+							<Placemark id="1B903C27DFC398EB87757">
+								<name>DISTRIBUSI 1C LINE 2/01</name>
+								<visibility>0</visibility>
+								<description>44 Meter</description>
+								<styleUrl>#inline11021000</styleUrl>
+								<LineString>
+									<tessellate>1</tessellate>
+									<coordinates>
+										111.5278423717068,-7.619368844803114,0 111.528238982288,-7.619385758986452,0 
+									</coordinates>
+								</LineString>
+							</Placemark>
+						</Folder>
+						<Folder>
+							<name>100M</name>
+							<visibility>0</visibility>
+							<Placemark id="1EF43F76394398EB87757">
+								<name>DISTRIBUSI 1C LINE 2/03</name>
+								<visibility>0</visibility>
+								<description>50 Meter</description>
+								<styleUrl>#inline1102100</styleUrl>
+								<LineString>
+									<tessellate>1</tessellate>
+									<coordinates>
+										111.5278429604803,-7.619372927621477,0 111.5277531702841,-7.619666072756866,0 111.5276495232435,-7.619626121854146,0 
+									</coordinates>
+								</LineString>
+							</Placemark>
+						</Folder>
+						<Folder>
+							<name>150M</name>
+							<visibility>0</visibility>
+							<Placemark id="1DBCF8EE50F398EB87757">
+								<name>DISTRIBUSI 1C LINE 2/04</name>
+								<visibility>0</visibility>
+								<description>95 Meter</description>
+								<styleUrl>#inline110211</styleUrl>
+								<LineString>
+									<tessellate>1</tessellate>
+									<coordinates>
+										111.5278435489267,-7.619358346446616,0 111.5278394961191,-7.619371196823064,0 111.5278243231355,-7.619361940895786,0 111.5277102830346,-7.619702091559823,0 111.5275684538497,-7.619681955938392,0 111.527532424964,-7.619907998449392,0 111.5275573177583,-7.61999613150036,0 
+									</coordinates>
+								</LineString>
+							</Placemark>
+						</Folder>
+					</Folder>
+				</Folder>
+				<Folder>
+					<name>DROP WIRE</name>
+					<visibility>0</visibility>
+					<Folder>
+						<name>W1_MN_EJ.TBM_002_L1</name>
+						<visibility>0</visibility>
+						<Placemark id="20F226868A3398EB87757">
+							<name>DISTRIBUSI 1C LINE 1/01</name>
+							<visibility>0</visibility>
+							<description>15 Meter</description>
+							<styleUrl>#inline11031115</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5282389822859,-7.619381676257824,0 111.5283931373341,-7.61946713213066,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="2144BCE12BF398EB87757">
+							<name>DISTRIBUSI 1C LINE 1/02</name>
+							<visibility>0</visibility>
+							<description>9 Meter</description>
+							<styleUrl>#inline1103118</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5282389822859,-7.619381676257824,0 111.5283272090631,-7.619470428554809,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="221B2E36471398EB87757">
+							<name>DISTRIBUSI 1C LINE 1/03</name>
+							<visibility>0</visibility>
+							<description>3 Meter</description>
+							<styleUrl>#inline11031116</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5282389822865,-7.619382842751722,0 111.5282626460176,-7.619439348451817,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="23D165E0F6E398EB87757">
+							<name>DISTRIBUSI 1C LINE 1/04</name>
+							<visibility>0</visibility>
+							<description>7 Meter</description>
+							<styleUrl>#inline11031112</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5282383938406,-7.619382259505187,0 111.5282223223886,-7.619451112090307,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="24D554504FB398EB87757">
+							<name>DISTRIBUSI 1C LINE 1/05</name>
+							<visibility>0</visibility>
+							<description>12 Meter</description>
+							<styleUrl>#inline11031111</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5282383938415,-7.619384009246029,0 111.5281647011067,-7.619383409577437,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="25B0FEB46FD398EB87757">
+							<name>DISTRIBUSI 1C LINE 1/06</name>
+							<visibility>0</visibility>
+							<description>17 Meter</description>
+							<styleUrl>#inline11031117</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5282383938406,-7.619382259505187,0 111.5281035946064,-7.619396407973058,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="26FCB5B0025398EB87757">
+							<name>DISTRIBUSI 1C LINE 1/07</name>
+							<visibility>0</visibility>
+							<description>17 Meter</description>
+							<styleUrl>#inline1103115</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5282383938406,-7.619382259505187,0 111.5279909741053,-7.619359551675402,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="2724B77C9F1398EB87757">
+							<name>DISTRIBUSI 1C LINE 1/08</name>
+							<visibility>0</visibility>
+							<description>40 Meter</description>
+							<styleUrl>#inline1103113</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.52823604007,-7.61938167625987,0 111.527932659348,-7.61936735657867,0 111.52790138779,-7.619362126913902,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+					</Folder>
+					<Folder>
+						<name>W1_MN_EJ.TBM_002_L2</name>
+						<visibility>0</visibility>
+						<Placemark id="285DF105C3E398EB87757">
+							<name>DISTRIBUSI 1C LINE 2/01</name>
+							<visibility>0</visibility>
+							<description>3 Meter</description>
+							<styleUrl>#inline11031121</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5278459027047,-7.619361845881836,0 111.5278679903514,-7.619450032034148,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="29F10DBF7DF398EB87757">
+							<name>DISTRIBUSI 1C LINE 2/02</name>
+							<visibility>0</visibility>
+							<description>18 Meter</description>
+							<styleUrl>#inline11031120</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.527845314265,-7.619360096140447,0 111.5278615244905,-7.619607672114882,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="2A600508604398EB87757">
+							<name>DISTRIBUSI 1C LINE 2/03</name>
+							<visibility>0</visibility>
+							<description>23 Meter</description>
+							<styleUrl>#inline1103110</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.527846491144,-7.619365928611313,0 111.5279389067914,-7.619624798938665,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="2BE679B47A1398EB87757">
+							<name>DISTRIBUSI 1C LINE 2/04</name>
+							<visibility>0</visibility>
+							<description>29 Meter</description>
+							<styleUrl>#inline1103112</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5278441373732,-7.619361845880997,0 111.5280163518638,-7.619630193133098,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="2C1124AB1EB398EB87757">
+							<name>DISTRIBUSI 1C LINE 2/05</name>
+							<visibility>0</visibility>
+							<description>37 Meter</description>
+							<styleUrl>#inline1103117</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5278447258245,-7.619364762116446,0 111.528113097868,-7.619638668974973,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="2DED5937FB9398EB87757">
+							<name>DISTRIBUSI 1C LINE 2/06</name>
+							<visibility>0</visibility>
+							<description>52 Meter</description>
+							<styleUrl>#inline1103114</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5278447258247,-7.619363595622383,0 111.5282471541559,-7.619674337571321,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="2EE2DAFF465398EB87757">
+							<name>DISTRIBUSI 1C LINE 2/07</name>
+							<visibility>0</visibility>
+							<description>63 Meter</description>
+							<styleUrl>#inline1103116</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5278459027045,-7.619362429128869,0 111.5283511240009,-7.619714338000054,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="2FB4AF65E1D398EB87757">
+							<name>DISTRIBUSI 1C LINE 2/08</name>
+							<visibility>0</visibility>
+							<description>72 Meter</description>
+							<styleUrl>#inline11031113</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5278453142649,-7.619361262634521,0 111.5284191939032,-7.619734213083183,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+					</Folder>
+					<Folder>
+						<name>W1_MN_EJ.TBM_002_L3</name>
+						<visibility>0</visibility>
+						<Placemark id="30701F0F9AF398EB87757">
+							<name>DISTRIBUSI 1C LINE 3/01</name>
+							<visibility>0</visibility>
+							<description>29 Meter</description>
+							<styleUrl>#inline11031110</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5276488137046,-7.619627580720956,0 111.5273317055995,-7.619661967753952,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="3143E7751B1398EB87757">
+							<name>DISTRIBUSI 1C LINE 3/02</name>
+							<visibility>0</visibility>
+							<description>21 Meter</description>
+							<styleUrl>#inline1103119</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5276503035858,-7.619628309982131,0 111.527412486287,-7.619679223309343,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="32FDE76822C398EB87757">
+							<name>DISTRIBUSI 1C LINE 3/03</name>
+							<visibility>0</visibility>
+							<description>5 Meter</description>
+							<styleUrl>#inline11031123</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5276510835418,-7.619630497068735,0 111.5276255420272,-7.619562155864392,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="3313058C898398EB87757">
+							<name>DISTRIBUSI 1C LINE 3/04</name>
+							<visibility>0</visibility>
+							<description>20 Meter</description>
+							<styleUrl>#inline11031114</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5276532271326,-7.619626851348482,0 111.527657815821,-7.619436026079882,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="34FCC0AD5A9398EB87757">
+							<name>DISTRIBUSI 1C LINE 3/05</name>
+							<visibility>0</visibility>
+							<description>20 Meter</description>
+							<styleUrl>#inline11031122</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5276503317954,-7.619629768155163,0 111.5275942729623,-7.619762730127407,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="356CB1425E8398EB87757">
+							<name>DISTRIBUSI 1C LINE 3/06</name>
+							<visibility>0</visibility>
+							<description>23 Meter</description>
+							<styleUrl>#inline11031118</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5276503317954,-7.619629768155163,0 111.5274941368595,-7.619783648498491,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="36EA79FFCD1398EB87757">
+							<name>DISTRIBUSI 1C LINE 3/07</name>
+							<visibility>0</visibility>
+							<description>27 m</description>
+							<styleUrl>#inline1103111</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5276502894776,-7.619627580722066,0 111.5273618348871,-7.619530150989526,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="37FDE8A6FD2398EB87757">
+							<name>DISTRIBUSI 1C LINE 3/08</name>
+							<visibility>0</visibility>
+							<description>42 m</description>
+							<styleUrl>#inline110311</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.527648799477,-7.619626851345151,0 111.5272157669497,-7.619675785309605,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+					</Folder>
+					<Folder>
+						<name>W1_MN_EJ.TBM_002_L4</name>
+						<visibility>0</visibility>
+						<Placemark id="383D804922B398EB87757">
+							<name>DISTRIBUSI 1C LINE 4/01</name>
+							<visibility>0</visibility>
+							<description>3 meter</description>
+							<styleUrl>#inline11031119</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5275439104347,-7.61999716643817,0 111.5275734448548,-7.619998292971249,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="39C9677A652398EB87757">
+							<name>DISTRIBUSI 1C LINE 4/02</name>
+							<visibility>0</visibility>
+							<description>6 Meter</description>
+							<styleUrl>#inline11031119</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5275447646152,-7.619997725073684,0 111.5275725575621,-7.619946251096453,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="3A4A6583C23398EB87757">
+							<name>DISTRIBUSI 1C LINE 4/03</name>
+							<visibility>0</visibility>
+							<description>6 Meter</description>
+							<styleUrl>#inline11031119</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.527545976558,-7.619999525336518,0 111.5274885657825,-7.620001316557408,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="3BC6F70B2AB398EB87757">
+							<name>DISTRIBUSI 1C LINE 4/04</name>
+							<visibility>0</visibility>
+							<description>11 Meter</description>
+							<styleUrl>#inline11031119</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.527545976558,-7.619999525336518,0 111.5275269557439,-7.620000066706757,0 111.5274836854131,-7.619931523223258,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="3C0C585A202398EB87757">
+							<name>DISTRIBUSI 1C LINE 4/05</name>
+							<visibility>0</visibility>
+							<description>4 Meter</description>
+							<styleUrl>#inline11031119</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.527544526307,-7.619997525930931,0 111.5275415519979,-7.620032847307147,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="3D957DA6F5B398EB87757">
+							<name>DISTRIBUSI 1C LINE 4/06</name>
+							<visibility>0</visibility>
+							<description>9 Meter</description>
+							<styleUrl>#inline11031119</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5275438576684,-7.619999096625982,0 111.527531102136,-7.619999606125256,0 111.5274821468067,-7.620057099038528,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="3EDBF78BD25398EB87757">
+							<name>DISTRIBUSI 1C LINE 4/07</name>
+							<visibility>0</visibility>
+							<description>10 Meter</description>
+							<styleUrl>#inline11031119</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5275460316248,-7.619999526559999,0 111.5275889841361,-7.620086225725754,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+						<Placemark id="3F496C3C4D8398EB87757">
+							<name>DISTRIBUSI 1C LINE 4/08</name>
+							<visibility>0</visibility>
+							<description>16 Meter</description>
+							<styleUrl>#inline11031119</styleUrl>
+							<LineString>
+								<tessellate>1</tessellate>
+								<coordinates>
+									111.5275457275178,-7.620000332786107,0 111.5275901350691,-7.620144366139293,0 
+								</coordinates>
+							</LineString>
+						</Placemark>
+					</Folder>
+				</Folder>
+				<Folder>
+					<name>SLACK/COIL</name>
+					<visibility>0</visibility>
+				</Folder>
+				<Folder>
+					<name>COVERAGE</name>
+					<visibility>0</visibility>
+				</Folder>
+			</Folder>
+		</Folder>
+		<Folder>
+			<name>SLACK</name>
+			<visibility>0</visibility>
+		</Folder>
+		<Folder>
+			<name>CLOSURE</name>
+			<visibility>0</visibility>
+		</Folder>
+		<atom:link rel="app" href="https://www.google.com/earth/about/versions/#earth-pro" title="Google Earth Pro 7.3.7.1155"></atom:link>
+	</Folder>
+</Document>
+</kml>

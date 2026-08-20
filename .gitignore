@@ -53,10 +53,7 @@ cache/
 !boundary.kml
 !POP.kml
 !PO.*.kml
-dashboard/public/data/*
-!dashboard/public/data/.gitkeep
-!dashboard/public/data/boundary.kml
-!dashboard/public/data/POP.kml
+
 
 # IDEs and Editors
 .idea/
