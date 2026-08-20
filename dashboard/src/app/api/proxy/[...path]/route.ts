@@ -7,7 +7,7 @@ async function proxy(req: NextRequest, { params }: { params: Promise<{ path: str
     const pathAndQuery = url.pathname.replace(/^\/api\/proxy\/?/, '') + url.search;
     
     // Forward request to python backend
-    const backendUrl = `http://localhost:8000/${pathAndQuery}`;
+    const backendUrl = `http://127.0.0.1:8000/${pathAndQuery}`;
     
     // Extract better-auth session token
     let sessionToken;
@@ -42,19 +42,19 @@ async function proxy(req: NextRequest, { params }: { params: Promise<{ path: str
       method: req.method,
       headers: headers,
       body: reqBody,
-    });
-
-    const resBody = await res.arrayBuffer();
+      duplex: 'half'
+    } as RequestInit);
     
-    // Copy headers from the backend response
-    const resHeaders = new Headers(res.headers);
-    resHeaders.delete('content-encoding'); // Next.js handles encoding
+    const text = await res.text();
+    let data;
+    try {
+        data = JSON.parse(text);
+    } catch (e) {
+        data = text;
+    }
 
-    return new NextResponse(resBody, {
-      status: res.status,
-      headers: resHeaders,
-    });
-  } catch (error: unknown) {
+    return NextResponse.json(data, { status: res.status });
+  } catch (error: any) {
     console.error("Proxy error:", error);
     return NextResponse.json({ 
       error: "Internal Server Error", 

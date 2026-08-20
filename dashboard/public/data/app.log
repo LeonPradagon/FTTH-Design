@@ -1911,3 +1911,134 @@ xml.etree.ElementTree.ParseError: not well-formed (invalid token): line 1, colum
 2026-08-19 18:32:11,065 - INFO - HTTP Request: POST http://localhost:64752/ "HTTP/1.1 200 OK"
 2026-08-19 18:32:11,068 - INFO - HTTP Request: POST http://localhost:64752/ "HTTP/1.1 200 OK"
 2026-08-20 12:09:52,384 - INFO - HTTP Request: GET http://localhost:53233/status "HTTP/1.1 200 OK"
+2026-08-20 12:35:27,742 - INFO - HTTP Request: GET http://localhost:56117/status "HTTP/1.1 200 OK"
+2026-08-20 12:41:38,529 - INFO - HTTP Request: GET http://localhost:65145/status "HTTP/1.1 200 OK"
+2026-08-20 12:58:35,648 - INFO - HTTP Request: POST http://localhost:56117/ "HTTP/1.1 200 OK"
+2026-08-20 12:58:35,654 - INFO - HTTP Request: POST http://localhost:56117/ "HTTP/1.1 200 OK"
+2026-08-20 12:58:35,704 - INFO - HTTP Request: POST http://localhost:56117/ "HTTP/1.1 200 OK"
+2026-08-20 12:58:35,709 - INFO - HTTP Request: POST http://localhost:56117/ "HTTP/1.1 200 OK"
+2026-08-20 13:07:10,417 - INFO - HTTP Request: GET http://localhost:62696/status "HTTP/1.1 200 OK"
+2026-08-20 13:07:11,006 - INFO - HTTP Request: GET http://localhost:62701/status "HTTP/1.1 200 OK"
+2026-08-20 13:08:42,389 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:08:42,392 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:09:26,849 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:11:08,329 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:11:08,332 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:12:37,415 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:12:37,418 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:13:12,904 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:13:12,906 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:13:34,362 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:13:34,365 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:13:59,911 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:13:59,914 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:14:18,427 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:14:18,429 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:14:42,088 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:14:42,090 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:15:05,801 - INFO - HTTP Request: GET http://localhost:60941/status "HTTP/1.1 200 OK"
+2026-08-20 13:15:17,463 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:15:17,467 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:15:46,869 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:15:46,872 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:16:19,010 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:16:19,012 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:16:54,157 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:16:54,160 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:17:27,806 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:17:27,810 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:17:27,965 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:17:27,970 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:17:37,442 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:17:37,445 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:18:08,077 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:18:08,079 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:18:53,348 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:18:53,350 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:19:38,960 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:19:38,963 - INFO - HTTP Request: POST http://localhost:62696/ "HTTP/1.1 200 OK"
+2026-08-20 13:21:23,089 - INFO - HTTP Request: GET http://localhost:64268/status "HTTP/1.1 200 OK"
+2026-08-20 13:21:23,153 - INFO - HTTP Request: GET http://localhost:64270/status "HTTP/1.1 200 OK"
+2026-08-20 13:21:23,514 - INFO - HTTP Request: GET http://localhost:52790/status "HTTP/1.1 200 OK"
+2026-08-20 13:21:24,372 - INFO - HTTP Request: GET http://localhost:53150/status "HTTP/1.1 200 OK"
+2026-08-20 13:26:43,096 - INFO - HTTP Request: GET http://localhost:58201/status "HTTP/1.1 200 OK"
+2026-08-20 13:26:46,365 - INFO - HTTP Request: POST http://localhost:52790/ "HTTP/1.1 200 OK"
+2026-08-20 13:26:46,372 - INFO - HTTP Request: POST http://localhost:52790/ "HTTP/1.1 200 OK"
+2026-08-20 13:26:46,487 - INFO - HTTP Request: POST http://localhost:52790/ "HTTP/1.1 200 OK"
+2026-08-20 13:26:46,493 - INFO - HTTP Request: POST http://localhost:52790/ "HTTP/1.1 200 OK"
+2026-08-20 13:26:56,527 - INFO - HTTP Request: POST http://localhost:52790/ "HTTP/1.1 200 OK"
+2026-08-20 13:26:56,533 - INFO - HTTP Request: POST http://localhost:52790/ "HTTP/1.1 200 OK"
+2026-08-20 13:26:56,579 - INFO - HTTP Request: POST http://localhost:52790/ "HTTP/1.1 200 OK"
+2026-08-20 13:26:56,586 - INFO - HTTP Request: POST http://localhost:52790/ "HTTP/1.1 200 OK"
+2026-08-20 14:52:01,885 - INFO - HTTP Request: GET http://localhost:52996/status "HTTP/1.1 200 OK"
+2026-08-20 14:52:26,071 - INFO - HTTP Request: GET http://localhost:62082/status "HTTP/1.1 200 OK"
+2026-08-20 14:53:09,034 - INFO - HTTP Request: GET http://localhost:53058/status "HTTP/1.1 200 OK"
+2026-08-20 17:00:38,804 - INFO - HTTP Request: GET http://localhost:50893/status "HTTP/1.1 200 OK"
+2026-08-20 17:00:44,382 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:00:44,392 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:00:44,434 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:00:44,438 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:01:01,272 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:01:01,276 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:01:01,306 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:01:01,309 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:01:16,813 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:01:16,817 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:01:16,843 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:01:16,847 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:01:31,349 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:01:31,357 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:01:31,401 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:01:31,405 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:01:36,097 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:01:36,108 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:01:36,373 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:01:36,378 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:01:52,843 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787220112.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787220112.kmz
+2026-08-20 17:01:52,846 - ERROR - Exception during generation
+Traceback (most recent call last):
+  File "C:\Users\Jhansen Wilson\Documents\Github\FTTH-Design\backend\api\routes\generation.py", line 90, in generate_design
+    await asyncio.to_thread(_run_generator_logic, boundary_path, pop_path, output_kmz_path, output_csv_path)
+  File "C:\Users\Jhansen Wilson\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\threads.py", line 26, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Jhansen Wilson\AppData\Local\Python\pythoncore-3.14-64\Lib\concurrent\futures\thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "C:\Users\Jhansen Wilson\AppData\Local\Python\pythoncore-3.14-64\Lib\concurrent\futures\thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "C:\Users\Jhansen Wilson\Documents\Github\FTTH-Design\backend\api\routes\generation.py", line 24, in _run_generator_logic
+    boundary = read_boundary(boundary_path)
+  File "C:\Users\Jhansen Wilson\Documents\Github\FTTH-Design\backend\services\generator\kml_parser.py", line 22, in read_boundary
+    root = ET.fromstring(_extract_kml_bytes(path))
+  File "C:\Users\Jhansen Wilson\AppData\Local\Python\pythoncore-3.14-64\Lib\xml\etree\ElementTree.py", line 1366, in XML
+    parser.feed(text)
+    ~~~~~~~~~~~^^^^^^
+xml.etree.ElementTree.ParseError: not well-formed (invalid token): line 1, column 17
+2026-08-20 17:03:31,274 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787220211.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787220211.kmz
+2026-08-20 17:03:31,275 - ERROR - Exception during generation
+Traceback (most recent call last):
+  File "C:\Users\Jhansen Wilson\Documents\Github\FTTH-Design\backend\api\routes\generation.py", line 90, in generate_design
+    await asyncio.to_thread(_run_generator_logic, boundary_path, pop_path, output_kmz_path, output_csv_path)
+  File "C:\Users\Jhansen Wilson\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\threads.py", line 26, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Jhansen Wilson\AppData\Local\Python\pythoncore-3.14-64\Lib\concurrent\futures\thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "C:\Users\Jhansen Wilson\AppData\Local\Python\pythoncore-3.14-64\Lib\concurrent\futures\thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "C:\Users\Jhansen Wilson\Documents\Github\FTTH-Design\backend\api\routes\generation.py", line 24, in _run_generator_logic
+    boundary = read_boundary(boundary_path)
+  File "C:\Users\Jhansen Wilson\Documents\Github\FTTH-Design\backend\services\generator\kml_parser.py", line 22, in read_boundary
+    root = ET.fromstring(_extract_kml_bytes(path))
+  File "C:\Users\Jhansen Wilson\AppData\Local\Python\pythoncore-3.14-64\Lib\xml\etree\ElementTree.py", line 1366, in XML
+    parser.feed(text)
+    ~~~~~~~~~~~^^^^^^
+xml.etree.ElementTree.ParseError: not well-formed (invalid token): line 1, column 17
+2026-08-20 17:05:05,016 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:05:05,020 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:05:05,046 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:05:05,049 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:06:03,559 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:06:03,563 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:06:03,593 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:06:03,598 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
