@@ -24,7 +24,6 @@ const MapComponent = dynamic(() => import('../components/Map'), {
 }>;
 
 let toastIdCounter = 0;
-let layerIdCounter = 0;
 
 export type LayerConfig = {
   id: string;
@@ -203,7 +202,15 @@ export default function Home() {
         return val || fallback;
       };
 
-      setLayers(parseJson(data.layers, []));
+      const rawLayers = parseJson(data.layers, []);
+      const uniqueLayers = rawLayers.map((l: LayerConfig, index: number) => {
+        if (rawLayers.findIndex((x: LayerConfig) => x.id === l.id) !== index) {
+          return { ...l, id: `${l.id}-${Date.now()}-${index}` };
+        }
+        return l;
+      });
+
+      setLayers(uniqueLayers);
       setFilters(parseJson(data.filters, {
         showPop: true, showOdc: true, showOdp: true, showHouse: true, showFeeder: true, showDistribution: true
       }));
@@ -213,6 +220,36 @@ export default function Home() {
       addToast('Proyek berhasil dimuat!', 'success');
     } catch {
       addToast(`Gagal memuat proyek: Akses ditolak`, 'error');
+    }
+  };
+
+  const unloadProject = () => {
+    setCurrentProjectId(null);
+    setProjectName("");
+    setLayers([]);
+    setKmzUrl(null);
+    setCsvUrl(null);
+    setFilters({
+      showPop: true, showOdc: true, showOdp: true, showHouse: true, showFeeder: true, showDistribution: true
+    });
+    setKmlTrees({});
+    addToast('Proyek ditutup', 'info');
+  };
+
+  const deleteProject = async (id: string) => {
+    try {
+      const res = await fetch(`/api/proxy/api/projects/${id}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) throw new Error('Failed to delete project');
+      addToast('Proyek berhasil dihapus!', 'success');
+      if (currentProjectId === id) {
+        setCurrentProjectId(null);
+        setProjectName("");
+      }
+      fetchProjects();
+    } catch {
+      addToast(`Gagal menghapus proyek`, 'error');
     }
   };
 
@@ -307,25 +344,28 @@ export default function Home() {
       const url = `/api/proxy${data.url}`;
       
       const newLayer: LayerConfig = {
-        id: `import-${++layerIdCounter}`,
+        id: `import-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         name: fileToUse.name,
         url,
         visible: true,
         color: "#3b82f6" // Default blue color
       };
       
+      const prjName = projectName || fileToUse.name.replace(/\.[^/.]+$/, "");
+      if (!projectName) {
+        setProjectName(prjName);
+      }
+      
       setLayers(prev => {
         const newLayers = [...prev, newLayer];
-        
-        // Auto-save the project with the new layer
-        const prjName = projectName || fileToUse.name.replace(/\.[^/.]+$/, "");
-        if (!projectName) {
-          setProjectName(prjName);
-        }
-        saveProject(prjName, newLayers).catch(console.error);
-        
         return newLayers;
       });
+      
+      // Get the latest layers from state (note: this might miss the just-added layer if we don't pass it explicitly, 
+      // so we use the functional approach but invoke saveProject outside)
+      // Actually, we can just pass the new list of layers directly to saveProject
+      const updatedLayers = [...layers, newLayer];
+      saveProject(prjName, updatedLayers).catch(console.error);
       
       addToast(`Berhasil mengimpor: ${fileToUse.name}`, "success");
     } catch {
@@ -480,6 +520,8 @@ export default function Home() {
           onChangeLayerColor={handleLayerColorChange}
           savedProjects={savedProjects}
           onLoadProject={loadProject}
+          onUnloadProject={unloadProject}
+          onDeleteProject={deleteProject}
           currentProjectId={currentProjectId}
         />
         <MapComponent 
@@ -581,7 +623,7 @@ export default function Home() {
       )}
 
       {/* Toast Container */}
-      <div style={{ position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '8px', pointerEvents: 'none' }}>
+      <div style={{ position: 'fixed', top: '80px', left: '50%', transform: 'translateX(-50%)', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '8px', pointerEvents: 'none' }}>
         {toasts.map(toast => (
           <div key={toast.id} style={{ pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: '12px', background: 'white', padding: '12px 20px', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', borderLeft: `4px solid ${toast.type === 'error' ? '#ef4444' : toast.type === 'success' ? '#10b981' : '#3b82f6'}`, minWidth: '300px' }}>
             {toast.type === 'error' && <AlertCircle size={20} color="#ef4444" />}

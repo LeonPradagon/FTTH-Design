@@ -1,5 +1,6 @@
-import React from 'react';
-import { ChevronLeft, Filter, MapPin, Target, Home, Route, Cable, Layers } from 'lucide-react';
+import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
+import { ChevronLeft, ChevronDown, ChevronRight, Filter, MapPin, Target, Home, Route, Cable, Layers, Trash2 } from 'lucide-react';
 import { LayerConfig, KmlNode } from '../app/page';
 import { KmlTreeViewer } from './KmlTreeViewer';
 
@@ -26,10 +27,14 @@ interface SidebarProps {
   onChangeLayerColor?: (id: string, color: string) => void;
   savedProjects?: { id: string; name: string; updated_at?: string; created_at?: string }[];
   onLoadProject?: (id: string) => void;
+  onUnloadProject?: () => void;
+  onDeleteProject?: (id: string) => void;
   currentProjectId?: string | null;
 }
 
-export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTrees, onToggleTreeNode, isCollapsed, onToggle, featureColors, onColorChange, onChangeLayerColor, savedProjects = [], onLoadProject, currentProjectId }: SidebarProps) {
+export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTrees, onToggleTreeNode, isCollapsed, onToggle, featureColors, onColorChange, onChangeLayerColor, savedProjects = [], onLoadProject, onUnloadProject, onDeleteProject, currentProjectId }: SidebarProps) {
+  const [isProjectsExpanded, setIsProjectsExpanded] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<{id: string, name: string} | null>(null);
 
   const filterItems: { key: keyof FeatureFilters; colorKey: string; label: string; icon: React.ReactNode }[] = [
     { key: 'showPop', colorKey: 'pop', label: 'Server OLT (POP)', icon: <MapPin size={16} /> },
@@ -45,17 +50,18 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
       className={`sidebar-container ${isCollapsed ? 'collapsed' : ''}`}
       style={{
         position: 'absolute',
-        top: '80px',
-        left: '20px',
+        top: '0',
+        left: '0',
+        bottom: '0',
+        height: '100%',
         zIndex: 1000,
-        backgroundColor: 'rgba(255, 255, 255, 0.85)',
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
-        borderRadius: '16px',
-        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-        border: '1px solid rgba(255, 255, 255, 0.5)',
-        width: isCollapsed ? '48px' : '260px',
-        maxHeight: 'calc(100vh - 100px)',
+        borderRadius: '0',
+        boxShadow: '4px 0 15px rgba(0, 0, 0, 0.05)',
+        borderRight: '1px solid rgba(0, 0, 0, 0.08)',
+        width: isCollapsed ? '48px' : '280px',
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         overflow: 'hidden',
         display: 'flex',
@@ -130,7 +136,6 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
                   opacity: filters[item.key] ? 1 : 0.4,
                   cursor: 'pointer'
                 }}
-                onClick={() => onToggleFilter(item.key)}
               >
                 {item.icon}
               </div>
@@ -139,7 +144,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
                 color: filters[item.key] ? '#374151' : '#9ca3af',
                 fontWeight: filters[item.key] ? 500 : 400,
                 cursor: 'pointer'
-              }} onClick={() => onToggleFilter(item.key)}>
+              }}>
                 {item.label}
               </span>
             </div>
@@ -150,6 +155,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
                   type="color"
                   value={featureColors[item.colorKey]}
                   onChange={(e) => onColorChange(item.colorKey, e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
                   style={{
                     width: '24px',
                     height: '24px',
@@ -172,7 +178,6 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
                   transition: 'background-color 0.2s',
                   cursor: 'pointer'
                 }}
-                onClick={() => onToggleFilter(item.key)}
               >
                 <div style={{
                   width: '16px',
@@ -299,35 +304,170 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
 
       {/* Database Projects Section */}
       {!isCollapsed && savedProjects && savedProjects.length > 0 && (
-        <div style={{ flex: 1, padding: '20px', borderTop: '1px solid rgba(0,0,0,0.05)', overflowY: 'auto' }}>
-          <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Proyek Tersimpan</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {savedProjects.map((p) => (
-              <div 
-                key={p.id}
-                onClick={() => onLoadProject?.(p.id)}
-                style={{
-                  padding: '12px',
-                  border: `1px solid ${currentProjectId === p.id ? '#3b82f6' : '#e5e7eb'}`,
-                  backgroundColor: currentProjectId === p.id ? '#eff6ff' : 'white',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '4px'
-                }}
-              >
-                <div style={{ fontWeight: 600, color: currentProjectId === p.id ? '#1e40af' : '#1f2937', fontSize: '13px' }}>
-                  {p.name}
-                </div>
-                <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                  {new Date(p.updated_at || p.created_at || "2024-01-01").toLocaleString('id-ID')}
-                </div>
-              </div>
-            ))}
+        <div style={{ padding: '0', borderTop: '1px solid rgba(0,0,0,0.05)', backgroundColor: '#f9fafb' }}>
+          <div 
+            onClick={() => setIsProjectsExpanded(!isProjectsExpanded)}
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between', 
+              padding: '16px 20px', 
+              cursor: 'pointer',
+              userSelect: 'none'
+            }}
+          >
+            <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#4b5563', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Proyek Tersimpan ({savedProjects.length})
+            </h4>
+            {isProjectsExpanded ? <ChevronDown size={16} color="#6b7280" /> : <ChevronRight size={16} color="#6b7280" />}
           </div>
+          
+          {isProjectsExpanded && (
+            <div style={{ display: 'flex', flexDirection: 'column', padding: '0 20px 20px 20px', maxHeight: '250px', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {savedProjects.map((p) => (
+                  <div 
+                    key={p.id}
+                    className="project-item"
+                    style={{
+                      position: 'relative',
+                      padding: '10px 12px',
+                      border: `1px solid ${currentProjectId === p.id ? '#3b82f6' : '#e5e7eb'}`,
+                      backgroundColor: currentProjectId === p.id ? '#eff6ff' : 'white',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '2px'
+                    }}
+                  >
+                    <div 
+                      onClick={() => {
+                        if (currentProjectId === p.id && onUnloadProject) {
+                          onUnloadProject();
+                        } else {
+                          onLoadProject?.(p.id);
+                        }
+                      }}
+                      style={{ flex: 1 }}
+                    >
+                      <div style={{ fontWeight: 600, color: currentProjectId === p.id ? '#1e40af' : '#1f2937', fontSize: '13px', paddingRight: '24px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {p.name}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#6b7280' }}>
+                        {new Date(p.updated_at || p.created_at || "2024-01-01").toLocaleDateString('id-ID')}
+                      </div>
+                    </div>
+                    
+                    {onDeleteProject && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setProjectToDelete({ id: p.id, name: p.name });
+                        }}
+                        style={{
+                          position: 'absolute',
+                          right: '10px',
+                          top: '12px',
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#ef4444',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          borderRadius: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: 0.6,
+                          transition: 'opacity 0.2s, background-color 0.2s'
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.backgroundColor = '#fee2e2'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.6'; e.currentTarget.style.backgroundColor = 'transparent'; }}
+                        title="Hapus Proyek"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {projectToDelete && typeof document !== 'undefined' && createPortal(
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          backdropFilter: 'blur(4px)',
+          zIndex: 99999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '24px',
+            width: '340px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+            animation: 'slideUp 0.3s ease-out'
+          }}>
+            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#111827' }}>Konfirmasi Hapus</h3>
+            <p style={{ margin: 0, fontSize: '14px', color: '#4b5563', lineHeight: '1.5' }}>
+              Apakah Anda yakin ingin menghapus proyek <b>"{projectToDelete.name}"</b>? Tindakan ini tidak dapat dibatalkan.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+              <button 
+                onClick={() => setProjectToDelete(null)}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #d1d5db',
+                  background: 'white',
+                  color: '#374151',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+              >
+                Batal
+              </button>
+              <button 
+                onClick={() => {
+                  if (onDeleteProject) onDeleteProject(projectToDelete.id);
+                  setProjectToDelete(null);
+                }}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: '#ef4444',
+                  color: 'white',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#dc2626'}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#ef4444'}
+              >
+                Hapus Proyek
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

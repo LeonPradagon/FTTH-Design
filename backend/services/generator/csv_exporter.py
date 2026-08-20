@@ -41,8 +41,8 @@ def export_csv(pop, odcs, feeder_segments, output_path):
                 
                 for k, h in enumerate(odp.houses, start=1):
                     house_name = f"{i:02d}/{j:02d}-{k:02d}"
-                    writer.writerow(['Homepass (Titik Rumah)', house_name, 1, 'pcs', h['lat'], h['lon']])
-                    drop_dist = haversine(odp.lat, odp.lon, h['lat'], h['lon']) * 1.2
+                    writer.writerow(['Homepass (Titik Rumah)', house_name, 1, 'pcs', h[0], h[1]])
+                    drop_dist = haversine(odp.lat, odp.lon, h[0], h[1]) * 1.2
                     writer.writerow(['Kabel Drop', f"{odp_name} -> {house_name}", round(drop_dist, 2), 'm', '', ''])
         
         for seg in feeder_segments:

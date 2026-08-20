@@ -204,6 +204,53 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
 
           const geoJson = kml(doc);
           setGeoDataMap(prev => ({ ...prev, [`${layer.id}-${layer.url}`]: geoJson }));
+
+          // Auto-fit bounds
+          if (containerRef.current && geoJson.type === 'FeatureCollection' && geoJson.features.length > 0) {
+            let minLng = 180, minLat = 90, maxLng = -180, maxLat = -90;
+            let hasCoords = false;
+            const processCoords = (coords: any[]) => {
+              if (typeof coords[0] === 'number') {
+                minLng = Math.min(minLng, coords[0]); maxLng = Math.max(maxLng, coords[0]);
+                minLat = Math.min(minLat, coords[1]); maxLat = Math.max(maxLat, coords[1]);
+                hasCoords = true;
+              } else if (Array.isArray(coords)) {
+                coords.forEach(processCoords);
+              }
+            };
+            geoJson.features.forEach((f: any) => {
+              if (f.geometry?.coordinates) processCoords(f.geometry.coordinates);
+            });
+
+            if (hasCoords) {
+              const { width, height } = containerRef.current.getBoundingClientRect();
+              if (width > 0 && height > 0) {
+                const viewport = new WebMercatorViewport({ width, height });
+                // Add some safety checks to prevent crash on identical min/max
+                if (maxLng - minLng > 0.0001 && maxLat - minLat > 0.0001) {
+                  const fitted = viewport.fitBounds(
+                    [[minLng, minLat], [maxLng, maxLat]],
+                    { padding: 40 }
+                  );
+                  setViewState(v => ({
+                    ...v,
+                    longitude: fitted.longitude,
+                    latitude: fitted.latitude,
+                    zoom: fitted.zoom,
+                    transitionDuration: 1000
+                  }));
+                } else {
+                  setViewState(v => ({
+                    ...v,
+                    longitude: minLng,
+                    latitude: minLat,
+                    zoom: 16,
+                    transitionDuration: 1000
+                  }));
+                }
+              }
+            }
+          }
         } catch (err) {
           console.error(`Error loading KML ${layer.name}:`, err);
         }

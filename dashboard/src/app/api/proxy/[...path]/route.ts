@@ -41,8 +41,7 @@ async function proxy(req: NextRequest, { params }: { params: Promise<{ path: str
     const res = await fetch(backendUrl, {
       method: req.method,
       headers: headers,
-      body: reqBody,
-      duplex: 'half'
+      body: reqBody
     } as RequestInit);
     
     // Create new headers from backend response

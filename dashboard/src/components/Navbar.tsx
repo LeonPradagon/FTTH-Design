@@ -58,11 +58,6 @@ export function Navbar({
 
         {/* Center: Project Name */}
         <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
-          {projectName && (
-            <span style={{ fontSize: '14px', fontWeight: 500, color: '#374151' }}>
-              {projectName}
-            </span>
-          )}
         </div>
 
         {/* Right: Actions */}

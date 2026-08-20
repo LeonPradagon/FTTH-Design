@@ -4,12 +4,13 @@ import zipfile
 import time
 import shutil
 import asyncio
+import glob
 from typing import Optional
 from backend.core.logging import logger
 
 from backend.services.generator.core_logic import regenerate_cables_only, generate_cables_from_custom_points
 from backend.services.generator.kml_parser import read_boundary, read_points, read_houses_from_file
-from backend.services.generator.osm_client import fetch_houses_in_boundary, fetch_road_graph
+from backend.services.generator.osm_local import fetch_houses_in_boundary, fetch_road_graph
 from backend.services.generator.clustering import build_design
 from backend.services.generator.routing import build_feeder_chain, enforce_min_distance_between_odcs
 from backend.services.generator.core_logic import save_design_state
@@ -19,11 +20,50 @@ import math
 
 router = APIRouter()
 
+def cleanup_old_files(directory="dashboard/public/data", max_age_seconds=3600):
+    """Hapus file generate yang lebih lama dari max_age_seconds (default 1 jam)"""
+    try:
+        if not os.path.exists(directory):
+            return
+        
+        now = time.time()
+        for ext in ["*.kml", "*.kmz", "*.csv"]:
+            for f in glob.glob(os.path.join(directory, ext)):
+                if os.path.isfile(f) and now - os.path.getmtime(f) > max_age_seconds:
+                    try:
+                        os.remove(f)
+                    except Exception:
+                        pass
+    except Exception as e:
+        logger.warning(f"Error during cleanup: {e}")
+
+from shapely.geometry import Point
+
+def haversine_dist(lon1, lat1, lon2, lat2):
+    """Hitung jarak (dalam meter) antara dua titik koordinat."""
+    R = 6371000
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+    return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
 # Helper for the main generation logic
-def _run_generator_logic(boundary_path, pop_path, output_kmz, output_csv=None):
+def _run_generator_logic(boundary_path, pop_path, output_kmz, output_csv=None, has_custom_pop=False):
     boundary = read_boundary(boundary_path)
-    pop_points = read_points(pop_path)
-    pop = pop_points[0]
+    
+    if has_custom_pop:
+        pop_points = read_points(pop_path)
+        pop = pop_points[0]
+        # Validasi Jarak jika POP custom di-upload
+        dist = haversine_dist(boundary.centroid.x, boundary.centroid.y, pop["lon"], pop["lat"])
+        if dist > 3000: # 3 km
+            raise ValueError("POP (Sentral) terlalu jauh dari area perancangan (> 3 km). Hal ini dapat membebani server saat meroute jalan. Harap letakkan POP lebih dekat dengan area boundary.")
+    else:
+        # Jika tidak ada POP yang di-upload, otomatis buat POP di lokasi strategis
+        from backend.services.generator.osm_local import find_strategic_pop
+        pop = find_strategic_pop(boundary)
+        logger.info(f"Auto-generated POP at {pop['lon']}, {pop['lat']} (Location: {pop['name']})")
     
     houses = fetch_houses_in_boundary(boundary)
     if not houses:
@@ -57,8 +97,12 @@ async def generate_design(
     boundaryFile: Optional[UploadFile] = File(None),
     popFile: Optional[UploadFile] = File(None)
 ):
+    # Bersihkan file lama setiap kali request baru
+    cleanup_old_files()
+    
     boundary_path = "boundary.kml"
     pop_path = "POP.kml"
+    has_custom_pop = False
 
     if boundaryFile and boundaryFile.filename:
         os.makedirs("dashboard/public/data", exist_ok=True)
@@ -71,10 +115,11 @@ async def generate_design(
         pop_path = f"dashboard/public/data/custom_pop_{int(time.time())}.kml"
         with open(pop_path, "wb") as buffer:
             shutil.copyfileobj(popFile.file, buffer)
+        has_custom_pop = True
     
     if not os.path.exists(boundary_path):
         raise HTTPException(status_code=404, detail=f"Boundary file not found: {boundary_path}")
-    if not os.path.exists(pop_path):
+    if has_custom_pop and not os.path.exists(pop_path):
         raise HTTPException(status_code=404, detail=f"POP file not found: {pop_path}")
 
     timestamp = int(time.time())
@@ -87,7 +132,7 @@ async def generate_design(
     try:
         # Run generator in a thread to avoid blocking the event loop
         logger.info(f"Running FTTH generation: boundary={boundary_path}, pop={pop_path}, output={output_kmz_path}")
-        await asyncio.to_thread(_run_generator_logic, boundary_path, pop_path, output_kmz_path, output_csv_path)
+        await asyncio.to_thread(_run_generator_logic, boundary_path, pop_path, output_kmz_path, output_csv_path, has_custom_pop)
 
         if not os.path.exists(output_kmz_path):
             raise HTTPException(status_code=500, detail="Script ran successfully but KMZ output not found.")
@@ -121,6 +166,7 @@ async def generate_design(
 
 @router.post("/regenerate-cables")
 async def regenerate_cables():
+    cleanup_old_files()
     timestamp = int(time.time())
     output_kmz_name = f"design_ftth_regen_{timestamp}.kmz"
     output_kmz_path = f"dashboard/public/data/{output_kmz_name}"

@@ -2042,3 +2042,410 @@ xml.etree.ElementTree.ParseError: not well-formed (invalid token): line 1, colum
 2026-08-20 17:06:03,563 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
 2026-08-20 17:06:03,593 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
 2026-08-20 17:06:03,598 - INFO - HTTP Request: POST http://localhost:53057/ "HTTP/1.1 200 OK"
+2026-08-20 17:16:24,806 - INFO - HTTP Request: GET http://localhost:54449/status "HTTP/1.1 200 OK"
+2026-08-20 17:16:28,519 - INFO - HTTP Request: POST http://localhost:54449/ "HTTP/1.1 200 OK"
+2026-08-20 17:16:28,526 - INFO - HTTP Request: POST http://localhost:54449/ "HTTP/1.1 200 OK"
+2026-08-20 17:17:38,293 - INFO - HTTP Request: POST http://localhost:54449/ "HTTP/1.1 200 OK"
+2026-08-20 17:17:38,296 - INFO - HTTP Request: POST http://localhost:54449/ "HTTP/1.1 200 OK"
+2026-08-20 17:18:37,996 - INFO - HTTP Request: POST http://localhost:54449/ "HTTP/1.1 200 OK"
+2026-08-20 17:18:38,002 - INFO - HTTP Request: POST http://localhost:54449/ "HTTP/1.1 200 OK"
+2026-08-20 17:18:38,065 - INFO - HTTP Request: POST http://localhost:54449/ "HTTP/1.1 200 OK"
+2026-08-20 17:18:38,077 - INFO - HTTP Request: POST http://localhost:54449/ "HTTP/1.1 200 OK"
+2026-08-20 17:18:51,753 - INFO - HTTP Request: POST http://localhost:54449/ "HTTP/1.1 200 OK"
+2026-08-20 17:18:51,756 - INFO - HTTP Request: POST http://localhost:54449/ "HTTP/1.1 200 OK"
+2026-08-20 17:20:51,821 - INFO - HTTP Request: GET http://localhost:57228/status "HTTP/1.1 200 OK"
+2026-08-20 17:21:04,744 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:21:04,746 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:22:22,661 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:22:22,664 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:22:31,024 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:22:31,026 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:27,781 - INFO - HTTP Request: GET http://localhost:54810/status "HTTP/1.1 200 OK"
+2026-08-20 17:23:32,421 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:32,425 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:32,484 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:32,488 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:36,675 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:36,681 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:36,726 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:36,730 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:37,555 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:37,561 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:37,597 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:37,600 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:47,099 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:47,102 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:47,159 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:47,162 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:56,085 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:56,090 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:56,097 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:56,100 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:56,711 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:56,713 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:56,757 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:23:56,761 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:24:04,821 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:24:04,824 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:24:05,118 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:24:05,120 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:24:05,756 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:24:05,759 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:24:06,532 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:24:06,534 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:24:07,828 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:24:07,831 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:26:57,294 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:26:57,297 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:27:07,119 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:27:07,121 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:28:15,447 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:28:15,450 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:28:15,494 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:28:15,496 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:28:27,842 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:28:27,847 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:28:27,889 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:28:27,892 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:30:48,253 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:30:48,256 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:30:48,260 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:30:48,331 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:30:48,335 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:31:00,029 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787221860.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787221860.kmz
+2026-08-20 17:32:07,697 - WARNING - Validation error during generation: Tidak ada rumah yang ditemukan di OpenStreetMap untuk area ini.
+2026-08-20 17:32:41,351 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787221961.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787221961.kmz
+2026-08-20 17:32:41,421 - WARNING - Validation error during generation: Tidak ada rumah yang ditemukan di OpenStreetMap untuk area ini.
+2026-08-20 17:33:52,257 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:33:52,259 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:33:52,263 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:33:52,301 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:33:52,303 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:33:56,934 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787222036.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787222036.kmz
+2026-08-20 17:33:57,002 - WARNING - Validation error during generation: Tidak ada rumah yang ditemukan di OpenStreetMap untuk area ini.
+2026-08-20 17:34:04,249 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787222044.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787222044.kmz
+2026-08-20 17:34:04,330 - WARNING - Validation error during generation: Tidak ada rumah yang ditemukan di OpenStreetMap untuk area ini.
+2026-08-20 17:34:11,815 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787222051.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787222051.kmz
+2026-08-20 17:34:11,879 - WARNING - Validation error during generation: Tidak ada rumah yang ditemukan di OpenStreetMap untuk area ini.
+2026-08-20 17:36:33,646 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787222193.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787222193.kmz
+2026-08-20 17:36:33,723 - WARNING - Validation error during generation: Tidak ada rumah yang ditemukan di OpenStreetMap untuk area ini.
+2026-08-20 17:36:35,846 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:36:35,849 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:36:38,061 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:36:38,064 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:36:42,771 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:36:42,773 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:36:44,255 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:36:44,257 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:36:57,250 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787222217.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787222217.kmz
+2026-08-20 17:36:57,302 - WARNING - Validation error during generation: Tidak ada rumah yang ditemukan di OpenStreetMap untuk area ini.
+2026-08-20 17:37:10,144 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787222230.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787222230.kmz
+2026-08-20 17:39:41,327 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:39:41,447 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:39:41,515 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:39:41,561 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:39:44,332 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:39:44,425 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:39:48,987 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787222388.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787222388.kmz
+2026-08-20 17:47:34,279 - INFO - HTTP Request: GET http://localhost:50758/status "HTTP/1.1 200 OK"
+2026-08-20 17:47:44,446 - WARNING - Gagal generate CSV (tuple indices must be integers or slices, not str)
+2026-08-20 17:47:50,423 - INFO - HTTP Request: GET http://localhost:63333/status "HTTP/1.1 200 OK"
+2026-08-20 17:49:41,730 - INFO - HTTP Request: GET http://localhost:63244/status "HTTP/1.1 200 OK"
+2026-08-20 17:50:01,331 - WARNING - Gagal generate CSV (tuple indices must be integers or slices, not str)
+2026-08-20 17:50:02,256 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:50:02,263 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:50:02,323 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:50:02,328 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:50:03,245 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:50:03,249 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 17:50:06,369 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787223006.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787223006.kmz
+2026-08-20 17:56:03,771 - WARNING - Gagal generate CSV (tuple indices must be integers or slices, not str)
+2026-08-20 18:05:01,212 - INFO - HTTP Request: GET http://localhost:65002/status "HTTP/1.1 200 OK"
+2026-08-20 18:05:12,764 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 18:05:12,771 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 18:05:12,800 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 18:05:12,806 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 18:05:14,643 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 18:05:14,647 - INFO - HTTP Request: POST http://localhost:57228/ "HTTP/1.1 200 OK"
+2026-08-20 18:05:17,452 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787223917.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787223917.kmz
+2026-08-20 18:11:09,480 - WARNING - Gagal generate CSV (tuple indices must be integers or slices, not str)
+2026-08-20 18:13:12,103 - INFO - HTTP Request: GET http://localhost:54549/status "HTTP/1.1 200 OK"
+2026-08-20 18:13:35,654 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787224415.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787224415.kmz
+2026-08-20 18:13:35,655 - INFO - Auto-generated POP at 112.72714305632843, -7.353656069945271
+2026-08-20 18:14:32,726 - INFO - HTTP Request: POST http://localhost:54549/ "HTTP/1.1 200 OK"
+2026-08-20 18:14:32,732 - INFO - HTTP Request: POST http://localhost:54549/ "HTTP/1.1 200 OK"
+2026-08-20 18:14:32,763 - INFO - HTTP Request: POST http://localhost:54549/ "HTTP/1.1 200 OK"
+2026-08-20 18:14:32,769 - INFO - HTTP Request: POST http://localhost:54549/ "HTTP/1.1 200 OK"
+2026-08-20 18:14:41,325 - INFO - HTTP Request: POST http://localhost:54549/ "HTTP/1.1 200 OK"
+2026-08-20 18:14:41,328 - INFO - HTTP Request: POST http://localhost:54549/ "HTTP/1.1 200 OK"
+2026-08-20 18:14:41,385 - INFO - HTTP Request: POST http://localhost:54549/ "HTTP/1.1 200 OK"
+2026-08-20 18:14:41,389 - INFO - HTTP Request: POST http://localhost:54549/ "HTTP/1.1 200 OK"
+2026-08-20 18:14:43,197 - INFO - HTTP Request: POST http://localhost:54549/ "HTTP/1.1 200 OK"
+2026-08-20 18:14:43,200 - INFO - HTTP Request: POST http://localhost:54549/ "HTTP/1.1 200 OK"
+2026-08-20 18:14:49,378 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787224489.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787224489.kmz
+2026-08-20 18:14:49,379 - INFO - Auto-generated POP at 112.72714305632843, -7.353656069945271
+2026-08-20 18:14:59,100 - INFO - HTTP Request: POST http://localhost:54549/ "HTTP/1.1 200 OK"
+2026-08-20 18:14:59,102 - INFO - HTTP Request: POST http://localhost:54549/ "HTTP/1.1 200 OK"
+2026-08-20 18:14:59,107 - INFO - HTTP Request: POST http://localhost:54549/ "HTTP/1.1 200 OK"
+2026-08-20 18:14:59,185 - INFO - HTTP Request: POST http://localhost:54549/ "HTTP/1.1 200 OK"
+2026-08-20 18:14:59,188 - INFO - HTTP Request: POST http://localhost:54549/ "HTTP/1.1 200 OK"
+2026-08-20 18:15:38,315 - INFO - HTTP Request: POST http://localhost:54549/ "HTTP/1.1 200 OK"
+2026-08-20 18:15:38,319 - INFO - HTTP Request: POST http://localhost:54549/ "HTTP/1.1 200 OK"
+2026-08-20 18:15:38,377 - INFO - HTTP Request: POST http://localhost:54549/ "HTTP/1.1 200 OK"
+2026-08-20 18:15:38,380 - INFO - HTTP Request: POST http://localhost:54549/ "HTTP/1.1 200 OK"
+2026-08-20 18:15:39,165 - INFO - HTTP Request: POST http://localhost:54549/ "HTTP/1.1 200 OK"
+2026-08-20 18:15:39,169 - INFO - HTTP Request: POST http://localhost:54549/ "HTTP/1.1 200 OK"
+2026-08-20 18:20:53,193 - INFO - HTTP Request: GET http://localhost:59053/status "HTTP/1.1 200 OK"
+2026-08-20 18:21:04,259 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787224864.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787224864.kmz
+2026-08-20 18:21:04,260 - INFO - Auto-generated POP at 112.72714305632843, -7.353656069945271
+2026-08-20 18:24:43,821 - INFO - HTTP Request: GET http://localhost:51103/status "HTTP/1.1 200 OK"
+2026-08-20 18:25:02,118 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787225102.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787225102.kmz
+2026-08-20 18:25:02,197 - INFO - Auto-generated POP at 112.7294182, -7.3526552 (Location: Waru)
+2026-08-20 18:26:58,972 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:26:58,978 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:26:59,032 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:26:59,037 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:26:59,977 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:26:59,979 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:27:02,897 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787225222.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787225222.kmz
+2026-08-20 18:27:02,968 - INFO - Auto-generated POP at 112.7294182, -7.3526552 (Location: Waru)
+2026-08-20 18:27:13,985 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:27:13,987 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:27:13,991 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:27:14,078 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:27:14,081 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:27:17,845 - INFO - Starting regenerate_cables_only -> dashboard/public/data/design_ftth_regen_1787225237.kmz
+2026-08-20 18:27:17,850 - INFO - load_road_graph returned: Graph with 152 nodes
+2026-08-20 18:27:27,039 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:27:27,042 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:27:27,045 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:27:27,164 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:27:27,167 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:27:53,479 - INFO - Starting regenerate_cables_only -> dashboard/public/data/design_ftth_regen_1787225273.kmz
+2026-08-20 18:27:53,482 - INFO - load_road_graph returned: Graph with 152 nodes
+2026-08-20 18:28:02,769 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:28:02,772 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:28:02,777 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:28:02,830 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:28:02,832 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:30:46,206 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787225446.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787225446.kmz
+2026-08-20 18:30:46,279 - INFO - Auto-generated POP at 112.7294182, -7.3526552 (Location: Waru)
+2026-08-20 18:30:56,675 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:30:56,678 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:30:56,683 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:30:56,753 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:30:56,755 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:31:00,141 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787225460.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787225460.kmz
+2026-08-20 18:31:00,219 - INFO - Auto-generated POP at 112.7294182, -7.3526552 (Location: Waru)
+2026-08-20 18:31:11,061 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:31:11,064 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:31:11,068 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:31:11,123 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:31:11,125 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:31:21,003 - INFO - Starting regenerate_cables_only -> dashboard/public/data/design_ftth_regen_1787225481.kmz
+2026-08-20 18:31:21,008 - INFO - load_road_graph returned: Graph with 152 nodes
+2026-08-20 18:31:30,297 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:31:30,299 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:31:30,303 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:31:30,360 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:31:30,362 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:31:32,602 - INFO - Starting regenerate_cables_only -> dashboard/public/data/design_ftth_regen_1787225492.kmz
+2026-08-20 18:31:32,605 - INFO - load_road_graph returned: Graph with 152 nodes
+2026-08-20 18:31:41,779 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:31:41,782 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:31:41,788 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:31:41,809 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:31:41,812 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:31:44,343 - INFO - Starting regenerate_cables_only -> dashboard/public/data/design_ftth_regen_1787225504.kmz
+2026-08-20 18:31:44,346 - INFO - load_road_graph returned: Graph with 152 nodes
+2026-08-20 18:31:53,712 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:31:53,715 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:31:53,719 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:31:53,775 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:31:53,778 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:31:58,291 - INFO - Starting regenerate_cables_only -> dashboard/public/data/design_ftth_regen_1787225518.kmz
+2026-08-20 18:31:58,295 - INFO - load_road_graph returned: Graph with 152 nodes
+2026-08-20 18:32:07,500 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:32:07,503 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:32:07,507 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:32:07,563 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:32:07,566 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:32:23,618 - INFO - Starting regenerate_cables_only -> dashboard/public/data/design_ftth_regen_1787225543.kmz
+2026-08-20 18:32:23,623 - INFO - load_road_graph returned: Graph with 152 nodes
+2026-08-20 18:32:32,808 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:32:32,810 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:32:32,814 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:32:32,872 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:32:32,877 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:34:39,681 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:34:39,686 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:35:15,896 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:35:15,900 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:35:15,920 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:35:15,924 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:35:17,659 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:35:17,663 - INFO - HTTP Request: POST http://localhost:51103/ "HTTP/1.1 200 OK"
+2026-08-20 18:36:57,688 - INFO - HTTP Request: GET http://localhost:53974/status "HTTP/1.1 200 OK"
+2026-08-20 18:37:56,199 - INFO - HTTP Request: POST http://localhost:53974/ "HTTP/1.1 200 OK"
+2026-08-20 18:37:56,205 - INFO - HTTP Request: POST http://localhost:53974/ "HTTP/1.1 200 OK"
+2026-08-20 18:37:56,261 - INFO - HTTP Request: POST http://localhost:53974/ "HTTP/1.1 200 OK"
+2026-08-20 18:37:56,265 - INFO - HTTP Request: POST http://localhost:53974/ "HTTP/1.1 200 OK"
+2026-08-20 18:38:02,501 - INFO - HTTP Request: POST http://localhost:53974/ "HTTP/1.1 200 OK"
+2026-08-20 18:38:02,504 - INFO - HTTP Request: POST http://localhost:53974/ "HTTP/1.1 200 OK"
+2026-08-20 18:38:05,971 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787225885.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787225885.kmz
+2026-08-20 18:38:06,055 - INFO - Auto-generated POP at 112.72926432353755, -7.3526317845124165 (Location: Stasiun Waru)
+2026-08-20 18:40:42,434 - INFO - HTTP Request: GET http://localhost:56488/status "HTTP/1.1 200 OK"
+2026-08-20 18:43:06,977 - INFO - HTTP Request: GET http://localhost:57793/status "HTTP/1.1 200 OK"
+2026-08-20 18:44:38,978 - WARNING - Gagal mengambil data jalan (HTTPSConnectionPool(host='overpass-api.de', port=443): Max retries exceeded with url: /api/interpreter (Caused by ConnectTimeoutError(<HTTPSConnection(host='overpass-api.de', port=443) at 0x28da55e4f50>, 'Connection to overpass-api.de timed out. (connect timeout=180)'))). Feeder akan pakai garis lurus.
+2026-08-20 18:45:28,876 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:45:28,883 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:45:42,765 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:45:42,770 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:45:42,804 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:45:42,813 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:46:26,793 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:46:26,798 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:22,446 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:22,453 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:22,539 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:22,548 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:32,972 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:32,976 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:33,037 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:33,042 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:36,996 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:37,003 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:37,083 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:37,088 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:43,053 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:43,056 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:45,450 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:45,453 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:47,514 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:47,517 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:48,917 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:48,921 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:50,054 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:50,063 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:51,517 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:51,520 - INFO - HTTP Request: POST http://localhost:57793/ "HTTP/1.1 200 OK"
+2026-08-20 18:47:54,792 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787226474.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787226474.kmz
+2026-08-20 18:47:54,880 - INFO - Auto-generated POP at 112.72926432353755, -7.3526317845124165 (Location: Stasiun Waru)
+2026-08-20 18:53:05,722 - WARNING - Gagal mengambil data jalan (HTTPSConnectionPool(host='overpass-api.de', port=443): Max retries exceeded with url: /api/interpreter (Caused by ConnectTimeoutError(<HTTPSConnection(host='overpass-api.de', port=443) at 0x2a716a8aad0>, 'Connection to overpass-api.de timed out. (connect timeout=180)'))). Feeder akan pakai garis lurus.
+2026-08-20 18:53:08,529 - INFO - HTTP Request: GET http://localhost:59347/status "HTTP/1.1 200 OK"
+2026-08-20 18:53:18,637 - INFO - HTTP Request: GET http://localhost:57516/status "HTTP/1.1 200 OK"
+2026-08-20 18:53:21,477 - INFO - HTTP Request: POST http://localhost:57516/ "HTTP/1.1 200 OK"
+2026-08-20 18:53:21,482 - INFO - HTTP Request: POST http://localhost:57516/ "HTTP/1.1 200 OK"
+2026-08-20 18:53:21,643 - INFO - HTTP Request: POST http://localhost:57516/ "HTTP/1.1 200 OK"
+2026-08-20 18:53:21,648 - INFO - HTTP Request: POST http://localhost:57516/ "HTTP/1.1 200 OK"
+2026-08-20 18:53:22,734 - INFO - HTTP Request: POST http://localhost:57516/ "HTTP/1.1 200 OK"
+2026-08-20 18:53:22,737 - INFO - HTTP Request: POST http://localhost:57516/ "HTTP/1.1 200 OK"
+2026-08-20 18:53:27,073 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787226807.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787226807.kmz
+2026-08-20 18:53:27,160 - INFO - Auto-generated POP at 112.72926432353755, -7.3526317845124165 (Location: Stasiun Waru)
+2026-08-20 18:59:22,895 - WARNING - Gagal mengambil data jalan (No data elements in server response. Check query location/filters and log.). Feeder akan pakai garis lurus.
+2026-08-20 18:59:26,522 - INFO - HTTP Request: GET http://localhost:54313/status "HTTP/1.1 200 OK"
+2026-08-20 18:59:26,534 - INFO - HTTP Request: POST http://localhost:54313/ "HTTP/1.1 200 OK"
+2026-08-20 18:59:26,537 - INFO - HTTP Request: POST http://localhost:54313/ "HTTP/1.1 200 OK"
+2026-08-20 18:59:26,587 - INFO - HTTP Request: POST http://localhost:54313/ "HTTP/1.1 200 OK"
+2026-08-20 18:59:26,590 - INFO - HTTP Request: POST http://localhost:54313/ "HTTP/1.1 200 OK"
+2026-08-20 18:59:28,049 - INFO - HTTP Request: POST http://localhost:54313/ "HTTP/1.1 200 OK"
+2026-08-20 18:59:28,053 - INFO - HTTP Request: POST http://localhost:54313/ "HTTP/1.1 200 OK"
+2026-08-20 19:01:56,716 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787227316.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787227316.kmz
+2026-08-20 19:01:56,822 - INFO - Auto-generated POP at 112.72926432353755, -7.3526317845124165 (Location: Stasiun Waru)
+2026-08-20 19:08:40,062 - WARNING - Gagal mengambil data jalan (No data elements in server response. Check query location/filters and log.). Feeder akan pakai garis lurus.
+2026-08-20 19:14:17,282 - INFO - HTTP Request: GET http://localhost:60219/status "HTTP/1.1 200 OK"
+2026-08-20 19:14:25,014 - INFO - HTTP Request: GET http://localhost:54697/status "HTTP/1.1 200 OK"
+2026-08-20 19:22:43,712 - INFO - Reading buildings from PBF (bbox: (112.7246019226737, -7.355259048215913, 112.7292577213914, -7.352111864756314))...
+2026-08-20 19:25:40,298 - INFO - Created 688 records
+2026-08-20 19:25:40,308 - INFO - Cached 688 buildings to C:\Users\Jhansen Wilson\Documents\Github\FTTH-Design\cache\buildings_8b8c7a3457d3.gpkg
+2026-08-20 19:25:40,309 - INFO - Loaded 688 buildings in 176.6s
+2026-08-20 19:27:22,625 - WARNING - OSMnx graph_from_polygon failed (HTTPSConnectionPool(host='overpass-api.de', port=443): Max retries exceeded with url: /api/interpreter (Caused by ConnectTimeoutError(<HTTPSConnection(host='overpass-api.de', port=443) at 0x23d8735da90>, 'Connection to overpass-api.de timed out. (connect timeout=180)'))), building graph from local roads...
+2026-08-20 19:27:22,625 - INFO - Reading roads from PBF (bbox: (112.72260202525354, -7.3572579690784785, 112.73126394935261, -7.3501124653078485))...
+2026-08-20 19:28:17,620 - INFO - Created 238 records
+2026-08-20 19:28:17,628 - INFO - Cached 238 road segments to C:\Users\Jhansen Wilson\Documents\Github\FTTH-Design\cache\roads_ade5ba5608c5.gpkg
+2026-08-20 19:28:17,629 - INFO - Loaded 238 road segments in 55.0s
+2026-08-20 19:32:38,568 - INFO - HTTP Request: GET http://localhost:59344/status "HTTP/1.1 200 OK"
+2026-08-20 19:34:26,358 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787229266.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787229266.kmz
+2026-08-20 19:36:08,568 - INFO -   Overpass https://overpass-api.de/api gagal: ConnectTimeout
+2026-08-20 19:37:50,707 - INFO -   Overpass https://lz4.overpass-api.de/api gagal: ConnectTimeout
+2026-08-20 19:52:43,396 - INFO - HTTP Request: GET http://localhost:57004/status "HTTP/1.1 200 OK"
+2026-08-20 19:54:13,797 - INFO - HTTP Request: GET http://localhost:59936/status "HTTP/1.1 200 OK"
+2026-08-20 19:54:30,082 - INFO - HTTP Request: POST http://localhost:57004/ "HTTP/1.1 200 OK"
+2026-08-20 19:54:30,088 - INFO - HTTP Request: POST http://localhost:57004/ "HTTP/1.1 200 OK"
+2026-08-20 19:54:30,134 - INFO - HTTP Request: POST http://localhost:57004/ "HTTP/1.1 200 OK"
+2026-08-20 19:54:30,139 - INFO - HTTP Request: POST http://localhost:57004/ "HTTP/1.1 200 OK"
+2026-08-20 19:54:37,301 - INFO - HTTP Request: POST http://localhost:57004/ "HTTP/1.1 200 OK"
+2026-08-20 19:54:37,306 - INFO - HTTP Request: POST http://localhost:57004/ "HTTP/1.1 200 OK"
+2026-08-20 19:54:40,072 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787230480.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787230480.kmz
+2026-08-20 19:54:40,073 - INFO - Loading POIs from local cache: C:\Users\Jhansen Wilson\Documents\Github\FTTH-Design\cache\regions\pois_building_train_station_ffbd71e94e.gpkg
+2026-08-20 19:54:40,145 - INFO - Auto-generated POP at 112.72926432353755, -7.3526317845124165 (Location: Stasiun Waru)
+2026-08-20 19:54:40,145 - INFO - Loading buildings from local cache: C:\Users\Jhansen Wilson\Documents\Github\FTTH-Design\cache\regions\buildings_ffbd71e94e.gpkg
+2026-08-20 19:56:22,434 - INFO -   Overpass https://overpass-api.de/api gagal: ConnectTimeout
+2026-08-20 19:58:04,643 - INFO -   Overpass https://lz4.overpass-api.de/api gagal: ConnectTimeout
+2026-08-20 19:59:31,934 - INFO -   Overpass https://overpass.kumi.systems/api gagal: ResponseStatusCodeError
+2026-08-20 19:59:32,043 - INFO -   Overpass https://overpass.osm.ch/api gagal: InsufficientResponseError
+2026-08-20 19:59:32,043 - WARNING - Gagal mengambil data jalan (No data elements in server response. Check query location/filters and log.). Feeder akan pakai garis lurus.
+2026-08-20 19:59:32,880 - INFO - HTTP Request: POST http://localhost:57004/ "HTTP/1.1 200 OK"
+2026-08-20 19:59:32,884 - INFO - HTTP Request: POST http://localhost:57004/ "HTTP/1.1 200 OK"
+2026-08-20 19:59:32,892 - INFO - HTTP Request: POST http://localhost:57004/ "HTTP/1.1 200 OK"
+2026-08-20 19:59:32,946 - INFO - HTTP Request: POST http://localhost:57004/ "HTTP/1.1 200 OK"
+2026-08-20 19:59:32,950 - INFO - HTTP Request: POST http://localhost:57004/ "HTTP/1.1 200 OK"
+2026-08-20 20:00:02,616 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787230802.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787230802.kmz
+2026-08-20 20:00:02,618 - INFO - Loading POIs from local cache: C:\Users\Jhansen Wilson\Documents\Github\FTTH-Design\cache\regions\pois_building_train_station_ffbd71e94e.gpkg
+2026-08-20 20:00:02,625 - INFO - Auto-generated POP at 112.72926432353755, -7.3526317845124165 (Location: Stasiun Waru)
+2026-08-20 20:00:02,625 - INFO - Loading buildings from local cache: C:\Users\Jhansen Wilson\Documents\Github\FTTH-Design\cache\regions\buildings_ffbd71e94e.gpkg
+2026-08-20 20:01:44,912 - INFO -   Overpass https://overpass-api.de/api gagal: ConnectTimeout
+2026-08-20 20:03:27,126 - INFO -   Overpass https://lz4.overpass-api.de/api gagal: ConnectTimeout
+2026-08-20 20:06:31,341 - INFO -   Overpass https://overpass.kumi.systems/api gagal: ResponseStatusCodeError
+2026-08-20 20:06:31,453 - INFO -   Overpass https://overpass.osm.ch/api gagal: InsufficientResponseError
+2026-08-20 20:06:31,453 - WARNING - Gagal mengambil data jalan (No data elements in server response. Check query location/filters and log.). Feeder akan pakai garis lurus.
+2026-08-20 20:20:40,359 - INFO - HTTP Request: GET http://localhost:52286/status "HTTP/1.1 200 OK"
+2026-08-20 20:23:21,009 - INFO - HTTP Request: GET http://localhost:63527/status "HTTP/1.1 200 OK"
+2026-08-20 20:23:21,052 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:23:21,057 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:23:22,131 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:23:22,135 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:23:25,463 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787232205.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787232205.kmz
+2026-08-20 20:23:25,465 - INFO - Loading POIs from local cache: C:\Users\Jhansen Wilson\Documents\Github\FTTH-Design\cache\regions\pois_building_train_station_ffbd71e94e.gpkg
+2026-08-20 20:23:25,546 - INFO - Auto-generated POP at 112.72926432353755, -7.3526317845124165 (Location: Stasiun Waru)
+2026-08-20 20:23:25,547 - INFO - Loading buildings from local cache: C:\Users\Jhansen Wilson\Documents\Github\FTTH-Design\cache\regions\buildings_ffbd71e94e.gpkg
+2026-08-20 20:23:28,632 - INFO - Cached road graph (254 nodes) to C:\Users\Jhansen Wilson\Documents\Github\FTTH-Design\cache\regions\roads_ffbd71e94e.graphml
+2026-08-20 20:23:40,606 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:23:40,609 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:23:40,619 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:23:40,639 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:23:40,644 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:25:03,057 - INFO - HTTP Request: GET http://localhost:62609/status "HTTP/1.1 200 OK"
+2026-08-20 20:25:11,906 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:25:11,913 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:25:12,125 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:25:12,131 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:25:13,648 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:25:13,652 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:25:23,853 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:25:23,858 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:25:23,903 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:25:23,908 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:25:27,784 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:25:27,795 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:25:27,853 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:25:27,857 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:25:30,609 - INFO - Running FTTH generation: boundary=dashboard/public/data/custom_boundary_1787232330.kml, pop=POP.kml, output=dashboard/public/data/design_ftth_1787232330.kmz
+2026-08-20 20:25:30,610 - INFO - Loading POIs from local cache: C:\Users\Jhansen Wilson\Documents\Github\FTTH-Design\cache\regions\pois_building_train_station_ffbd71e94e.gpkg
+2026-08-20 20:25:30,622 - INFO - Auto-generated POP at 112.72926432353755, -7.3526317845124165 (Location: Stasiun Waru)
+2026-08-20 20:25:30,622 - INFO - Loading buildings from local cache: C:\Users\Jhansen Wilson\Documents\Github\FTTH-Design\cache\regions\buildings_ffbd71e94e.gpkg
+2026-08-20 20:25:30,696 - INFO - Loading road graph from local cache: C:\Users\Jhansen Wilson\Documents\Github\FTTH-Design\cache\regions\roads_ffbd71e94e.graphml
+2026-08-20 20:25:49,609 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:25:49,612 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:25:49,615 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:25:49,734 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:25:49,736 - INFO - HTTP Request: POST http://localhost:63527/ "HTTP/1.1 200 OK"
+2026-08-20 20:27:07,970 - INFO - HTTP Request: GET http://localhost:59837/status "HTTP/1.1 200 OK"
+2026-08-20 20:43:59,914 - INFO - HTTP Request: POST http://localhost:59837/ "HTTP/1.1 200 OK"
+2026-08-20 20:43:59,917 - INFO - HTTP Request: POST http://localhost:59837/ "HTTP/1.1 200 OK"
+2026-08-20 20:44:00,936 - INFO - HTTP Request: POST http://localhost:59837/ "HTTP/1.1 200 OK"
+2026-08-20 20:44:00,940 - INFO - HTTP Request: POST http://localhost:59837/ "HTTP/1.1 200 OK"
+2026-08-20 20:47:49,702 - INFO - HTTP Request: POST http://localhost:59837/ "HTTP/1.1 200 OK"
+2026-08-20 20:47:49,707 - INFO - HTTP Request: POST http://localhost:59837/ "HTTP/1.1 200 OK"
+2026-08-20 20:47:51,088 - INFO - HTTP Request: POST http://localhost:59837/ "HTTP/1.1 200 OK"
+2026-08-20 20:47:51,092 - INFO - HTTP Request: POST http://localhost:59837/ "HTTP/1.1 200 OK"

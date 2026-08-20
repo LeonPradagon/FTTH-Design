@@ -53,6 +53,21 @@ cache/
 !boundary.kml
 !POP.kml
 !PO.*.kml
+temp_*.xml
+temp_osm.xml
+
+# Dashboard Public Data Outputs
+dashboard/public/data/*.csv
+dashboard/public/data/*.kml
+dashboard/public/data/*.kmz
+dashboard/public/data/*.log
+dashboard/proxy-error.log
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+backend/ftth.db
 
 
 # IDEs and Editors

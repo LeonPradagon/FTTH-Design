@@ -4,7 +4,7 @@ import pickle
 from shapely.geometry import Polygon
 from backend.core.logging import logger
 from backend.services.generator.models import Splitter, ODP, ODC
-from backend.services.generator.osm_client import fetch_road_graph
+from backend.services.generator.osm_local import fetch_road_graph
 from backend.services.generator.routing import build_feeder_segments_preserving_order, build_feeder_chain
 from backend.services.generator.kml_builder import export_kmz
 from backend.services.generator.csv_exporter import export_csv

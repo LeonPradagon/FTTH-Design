@@ -31,6 +31,9 @@ def export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=False, 
     fol_fd = kml.newfolder(name="LINE FD")
     for seg in feeder_segments:
         coords_lonlat = [(lon, lat) for lat, lon in seg["coords"]]
+        if len(coords_lonlat) == 1:
+            coords_lonlat.append((coords_lonlat[0][0] + 0.00001, coords_lonlat[0][1] + 0.00001))
+        
         feeder = fol_fd.newlinestring(
             name=f"FD {seg['from_label']} -> {seg['to_label']}",
             coords=coords_lonlat,
@@ -88,6 +91,9 @@ def export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=False, 
                 path = route_along_road(road_graph, (odc.lat, odc.lon), (odp.lat, odp.lon))
                 if path:
                     coords = [(lon, lat) for lat, lon in path]
+            
+            if len(coords) == 1:
+                coords.append((coords[0][0] + 0.00001, coords[0][1] + 0.00001))
 
             dist = fol_dist.newlinestring(
                 name=f"ODC {i:02d} TO ODP {odp_label}",
@@ -118,6 +124,9 @@ def export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=False, 
                     path = route_along_road(road_graph, (odp.lat, odp.lon), (h_lat, h_lon))
                     if path:
                         drop_coords = [(lon, lat) for lat, lon in path]
+                
+                if len(drop_coords) == 1:
+                    drop_coords.append((drop_coords[0][0] + 0.00001, drop_coords[0][1] + 0.00001))
 
                 drop = fol_drop.newlinestring(
                     name=f"ODP {odp_label} TO HC {hc_label}",

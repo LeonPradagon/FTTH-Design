@@ -36,6 +36,7 @@ def capacitated_clustering(points, capacity):
         rem_coords = coords[remaining]
         if last_centroid is None:
             import random
+            random.seed(42)  # Deterministic seed
             seed_pos = random.randint(0, len(rem_coords) - 1)
         else:
             dists_to_last = np.linalg.norm(rem_coords - last_centroid, axis=1)
