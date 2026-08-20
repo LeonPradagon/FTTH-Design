@@ -30,10 +30,6 @@ Buka dan sesuaikan isi file **`.env.prod`** (di root folder):
 ```ini
 # Ganti dengan kredensial PostgreSQL Anda yang sebenarnya
 DATABASE_URL=postgresql://user:password@alamat_server:5432/ftth_db
-
-# Konfigurasi AI API
-OPENAI_API_KEY=sk-kunci-rahasia-anda
-OPENAI_MODEL=gpt-4o-mini
 ```
 
 Buka dan sesuaikan isi file **`dashboard/.env.prod`**:
