@@ -45,20 +45,21 @@ async function proxy(req: NextRequest, { params }: { params: Promise<{ path: str
       duplex: 'half'
     } as RequestInit);
     
-    const text = await res.text();
-    let data;
-    try {
-        data = JSON.parse(text);
-    } catch (e) {
-        data = text;
-    }
+    // Create new headers from backend response
+    const resHeaders = new Headers(res.headers);
+    // Remove headers that might cause issues when proxying
+    resHeaders.delete('content-encoding');
+    resHeaders.delete('content-length');
 
-    return NextResponse.json(data, { status: res.status });
+    return new NextResponse(res.body, {
+      status: res.status,
+      headers: resHeaders
+    });
   } catch (error: any) {
     console.error("Proxy error:", error);
     return NextResponse.json({ 
       error: "Internal Server Error", 
-      details: error instanceof Error ? error.stack : String(error) 
+      details: error instanceof Error ? error.message : String(error) 
     }, { status: 500 });
   }
 }
