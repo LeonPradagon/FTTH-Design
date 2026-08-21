@@ -7,7 +7,7 @@ import asyncio
 import glob
 from typing import Optional
 from server.core.logging import logger
-from server.core.paths import DATA_DIR
+from server.core.paths import DATA_DIR, SAMPLES_KML_DIR
 
 from server.services.generator.core_logic import regenerate_cables_only, generate_cables_from_custom_points
 from server.services.generator.kml_parser import read_boundary, read_points, read_houses_from_file
@@ -101,8 +101,8 @@ async def generate_design(
     # Bersihkan file lama setiap kali request baru
     cleanup_old_files()
     
-    boundary_path = "boundary.kml"
-    pop_path = "POP.kml"
+    boundary_path = str(SAMPLES_KML_DIR / "boundary.kml")
+    pop_path = str(SAMPLES_KML_DIR / "POP.kml")
     has_custom_pop = False
 
     if boundaryFile and boundaryFile.filename:

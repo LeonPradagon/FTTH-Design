@@ -50,24 +50,24 @@ build/
 cache/
 *.kmz
 *.kml
-!boundary.kml
-!POP.kml
-!PO.*.kml
+!samples/
+!samples/kml/
+!samples/kml/*.kml
 temp_*.xml
 temp_osm.xml
 
 # Server-generated data outputs
-server/data/**/*.csv
-server/data/**/*.kml
-server/data/**/*.kmz
-server/data/**/*.log
-web/proxy-error.log
+app/server/data/**/*.csv
+app/server/data/**/*.kml
+app/server/data/**/*.kmz
+app/server/data/**/*.log
+app/web/proxy-error.log
 
 # Database
 *.sqlite
 *.sqlite3
 *.db
-server/ftth.db
+app/server/ftth.db
 
 
 # IDEs and Editors

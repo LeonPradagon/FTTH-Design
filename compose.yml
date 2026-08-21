@@ -2,7 +2,7 @@ services:
   server:
     build:
       context: .
-      dockerfile: server/Dockerfile
+      dockerfile: app/server/Dockerfile
     container_name: ftth-server
     ports:
       - "8000:8000"
@@ -10,18 +10,18 @@ services:
       - .env.prod
     restart: unless-stopped
     volumes:
-      - ./server/cache:/app/server/cache
-      - ./server/data:/app/server/data
+      - ./app/server/cache:/workspace/app/server/cache
+      - ./app/server/data:/workspace/app/server/data
 
   web:
     build:
       context: .
-      dockerfile: web/Dockerfile
+      dockerfile: app/web/Dockerfile
     container_name: ftth-web
     ports:
       - "3000:3000"
     env_file:
-      - web/.env.prod
+      - app/web/.env.prod
     environment:
       FTTH_SERVER_URL: http://server:8000
     depends_on:

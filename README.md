@@ -3,9 +3,18 @@
 Aplikasi berbasis web untuk merancang dan membuat generator desain Fiber To The Home (FTTH) menggunakan Python (FastAPI) dan Next.js. Aplikasi ini memanfaatkan OSM, Prisma, dan algoritma *clustering* AI untuk pemrosesan geospasial yang akurat.
 
 ## Arsitektur Aplikasi
-- **Web**: Next.js (Port 3000)
-- **Server**: FastAPI + Python (Port 8000)
+- **Web**: Next.js di `app/web` (Port 3000)
+- **Server**: FastAPI + Python di `app/server` (Port 8000)
 - **Database**: PostgreSQL (Eksternal)
+
+```text
+app/
+├── server/          # FastAPI dan generator FTTH
+└── web/             # Next.js
+samples/
+└── kml/             # Sample input KML; bukan data runtime
+compose.yml
+```
 
 ---
 
@@ -23,7 +32,7 @@ Sebelum menjalankan Docker, Anda wajib membuat file `.env.prod` khusus untuk lin
 Salin file *template* ke file aslinya:
 ```bash
 cp .env.prod.example .env.prod
-cp web/.env.prod.example web/.env.prod
+cp app/web/.env.prod.example app/web/.env.prod
 ```
 
 Buka dan sesuaikan isi file **`.env.prod`** (di root folder):
@@ -32,7 +41,7 @@ Buka dan sesuaikan isi file **`.env.prod`** (di root folder):
 DATABASE_URL=postgresql://user:password@alamat_server:5432/ftth_db
 ```
 
-Buka dan sesuaikan isi file **`web/.env.prod`**:
+Buka dan sesuaikan isi file **`app/web/.env.prod`**:
 ```ini
 BETTER_AUTH_SECRET=ganti_dengan_teks_acak_yang_sangat_panjang_dan_rahasia
 JWT_SECRET=ganti_dengan_teks_acak_yang_sangat_panjang_dan_rahasia

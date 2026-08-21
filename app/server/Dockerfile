@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-WORKDIR /app
+WORKDIR /workspace
 
 # Instal dependensi sistem yang dibutuhkan
 RUN apt-get update && apt-get install -y \
@@ -9,16 +9,22 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Salin file requirements
-COPY requirements.txt .
+COPY app/server/requirements.txt .
 
 # Instal dependensi Python
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Salin kode server
-COPY server/ ./server/
+COPY app/server/ ./app/server/
+
+# Salin sample input yang dipakai ketika request tidak mengunggah boundary
+COPY samples/ ./samples/
 
 # Generate Prisma client dari schema server
-RUN prisma generate --schema=server/schema.prisma
+RUN prisma generate --schema=app/server/schema.prisma
+
+# Jadikan app/ sebagai Python import root sehingga package tetap bernama server
+WORKDIR /workspace/app
 
 # Ekspos port server
 EXPOSE 8000
