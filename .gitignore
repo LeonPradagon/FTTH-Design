@@ -56,18 +56,18 @@ cache/
 temp_*.xml
 temp_osm.xml
 
-# Dashboard Public Data Outputs
-dashboard/public/data/*.csv
-dashboard/public/data/*.kml
-dashboard/public/data/*.kmz
-dashboard/public/data/*.log
-dashboard/proxy-error.log
+# Server-generated data outputs
+server/data/**/*.csv
+server/data/**/*.kml
+server/data/**/*.kmz
+server/data/**/*.log
+web/proxy-error.log
 
 # Database
 *.sqlite
 *.sqlite3
 *.db
-backend/ftth.db
+server/ftth.db
 
 
 # IDEs and Editors

@@ -1,0 +1,29 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: ftth-server
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.prod
+    restart: unless-stopped
+    volumes:
+      - ./server/cache:/app/server/cache
+      - ./server/data:/app/server/data
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    container_name: ftth-web
+    ports:
+      - "3000:3000"
+    env_file:
+      - web/.env.prod
+    environment:
+      FTTH_SERVER_URL: http://server:8000
+    depends_on:
+      - server
+    restart: unless-stopped

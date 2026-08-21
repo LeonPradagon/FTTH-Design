@@ -1,6 +1,6 @@
 import asyncio
-from backend.database import db
-from backend.api.deps import get_current_user
+from server.database import db
+from server.api.deps import get_current_user
 from fastapi.security import HTTPAuthorizationCredentials
 
 async def test():
