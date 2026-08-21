@@ -1,7 +1,7 @@
 import simplekml
-from backend.services.generator.routing import route_along_road
+from backend.services.generator.routing import build_distribution_tree
 
-def export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=False, road_graph=None, road_feeder=False):
+def export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=False, road_graph=None, road_feeder=False, boundary=None, boundary_style=None):
     """Export desain ke KMZ dengan struktur folder & penamaan mengikuti
     konvensi industri (per-ODC), seperti contoh:
 
@@ -20,6 +20,20 @@ def export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=False, 
      ...
     """
     kml = simplekml.Kml()
+
+    if boundary is not None:
+        fol_bound = kml.newfolder(name="Boundary Area")
+        coords = list(boundary.exterior.coords)
+        pol = fol_bound.newpolygon(name="Boundary")
+        pol.outerboundaryis = coords
+        if boundary_style:
+            pol.style.polystyle.color = boundary_style.get("poly_color", "4dff0000")
+            pol.style.linestyle.color = boundary_style.get("line_color", "ffff0000")
+            pol.style.linestyle.width = boundary_style.get("line_width", 3.0)
+        else:
+            pol.style.polystyle.color = '4dff0000'
+            pol.style.linestyle.color = 'ffff0000'
+            pol.style.linestyle.width = 3.0
 
     # -- OLT --
     fol_olt = kml.newfolder(name="OLT")
@@ -52,7 +66,9 @@ def export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=False, 
         fol_dist = fol_odc_top.newfolder(name="LINE ODC TO ODP")
         if include_homepass:
             fol_hc = fol_odc_top.newfolder(name="HC")
+            fol_hc.visibility = 0
             fol_drop = fol_odc_top.newfolder(name="LINE ODP TO HC")
+            fol_drop.visibility = 0
 
         pt = fol_odc.newpoint(
             name=odc_label,
@@ -86,15 +102,10 @@ def export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=False, 
             opt.style.iconstyle.color = simplekml.Color.blue
             opt.style.iconstyle.scale = 0.9
 
-            coords = [(odc.lon, odc.lat), (odp.lon, odp.lat)]
-            if road_graph and road_feeder:
-                path = route_along_road(road_graph, (odc.lat, odc.lon), (odp.lat, odp.lon))
-                if path:
-                    coords = [(lon, lat) for lat, lon in path]
-            
-            if len(coords) == 1:
-                coords.append((coords[0][0] + 0.00001, coords[0][1] + 0.00001))
-
+        routing_graph = road_graph if road_graph is not None and road_feeder else None
+        for segment in build_distribution_tree(odc, routing_graph):
+            odp_label = f"{i:02d}/{segment['odp_index']:02d}"
+            coords = [(lon, lat) for lat, lon in segment["coords"]]
             dist = fol_dist.newlinestring(
                 name=f"ODC {i:02d} TO ODP {odp_label}",
                 coords=coords,
@@ -102,10 +113,14 @@ def export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=False, 
             dist.style.linestyle.color = simplekml.Color.blue
             dist.style.linestyle.width = 2
 
-            if not include_homepass:
-                total_houses += len(odp.houses)
-                continue
+        if not include_homepass:
+            total_houses += sum(len(odp.houses) for odp in odc.odps)
+            continue
 
+        # Drop cable memang berupa konektor last-mile dari ODP ke bangunan;
+        # feeder dan distribusi tetap dirutekan di jaringan jalan.
+        for j, odp in enumerate(odc.odps, start=1):
+            odp_label = f"{i:02d}/{j:02d}"
             for k, (h_lat, h_lon) in enumerate(odp.houses, start=1):
                 total_houses += 1
                 hc_label = f"{odp_label}-{k:02d}"   # mis. "01/01-01"
@@ -120,13 +135,6 @@ def export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=False, 
                 hc.style.iconstyle.scale = 0.6
 
                 drop_coords = [(odp.lon, odp.lat), (h_lon, h_lat)]
-                if road_graph and road_feeder:
-                    path = route_along_road(road_graph, (odp.lat, odp.lon), (h_lat, h_lon))
-                    if path:
-                        drop_coords = [(lon, lat) for lat, lon in path]
-                
-                if len(drop_coords) == 1:
-                    drop_coords.append((drop_coords[0][0] + 0.00001, drop_coords[0][1] + 0.00001))
 
                 drop = fol_drop.newlinestring(
                     name=f"ODP {odp_label} TO HC {hc_label}",

@@ -4,6 +4,56 @@ from shapely.geometry import Polygon, Point
 
 KML_NS = {"kml": "http://www.opengis.net/kml/2.2"}
 
+def read_boundary_style(path):
+    """Membaca gaya (warna, ketebalan garis) dari file boundary KML/KMZ."""
+    root = ET.fromstring(_extract_kml_bytes(path))
+    pm_el = None
+    for pm in root.findall(".//kml:Placemark", KML_NS):
+        if pm.find(".//kml:Polygon", KML_NS) is not None:
+            pm_el = pm
+            break
+            
+    # Default: biru semi-transparan dengan garis tegas biru
+    poly_color = '4dff0000' # 30% alpha, blue
+    line_color = 'ffff0000' # 100% alpha, blue
+    line_width = 3.0
+    
+    if pm_el is not None:
+        style_el = pm_el.find("kml:Style", KML_NS)
+        if style_el is not None:
+            p_col = style_el.find("kml:PolyStyle/kml:color", KML_NS)
+            if p_col is not None and p_col.text: poly_color = p_col.text.strip()
+            l_col = style_el.find("kml:LineStyle/kml:color", KML_NS)
+            if l_col is not None and l_col.text: line_color = l_col.text.strip()
+            l_wid = style_el.find("kml:LineStyle/kml:width", KML_NS)
+            if l_wid is not None and l_wid.text: line_width = float(l_wid.text.strip())
+        else:
+            style_url_el = pm_el.find("kml:styleUrl", KML_NS)
+            if style_url_el is not None and style_url_el.text:
+                style_id = style_url_el.text.strip().lstrip("#")
+                doc_style = root.find(f".//kml:Style[@id='{style_id}']", KML_NS)
+                if doc_style is None:
+                    style_map = root.find(f".//kml:StyleMap[@id='{style_id}']", KML_NS)
+                    if style_map is not None:
+                        pair = style_map.find(".//kml:Pair[kml:key='normal']/kml:styleUrl", KML_NS)
+                        if pair is not None and pair.text:
+                            normal_id = pair.text.strip().lstrip("#")
+                            doc_style = root.find(f".//kml:Style[@id='{normal_id}']", KML_NS)
+                
+                if doc_style is not None:
+                    p_col = doc_style.find(".//kml:PolyStyle/kml:color", KML_NS)
+                    if p_col is not None and p_col.text: poly_color = p_col.text.strip()
+                    l_col = doc_style.find(".//kml:LineStyle/kml:color", KML_NS)
+                    if l_col is not None and l_col.text: line_color = l_col.text.strip()
+                    l_wid = doc_style.find(".//kml:LineStyle/kml:width", KML_NS)
+                    if l_wid is not None and l_wid.text: line_width = float(l_wid.text.strip())
+
+    return {
+        "poly_color": poly_color,
+        "line_color": line_color,
+        "line_width": line_width
+    }
+
 def _extract_kml_bytes(path):
     """Ambil isi file .kml mentah, baik dari file .kml langsung maupun dari
     dalam arsip .kmz (kmz = kml yang di-zip)."""
@@ -93,3 +143,19 @@ def read_custom_mapped_kml(path):
             points['hc'].append(pt_data)
             
     return points
+
+
+def check_has_pop_point(path):
+    """Mengecek apakah file KML memiliki Placemark berupa Point (POP/OLT)."""
+    try:
+        points = read_points(path)
+        if points:
+            # Cari jika ada yang namanya mengandung POP/OLT
+            for pt in points:
+                if "pop" in pt["name"].lower() or "olt" in pt["name"].lower():
+                    return True, pt
+            # Jika tidak ada yang spesifik, gunakan titik pertama
+            return True, points[0]
+    except ValueError:
+        pass
+    return False, None

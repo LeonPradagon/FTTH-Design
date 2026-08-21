@@ -2,10 +2,14 @@ import argparse
 import math
 import sys
 
-from backend.services.generator.kml_parser import read_boundary, read_points, read_houses_from_file
-from backend.services.generator.osm_client import fetch_houses_in_boundary, fetch_road_graph
+from backend.services.generator.kml_parser import read_boundary, read_points, read_houses_from_file, read_boundary_style
+from backend.services.generator.osm_local import fetch_houses_in_boundary, fetch_road_graph
 from backend.services.generator.clustering import build_design
-from backend.services.generator.routing import build_feeder_chain, enforce_min_distance_between_odcs
+from backend.services.generator.routing import (
+    build_feeder_chain,
+    enforce_min_distance_between_odcs,
+    enforce_min_distance_between_odcs_on_road,
+)
 from backend.services.generator.core_logic import save_design_state
 from backend.services.generator.kml_builder import export_kmz
 from backend.utils.geometry import haversine_m
@@ -17,8 +21,8 @@ def main():
     parser.add_argument("--boundary", help="File boundary area (KML/KMZ) -- dipakai jika tidak pakai --input")
     parser.add_argument("--pop", help="File titik POP/OLT (KML/KMZ) -- dipakai jika tidak pakai --input")
     parser.add_argument("--output", default="design_ftth.kmz", help="Path output KMZ")
-    parser.add_argument("--odp-capacity", type=int, default=8,
-                         help="Kapasitas splitter di ODP / max rumah per ODP (default: 8)")
+    parser.add_argument("--odp-capacity", type=int, default=10,
+                         help="Kapasitas splitter di ODP / max rumah per ODP (default: 10)")
     parser.add_argument("--odc-capacity", type=int, default=4,
                          help="Jumlah ODP maksimum per ODC (default: 4)")
     parser.add_argument("--target-homepass", type=int, default=None,
@@ -48,6 +52,7 @@ def main():
 
     print(f"Membaca boundary : {boundary_path}")
     boundary = read_boundary(boundary_path)
+    boundary_style = read_boundary_style(boundary_path)
 
     print(f"Membaca titik POP: {pop_path}")
     pop_points = read_points(pop_path)
@@ -101,20 +106,24 @@ def main():
           f"-> {n_odc_expected} ODC (1:{args.odc_capacity})")
 
     print(f"Memastikan tidak ada ODC yang bertumpuk (jarak minimum {args.odc_min_distance_m:.0f} m)...")
-    enforce_min_distance_between_odcs(odcs, min_dist_m=args.odc_min_distance_m)
-
     if road_graph is not None:
-        pass
+        enforce_min_distance_between_odcs_on_road(
+            road_graph, odcs, min_dist_m=args.odc_min_distance_m
+        )
+    else:
+        enforce_min_distance_between_odcs(
+            odcs, min_dist_m=args.odc_min_distance_m
+        )
 
     feeder_segments, odcs = build_feeder_chain(pop, odcs, road_graph=road_graph)
 
     # Cache design state untuk fitur regenerate-cables
     try:
-        save_design_state(pop, odcs, road_graph=road_graph)
+        save_design_state(pop, odcs, road_graph=road_graph, boundary=boundary, boundary_style=boundary_style)
     except Exception as e:
         print(f"Peringatan: gagal menyimpan design state ({e}), regenerate-cables tidak tersedia.")
 
-    export_kmz(pop, odcs, feeder_segments, args.output, include_homepass=args.show_homepass, road_graph=road_graph, road_feeder=not args.no_road_feeder)
+    export_kmz(pop, odcs, feeder_segments, args.output, include_homepass=args.show_homepass, road_graph=road_graph, road_feeder=not args.no_road_feeder, boundary=boundary, boundary_style=boundary_style)
 
 if __name__ == "__main__":
     main()

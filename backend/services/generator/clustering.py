@@ -58,17 +58,25 @@ def centroid_of(points):
     return tuple(np.array(points, dtype=float).mean(axis=0))
 
 
-def snap_centroid_to_road(target_centroid, road_graph):
-    """Fallback ke road snapping (Nearest Node)."""
+def snap_centroid_to_road(target_centroid, road_graph, max_snap_dist_m=200.0):
+    """Fallback ke road snapping (Nearest Node). 
+    Jika hasil snap terlalu jauh dari centroid (> max_snap_dist_m), 
+    gunakan centroid asli agar ODP/ODC tidak nyasar jauh dari rumah."""
     if road_graph is None:
         return target_centroid
     try:
-        return snap_to_road(road_graph, target_centroid[0], target_centroid[1])
+        snapped = snap_to_road(road_graph, target_centroid[0], target_centroid[1])
+        # Validasi jarak — jangan snap jika terlalu jauh
+        from backend.utils.geometry import haversine_m
+        dist = haversine_m(target_centroid[0], target_centroid[1], snapped[0], snapped[1])
+        if dist > max_snap_dist_m:
+            return target_centroid
+        return snapped
     except Exception:
         return target_centroid
 
 
-def build_design(houses, odp_capacity=8, odc_capacity=4, road_graph=None):
+def build_design(houses, odp_capacity=10, odc_capacity=4, road_graph=None):
     """Bangun struktur ODC -> ODP -> rumah dari daftar titik rumah.
     Penomoran ODC di sini masih berdasar urutan cluster (belum urutan
     rantai feeder) -- akan di-renumber ulang oleh build_feeder_chain()."""

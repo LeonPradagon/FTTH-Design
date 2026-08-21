@@ -85,3 +85,8 @@ backend/ftth.db
 
 # Environment Variables
 .env*
+
+# Testing and Scratch Files
+/test*
+!/tests/
+/scratch*

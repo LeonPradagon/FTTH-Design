@@ -4,7 +4,7 @@ import pickle
 from shapely.geometry import Polygon
 from backend.core.logging import logger
 from backend.services.generator.models import Splitter, ODP, ODC
-from backend.services.generator.osm_local import fetch_road_graph
+from backend.services.generator.osm_local import fetch_road_graph, prepare_road_graph
 from backend.services.generator.routing import build_feeder_segments_preserving_order, build_feeder_chain
 from backend.services.generator.kml_builder import export_kmz
 from backend.services.generator.csv_exporter import export_csv
@@ -15,7 +15,7 @@ CACHE_DIR = os.path.abspath("cache")
 DESIGN_STATE_PATH = os.path.join(CACHE_DIR, "design_state.json")
 ROAD_GRAPH_PATH = os.path.join(CACHE_DIR, "road_graph.pkl")
 
-def save_design_state(pop, odcs, road_graph=None):
+def save_design_state(pop, odcs, road_graph=None, boundary=None, boundary_style=None):
     """Simpan posisi POP, ODC, ODP, dan rumah ke file JSON, serta road graph
     ke pickle. Ini memungkinkan regenerate kabel tanpa menjalankan ulang
     clustering & placement dari awal."""
@@ -24,6 +24,8 @@ def save_design_state(pop, odcs, road_graph=None):
     state = {
         "pop": pop,
         "odcs": [],
+        "boundary_coords": list(boundary.exterior.coords) if boundary else None,
+        "boundary_style": boundary_style
     }
     for odc in odcs:
         odc_data = {
@@ -69,6 +71,12 @@ def load_design_state():
         state = json.load(f)
 
     pop = state["pop"]
+
+    boundary = None
+    if state.get("boundary_coords"):
+        boundary = Polygon(state["boundary_coords"])
+    boundary_style = state.get("boundary_style")
+
     odcs = []
     for odc_data in state["odcs"]:
         odps = []
@@ -79,7 +87,7 @@ def load_design_state():
                 lon=odp_data["lon"],
                 houses=[tuple(h) for h in odp_data["houses"]],
                 splitter=Splitter(
-                    ratio=odp_data["splitter_ratio"] or "1:8",
+                    ratio=odp_data["splitter_ratio"] or "1:10",
                     location=odp_data["splitter_location"] or "ODP",
                 ),
             )
@@ -97,15 +105,19 @@ def load_design_state():
         )
         odcs.append(odc)
 
-    return pop, odcs
+    return pop, odcs, boundary, boundary_style
 
 
 def load_road_graph():
     """Muat road graph dari pickle cache. Return None kalau tidak ada."""
     if not os.path.exists(ROAD_GRAPH_PATH):
         return None
-    with open(ROAD_GRAPH_PATH, "rb") as f:
-        return pickle.load(f)
+    try:
+        with open(ROAD_GRAPH_PATH, "rb") as f:
+            return prepare_road_graph(pickle.load(f))
+    except Exception as exc:
+        logger.warning("Road graph cache lama tidak valid: %s", exc)
+        return None
 
 
 def regenerate_cables_only(output_path, include_homepass=False, output_csv=None):
@@ -118,7 +130,7 @@ def regenerate_cables_only(output_path, include_homepass=False, output_csv=None)
     print("REGENERATE KABEL ONLY — posisi tiang/ODC/ODP/rumah TETAP")
     print("=" * 60)
 
-    pop, odcs = load_design_state()
+    pop, odcs, boundary, boundary_style = load_design_state()
     road_graph = load_road_graph()
 
     logger.info(f"load_road_graph returned: {'None' if road_graph is None else 'Graph with ' + str(len(road_graph.nodes)) + ' nodes'}")
@@ -159,18 +171,11 @@ def regenerate_cables_only(output_path, include_homepass=False, output_csv=None)
     total_houses = sum(len(odp.houses) for odc in odcs for odp in odc.odps)
     print(f"  Loaded: {len(odcs)} ODC, {total_odp} ODP, {total_houses} rumah")
 
-    if road_graph is not None:
-        import random
-        # Tambahkan variasi acak (noise) ke bobot jalan agar rute mencari alternatif baru
-        for u, v, k, data in road_graph.edges(keys=True, data=True):
-            if "length" in data:
-                data["length"] = data["length"] * random.uniform(0.5, 2.0)
-
     # Route feeder tanpa mengubah urutan ODC (sudah benar dari cache)
     feeder_segments, odcs = build_feeder_segments_preserving_order(pop, odcs, road_graph=road_graph)
 
     # Export KMZ dengan routing kabel baru
-    export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=include_homepass, road_graph=road_graph, road_feeder=True)
+    export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=include_homepass, road_graph=road_graph, road_feeder=True, boundary=boundary, boundary_style=boundary_style)
     if output_csv:
         try:
             export_csv(pop, odcs, feeder_segments, output_csv)
@@ -200,7 +205,7 @@ def generate_cables_from_custom_points(file_path, output_path, include_homepass=
     # 1. Kelompokkan HC ke ODP terdekat
     odp_objects = []
     for odp_pt in points['odp']:
-        odp = ODP(id=odp_pt['name'], lat=odp_pt['lat'], lon=odp_pt['lon'], houses=[], splitter=Splitter(ratio="1:8", location="ODP"))
+        odp = ODP(id=odp_pt['name'], lat=odp_pt['lat'], lon=odp_pt['lon'], houses=[], splitter=Splitter(ratio="1:10", location="ODP"))
         odp_objects.append(odp)
         
     for hc in points['hc']:
@@ -258,11 +263,13 @@ def generate_cables_from_custom_points(file_path, output_path, include_homepass=
         include_homepass=include_homepass,
         road_graph=road_graph,
         road_feeder=(road_graph is not None),
+        boundary=bbox,
+        boundary_style=None
     )
     
     # 6. Cache design state untuk fitur regenerate-cables
     try:
-        save_design_state(pop, odcs, road_graph=road_graph)
+        save_design_state(pop, odcs, road_graph=road_graph, boundary=bbox, boundary_style=None)
     except Exception as e:
         print(f"Peringatan: gagal menyimpan custom design state ({e}), regenerate-cables tidak tersedia.")
     

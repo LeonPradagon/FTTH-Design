@@ -9,10 +9,14 @@ from typing import Optional
 from backend.core.logging import logger
 
 from backend.services.generator.core_logic import regenerate_cables_only, generate_cables_from_custom_points
-from backend.services.generator.kml_parser import read_boundary, read_points, read_houses_from_file
+from backend.services.generator.kml_parser import read_boundary, read_points, read_houses_from_file, read_boundary_style
 from backend.services.generator.osm_local import fetch_houses_in_boundary, fetch_road_graph
 from backend.services.generator.clustering import build_design
-from backend.services.generator.routing import build_feeder_chain, enforce_min_distance_between_odcs
+from backend.services.generator.routing import (
+    build_feeder_chain,
+    enforce_min_distance_between_odcs,
+    enforce_min_distance_between_odcs_on_road,
+)
 from backend.services.generator.core_logic import save_design_state
 from backend.services.generator.kml_builder import export_kmz
 from backend.services.generator.csv_exporter import export_csv
@@ -50,8 +54,11 @@ def haversine_dist(lon1, lat1, lon2, lat2):
 
 # Helper for the main generation logic
 def _run_generator_logic(boundary_path, pop_path, output_kmz, output_csv=None, has_custom_pop=False):
+    import concurrent.futures
+
     boundary = read_boundary(boundary_path)
-    
+    boundary_style = read_boundary_style(boundary_path)
+
     if has_custom_pop:
         pop_points = read_points(pop_path)
         pop = pop_points[0]
@@ -60,31 +67,60 @@ def _run_generator_logic(boundary_path, pop_path, output_kmz, output_csv=None, h
         if dist > 3000: # 3 km
             raise ValueError("POP (Sentral) terlalu jauh dari area perancangan (> 3 km). Hal ini dapat membebani server saat meroute jalan. Harap letakkan POP lebih dekat dengan area boundary.")
     else:
-        # Jika tidak ada POP yang di-upload, otomatis buat POP di lokasi strategis
-        from backend.services.generator.osm_local import find_strategic_pop
-        pop = find_strategic_pop(boundary)
-        logger.info(f"Auto-generated POP at {pop['lon']}, {pop['lat']} (Location: {pop['name']})")
-    
-    houses = fetch_houses_in_boundary(boundary)
+        # Cek apakah boundary file memiliki point POP di dalamnya (menghindari duplikasi)
+        from backend.services.generator.kml_parser import check_has_pop_point
+        has_pop_in_boundary, boundary_pop = check_has_pop_point(boundary_path)
+
+        if has_pop_in_boundary:
+            pop = boundary_pop
+            logger.info(f"Using POP found in boundary file: {pop['lon']}, {pop['lat']} (Location: {pop['name']})")
+        else:
+            # Jika tidak ada POP yang di-upload, otomatis buat POP di lokasi strategis
+            from backend.services.generator.osm_local import find_strategic_pop
+            pop = find_strategic_pop(boundary)
+            logger.info(f"Auto-generated POP at {pop['lon']}, {pop['lat']} (Location: {pop['name']})")
+
+    # Jalankan fetch bangunan dan jalan secara PARALEL untuk mempercepat generate
+    # (dua query ini independen dan masing-masing bisa memakan 20-120 detik)
+    houses = []
+    road_graph = None
+
+    def _fetch_houses():
+        return fetch_houses_in_boundary(boundary)
+
+    def _fetch_roads():
+        try:
+            # Perbesar buffer agar jaringan jalan bisa menangkap jembatan perlintasan kali/rel (0.015 deg ~ 1.6km)
+            return fetch_road_graph(boundary, pop, buffer_deg=0.015)
+        except Exception as e:
+            logger.warning(f"Gagal mengambil data jalan ({e}). Feeder akan pakai garis lurus.")
+            return None
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        future_houses = executor.submit(_fetch_houses)
+        future_roads = executor.submit(_fetch_roads)
+
+        houses = future_houses.result()
+        road_graph = future_roads.result()
+
     if not houses:
         raise ValueError("Tidak ada rumah yang ditemukan di OpenStreetMap untuk area ini.")
-        
-    road_graph = None
-    try:
-        road_graph = fetch_road_graph(boundary, pop)
-    except Exception as e:
-        logger.warning(f"Gagal mengambil data jalan ({e}). Feeder akan pakai garis lurus.")
-        
-    odcs = build_design(houses=houses, odp_capacity=8, odc_capacity=4, road_graph=road_graph)
-    enforce_min_distance_between_odcs(odcs, min_dist_m=40.0)
+
+    odcs = build_design(houses=houses, odp_capacity=10, odc_capacity=4, road_graph=road_graph)
+    if road_graph is not None:
+        enforce_min_distance_between_odcs_on_road(
+            road_graph, odcs, min_dist_m=40.0
+        )
+    else:
+        enforce_min_distance_between_odcs(odcs, min_dist_m=40.0)
     feeder_segments, odcs = build_feeder_chain(pop, odcs, road_graph=road_graph)
     
     try:
-        save_design_state(pop, odcs, road_graph=road_graph)
+        save_design_state(pop, odcs, road_graph=road_graph, boundary=boundary, boundary_style=boundary_style)
     except Exception as e:
         logger.warning(f"Gagal menyimpan design state ({e})")
         
-    export_kmz(pop, odcs, feeder_segments, output_kmz, include_homepass=True, road_graph=road_graph, road_feeder=True)
+    export_kmz(pop, odcs, feeder_segments, output_kmz, include_homepass=True, road_graph=road_graph, road_feeder=True, boundary=boundary, boundary_style=boundary_style)
     if output_csv:
         try:
             export_csv(pop, odcs, feeder_segments, output_csv)

@@ -31,6 +31,7 @@ export type LayerConfig = {
   url: string;
   visible: boolean;
   color?: string;
+  customColor?: string;
 };
 
 export type KmlNode = {
@@ -57,14 +58,14 @@ export default function Home() {
     showPop: true,
     showOdc: true,
     showOdp: true,
-    showHouse: true,
+    showHouse: false,
     showFeeder: true,
     showDistribution: true,
   });
 
   const [featureColors, setFeatureColors] = useState<Record<string, string>>({
     pop: '#ef4444',
-    odc: '#3b82f6',
+    odc: '#ef4444',
     odp: '#10b981',
     house: '#6b7280',
     feeder: '#ef4444',
@@ -131,7 +132,7 @@ export default function Home() {
   };
 
   const handleLayerColorChange = (id: string, color: string) => {
-    setLayers(prev => prev.map(l => l.id === id ? { ...l, color } : l));
+    setLayers(prev => prev.map(l => l.id === id ? { ...l, color, customColor: color } : l));
   };
 
   // Token extraction logic removed because the Next.js proxy route handles it server-side
@@ -195,11 +196,11 @@ export default function Home() {
       setCurrentProjectId(data.id);
       setProjectName(data.name);
       
-      const parseJson = (val: any, fallback: any) => {
+      const parseJson = <T,>(val: unknown, fallback: T): T => {
         if (typeof val === 'string') {
-          try { return JSON.parse(val); } catch { return fallback; }
+          try { return JSON.parse(val) as T; } catch { return fallback; }
         }
-        return val || fallback;
+        return (val as T) || fallback;
       };
 
       const rawLayers = parseJson(data.layers, []);
@@ -212,10 +213,10 @@ export default function Home() {
 
       setLayers(uniqueLayers);
       setFilters(parseJson(data.filters, {
-        showPop: true, showOdc: true, showOdp: true, showHouse: true, showFeeder: true, showDistribution: true
+        showPop: true, showOdc: true, showOdp: true, showHouse: false, showFeeder: true, showDistribution: true
       }));
       setFeatureColors(parseJson(data.feature_colors, {
-        pop: '#ef4444', odc: '#3b82f6', odp: '#10b981', house: '#6b7280', feeder: '#ef4444', distribution: '#3b82f6'
+        pop: '#ef4444', odc: '#ef4444', odp: '#10b981', house: '#6b7280', feeder: '#ef4444', distribution: '#3b82f6'
       }));
       addToast('Proyek berhasil dimuat!', 'success');
     } catch {
@@ -230,7 +231,7 @@ export default function Home() {
     setKmzUrl(null);
     setCsvUrl(null);
     setFilters({
-      showPop: true, showOdc: true, showOdp: true, showHouse: true, showFeeder: true, showDistribution: true
+      showPop: true, showOdc: true, showOdp: true, showHouse: false, showFeeder: true, showDistribution: true
     });
     setKmlTrees({});
     addToast('Proyek ditutup', 'info');
