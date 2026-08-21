@@ -701,7 +701,7 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
         style={{
           position: 'absolute',
           bottom: '0px',
-          left: '0px',
+          right: '0px',
           backgroundColor: 'rgba(0, 0, 0, 0.6)',
           color: '#e5e7eb',
           padding: '4px 12px',
@@ -709,7 +709,7 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
           zIndex: 10,
           whiteSpace: 'nowrap',
-          borderTopRightRadius: '8px'
+          borderTopLeftRadius: '8px'
         }}
       >
         elev: 0 m   eye alt: 2200.00 km   lat: -2.548900   lon: 118.014900
