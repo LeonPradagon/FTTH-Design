@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-async function proxy(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+async function proxy(req: NextRequest) {
   try {
     const url = new URL(req.url);
     const pathAndQuery = url.pathname.replace(/^\/api\/proxy\/?/, '') + url.search;
@@ -54,7 +54,7 @@ async function proxy(req: NextRequest, { params }: { params: Promise<{ path: str
       status: res.status,
       headers: resHeaders
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Proxy error:", error);
     return NextResponse.json({ 
       error: "Internal Server Error", 

@@ -57,6 +57,74 @@ const getHouseDataUri = (color: string, bg: string) => {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 };
 
+type FeatureClassification = {
+  isPop: boolean;
+  isOdc: boolean;
+  isClosure: boolean;
+  isOdp: boolean;
+  isHouse: boolean;
+  isFeeder: boolean;
+  isDistribution: boolean;
+  isHouseCable: boolean;
+};
+
+const classifyFeature = (feature: any, layer: LayerConfig): FeatureClassification => {
+  const name = String(feature.properties?.name || "");
+  const description = String(feature.properties?.description || "");
+  const nameUpper = name.toUpperCase();
+  const descriptionUpper = description.toUpperCase();
+  const geometryType = feature.geometry?.type;
+  const isLine = geometryType === "LineString" || geometryType === "MultiLineString";
+  const isPoint = geometryType === "Point" || geometryType === "MultiPoint";
+
+  const isPop = isPoint && (
+    layer.id === "pop"
+    || descriptionUpper.includes("SERVER OLT")
+    || nameUpper.includes("POP")
+    || nameUpper.includes("OLT")
+  );
+  const isOdc = isPoint && (
+    nameUpper.startsWith("ODC") || descriptionUpper.includes("JUMLAH ODP:")
+  );
+  const isClosure = isPoint && (
+    nameUpper.includes("JOIN CLOSURE") || nameUpper.includes("CLOSURE")
+  );
+  const isOdp = isPoint && (
+    /^\d{1,2}\/\d{1,2}$/.test(name)
+    || descriptionUpper.includes("INDUK: ODC")
+    || nameUpper.includes("ODP")
+  );
+  const isHouse = isPoint && (
+    /^\d{1,2}\/\d{1,2}-\d{1,2}$/.test(name)
+    || descriptionUpper.includes("INDUK ODP:")
+    || (!isPop && !isOdc && !isClosure && !isOdp)
+  );
+
+  const isFeeder = isLine && (
+    nameUpper.includes("FEEDER")
+    || descriptionUpper.includes("FEEDER")
+    || feature.properties?.stroke === "#ff0000"
+  );
+  const isHouseCable = isLine && (
+    nameUpper.includes(" TO HC ")
+    || nameUpper.includes("KABEL DROP")
+    || nameUpper.includes("DROP CABLE")
+    || descriptionUpper.includes("KABEL DROP")
+  );
+  const isDistribution = isLine && !isFeeder && !isHouseCable;
+
+  return {
+    isPop,
+    isOdc,
+    isClosure,
+    isOdp,
+    isHouse,
+    isFeeder,
+    isDistribution,
+    isHouseCable,
+  };
+};
+
 const parseKmlTree = (parentEl: Element, doc: Document): KmlNode[] => {
   const nodes: KmlNode[] = [];
   
@@ -267,31 +335,17 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
         
         const filteredFeatures = geoJson.features.filter((f: any) => {
            if (!f || !f.geometry || !f.geometry.type) return false;
-           const name = String(f.properties?.name || "");
-           const desc = String(f.properties?.description || "");
-           const nameUpper = name.toUpperCase();
-           
-            const geomType = f.geometry?.type;
-            const isLine = geomType === "LineString" || geomType === "MultiLineString";
-            const isPoint = geomType === "Point" || geomType === "MultiPoint";
-
-            const isPop = isPoint && (layer.id === 'pop' || desc.includes("SERVER OLT") || nameUpper.includes("POP") || nameUpper.includes("OLT"));
-            const isOdc = isPoint && (nameUpper.startsWith("ODC") || desc.includes("Jumlah ODP:"));
-            const isClosure = isPoint && (nameUpper.includes("JOIN CLOSURE") || nameUpper.includes("CLOSURE"));
-            const isOdp = isPoint && ((/^\d{1,2}\/\d{1,2}$/.test(name)) || desc.includes("Induk: ODC") || nameUpper.includes("ODP"));
-            const isHouse = isPoint && ((/^\d{1,2}\/\d{1,2}-\d{1,2}$/.test(name)) || desc.includes("Induk ODP:") || (!isPop && !isOdc && !isClosure && !isOdp));
-            
-            const isFeeder = isLine && (nameUpper.includes("FEEDER") || desc.includes("FEEDER") || f.properties?.stroke === "#ff0000");
-            const isDistribution = isLine && !isFeeder;
+           const classification = classifyFeature(f, layer);
 
            if (filters && layer.id !== "boundary") {
-             if (isPop && !filters.showPop) return false;
-             if ((isOdc || isClosure) && !filters.showOdc) return false;
-             if (isOdp && !filters.showOdp) return false;
-             if (isHouse && !filters.showHouse) return false;
+             if (classification.isPop && !filters.showPop) return false;
+             if ((classification.isOdc || classification.isClosure) && !filters.showOdc) return false;
+             if (classification.isOdp && !filters.showOdp) return false;
+             if (classification.isHouse && !filters.showHouse) return false;
+             if (classification.isHouseCable && !filters.showHouse) return false;
              
-             if (isFeeder && !filters.showFeeder) return false;
-             if (isDistribution && !filters.showDistribution) return false;
+             if (classification.isFeeder && !filters.showFeeder) return false;
+             if (classification.isDistribution && !filters.showDistribution) return false;
            }
 
            if (kmlTrees && kmlTrees[layer.id]) {
@@ -349,16 +403,14 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
             if (f.geometry?.type === "Point") {
                 return [255, 255, 255, 255]; // White border for points
             }
-            const name = String(f.properties?.name || "");
-            const desc = String(f.properties?.description || "");
-            const nameUpper = name.toUpperCase();
-            
-            const isFeeder = nameUpper.includes("FEEDER") || desc.includes("FEEDER") || f.properties?.stroke === "#ff0000";
+            const classification = classifyFeature(f, layer);
             const isFtthLayer = layer.id.includes("design") || layer.name.toUpperCase().includes("FTTH");
-            const isDistribution = isFtthLayer && !isFeeder;
 
-            if (isFeeder) return getPinColorArray(featureColors?.feeder || '#ef4444');
-            if (isDistribution) return getPinColorArray(featureColors?.distribution || '#3b82f6');
+            if (classification.isFeeder) return getPinColorArray(featureColors?.feeder || '#ef4444');
+            if (classification.isHouseCable) return getPinColorArray(featureColors?.house || '#6b7280');
+            if (isFtthLayer && classification.isDistribution) {
+              return getPinColorArray(featureColors?.distribution || '#3b82f6');
+            }
 
             return getPinColorArray(f.properties?.stroke || layer.color);
           },

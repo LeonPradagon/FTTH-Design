@@ -23,7 +23,6 @@ export function Navbar({
   isRegeneratingCables, 
   hasDesign,
   featureColors,
-  projectName
 }: NavbarProps) {
   const [showInfo, setShowInfo] = useState(false);
   const [showAccountCenter, setShowAccountCenter] = useState(false);
@@ -37,6 +36,7 @@ export function Navbar({
     { label: "Rumah (HC)", desc: "Titik pelanggan / homepass", color: featureColors?.house || "#6b7280", shape: "house" },
     { label: "Kabel Feeder", desc: "Jalur utama (POP ke ODC)", color: featureColors?.feeder || "#ef4444", shape: "line" },
     { label: "Kabel Distribusi", desc: "Jalur cabang (ODC ke ODP)", color: featureColors?.distribution || "#3b82f6", shape: "line" },
+    { label: "Kabel Drop", desc: "ODP ke rumah; mengikuti filter HC", color: featureColors?.house || "#6b7280", shape: "line" },
   ];
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -54,10 +54,6 @@ export function Navbar({
         {/* Left: Logo / Title */}
         <div className="navbar-group">
           <h1 className="navbar-title">FTTH Design</h1>
-        </div>
-
-        {/* Center: Project Name */}
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
         </div>
 
         {/* Right: Actions */}
@@ -192,4 +188,3 @@ export function Navbar({
     </>
   );
 }
-

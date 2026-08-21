@@ -20,14 +20,14 @@ export default function LoginPage() {
 
     try {
       if (isLogin) {
-        const { data, error } = await signIn.email({
+        const { error } = await signIn.email({
           email,
           password,
         });
         if (error) throw new Error(error.message);
         router.push("/");
       } else {
-        const { data, error } = await signUp.email({
+        const { error } = await signUp.email({
           email,
           password,
           name,
@@ -35,8 +35,8 @@ export default function LoginPage() {
         if (error) throw new Error(error.message);
         router.push("/");
       }
-    } catch (err: any) {
-      setError(err.message || "Terjadi kesalahan");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Terjadi kesalahan");
     } finally {
       setLoading(false);
     }

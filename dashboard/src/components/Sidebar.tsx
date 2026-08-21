@@ -40,7 +40,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
     { key: 'showPop', colorKey: 'pop', label: 'Server OLT (POP)', icon: <MapPin size={16} /> },
     { key: 'showOdc', colorKey: 'odc', label: 'ODC (Cabinet)', icon: <Target size={16} /> },
     { key: 'showOdp', colorKey: 'odp', label: 'ODP (Tiang)', icon: <MapPin size={16} /> },
-    { key: 'showHouse', colorKey: 'house', label: 'Rumah (HC)', icon: <Home size={16} /> },
+    { key: 'showHouse', colorKey: 'house', label: 'Rumah (HC) & Kabel Drop', icon: <Home size={16} /> },
     { key: 'showFeeder', colorKey: 'feeder', label: 'Kabel Feeder', icon: <Cable size={16} /> },
     { key: 'showDistribution', colorKey: 'distribution', label: 'Kabel Distribusi', icon: <Route size={16} /> },
   ];
@@ -422,7 +422,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
           }}>
             <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#111827' }}>Konfirmasi Hapus</h3>
             <p style={{ margin: 0, fontSize: '14px', color: '#4b5563', lineHeight: '1.5' }}>
-              Apakah Anda yakin ingin menghapus proyek <b>"{projectToDelete.name}"</b>? Tindakan ini tidak dapat dibatalkan.
+              Apakah Anda yakin ingin menghapus proyek <b>&quot;{projectToDelete.name}&quot;</b>? Tindakan ini tidak dapat dibatalkan.
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
               <button 

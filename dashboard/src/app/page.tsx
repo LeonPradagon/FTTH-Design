@@ -43,6 +43,14 @@ export type KmlNode = {
 };
 
 const initialLayers: LayerConfig[] = [];
+const defaultFeatureFilters: FeatureFilters = {
+  showPop: true,
+  showOdc: true,
+  showOdp: true,
+  showHouse: false,
+  showFeeder: true,
+  showDistribution: true,
+};
 
 export default function Home() {
   const [layers, setLayers] = useState<LayerConfig[]>(initialLayers);
@@ -53,14 +61,9 @@ export default function Home() {
   const [showDownloadPopup, setShowDownloadPopup] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [toasts, setToasts] = useState<{id: number, message: string, type: 'success' | 'error' | 'info'}[]>([]);
-  const [filters, setFilters] = useState<FeatureFilters>({
-    showPop: true,
-    showOdc: true,
-    showOdp: true,
-    showHouse: true,
-    showFeeder: true,
-    showDistribution: true,
-  });
+  const [filters, setFilters] = useState<FeatureFilters>(() => ({
+    ...defaultFeatureFilters,
+  }));
 
   const [featureColors, setFeatureColors] = useState<Record<string, string>>({
     pop: '#ef4444',
@@ -156,12 +159,16 @@ export default function Home() {
     load();
   }, [fetchProjects]);
 
-  const saveProject = async (name: string, overrideLayers?: LayerConfig[]) => {
+  const saveProject = async (
+    name: string,
+    overrideLayers?: LayerConfig[],
+    overrideFilters?: FeatureFilters,
+  ) => {
     try {
       const payload = {
         name: name,
         layers: overrideLayers || layers,
-        filters: filters,
+        filters: overrideFilters || filters,
         feature_colors: featureColors
       };
 
@@ -211,9 +218,8 @@ export default function Home() {
       });
 
       setLayers(uniqueLayers);
-      setFilters(parseJson(data.filters, {
-        showPop: true, showOdc: true, showOdp: true, showHouse: true, showFeeder: true, showDistribution: true
-      }));
+      const loadedFilters = parseJson(data.filters, defaultFeatureFilters);
+      setFilters({ ...defaultFeatureFilters, ...loadedFilters });
       setFeatureColors(parseJson(data.feature_colors, {
         pop: '#ef4444', odc: '#3b82f6', odp: '#10b981', house: '#6b7280', feeder: '#ef4444', distribution: '#3b82f6'
       }));
@@ -229,9 +235,7 @@ export default function Home() {
     setLayers([]);
     setKmzUrl(null);
     setCsvUrl(null);
-    setFilters({
-      showPop: true, showOdc: true, showOdp: true, showHouse: true, showFeeder: true, showDistribution: true
-    });
+    setFilters({ ...defaultFeatureFilters });
     setKmlTrees({});
     addToast('Proyek ditutup', 'info');
   };
@@ -407,8 +411,14 @@ export default function Home() {
         if (data.status === "success") {
           const newDesign: LayerConfig = { id: "design", name: "FTTH Design", url: `/api/proxy${data.url}`, visible: true, color: "#22c55e" };
           const newLayers = [...layers.filter(l => l.id !== 'design'), newDesign];
+          const generatedFilters = { ...filters, showHouse: false };
           setLayers(newLayers);
-          saveProject(projectName || "Untitled Project", newLayers).catch(console.error);
+          setFilters(generatedFilters);
+          saveProject(
+            projectName || "Untitled Project",
+            newLayers,
+            generatedFilters,
+          ).catch(console.error);
           
           if (data.kmz_url) setKmzUrl(`/api/proxy${data.kmz_url}`);
           if (data.csv_url) setCsvUrl(`/api/proxy${data.csv_url}`);
@@ -444,8 +454,14 @@ export default function Home() {
         if (data.status === "success") {
           const newDesign: LayerConfig = { id: "design", name: "FTTH Design", url: `/api/proxy${data.url}`, visible: true, color: "#22c55e" };
           const newLayers = [...layers.filter(l => l.id !== 'design'), newDesign];
+          const generatedFilters = { ...filters, showHouse: false };
           setLayers(newLayers);
-          saveProject(projectName || "Untitled Project", newLayers).catch(console.error);
+          setFilters(generatedFilters);
+          saveProject(
+            projectName || "Untitled Project",
+            newLayers,
+            generatedFilters,
+          ).catch(console.error);
           
           if (data.kmz_url) setKmzUrl(`/api/proxy${data.kmz_url}`);
           if (data.csv_url) setCsvUrl(`/api/proxy${data.csv_url}`);
@@ -475,8 +491,14 @@ export default function Home() {
       if (data.status === "success") {
         const newDesign: LayerConfig = { id: "design", name: "FTTH Design", url: `/api/proxy${data.url}`, visible: true, color: "#22c55e" };
         const newLayers = [...layers.filter(l => l.id !== 'design'), newDesign];
+        const generatedFilters = { ...filters, showHouse: false };
         setLayers(newLayers);
-        saveProject(projectName || "Untitled Project", newLayers).catch(console.error);
+        setFilters(generatedFilters);
+        saveProject(
+          projectName || "Untitled Project",
+          newLayers,
+          generatedFilters,
+        ).catch(console.error);
         
         if (data.kmz_url) setKmzUrl(`/api/proxy${data.kmz_url}`);
         if (data.csv_url) setCsvUrl(`/api/proxy${data.csv_url}`);
