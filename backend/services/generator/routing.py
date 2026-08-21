@@ -1,10 +1,93 @@
 import math
+import ast
 import networkx as nx
 import osmnx as ox
 from shapely.geometry import Point as ShPoint, LineString
 from shapely.ops import substring
 from backend.utils.geometry import haversine_m, bearing_between, offset_latlon
 from backend.core.logging import logger
+
+ROAD_PROFILE_VERSION = "road-priority-v3"
+ALLOWED_HIGHWAY_TYPES = {
+    "motorway", "motorway_link", "trunk", "trunk_link",
+    "primary", "primary_link", "secondary", "secondary_link",
+    "tertiary", "tertiary_link", "residential", "living_street",
+    "unclassified", "service", "road",
+}
+ROAD_PRIORITY_FACTORS = {
+    "trunk": 0.70,
+    "trunk_link": 0.75,
+    "primary": 0.75,
+    "primary_link": 0.80,
+    "secondary": 0.85,
+    "secondary_link": 0.90,
+    "tertiary": 0.95,
+    "tertiary_link": 1.00,
+    "motorway": 1.00,
+    "motorway_link": 1.05,
+    "residential": 1.15,
+    "unclassified": 1.20,
+    "living_street": 1.25,
+    "road": 1.30,
+    "service": 1.45,
+}
+
+
+def _highway_values(value):
+    if isinstance(value, (list, tuple, set)):
+        return {str(item).lower() for item in value}
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.startswith("["):
+            try:
+                parsed = ast.literal_eval(stripped)
+                if isinstance(parsed, (list, tuple, set)):
+                    return {str(item).lower() for item in parsed}
+            except (ValueError, SyntaxError):
+                pass
+        return {stripped.lower()}
+    return set()
+
+
+def prepare_road_graph(road_graph):
+    """Keep actual vehicle roads only and add a road-class routing cost.
+
+    Native OSM XML also contains railways and other ways without a ``highway``
+    tag. Those edges must never be considered cable routes.
+    """
+    if road_graph.graph.get("ftth_road_profile") == ROAD_PROFILE_VERSION:
+        first_edge = next(iter(road_graph.edges(data=True)), None)
+        if first_edge is not None and isinstance(first_edge[2].get("routing_cost"), (int, float)):
+            return road_graph
+        # GraphML memuat atribut custom sebagai string; konversi sekali saat load.
+        for _, _, data in road_graph.edges(data=True):
+            data["routing_cost"] = float(data["routing_cost"])
+        return road_graph
+
+    invalid_edges = []
+    for u, v, key, data in road_graph.edges(keys=True, data=True):
+        highway_types = _highway_values(data.get("highway"))
+        allowed_types = highway_types & ALLOWED_HIGHWAY_TYPES
+        if not allowed_types:
+            invalid_edges.append((u, v, key))
+            continue
+
+        factor = min(ROAD_PRIORITY_FACTORS.get(kind, 1.5) for kind in allowed_types)
+        length = float(data.get("length") or 0.0)
+        data["routing_cost"] = max(length, 0.01) * factor
+
+    road_graph.remove_edges_from(invalid_edges)
+    road_graph.remove_nodes_from(list(nx.isolates(road_graph)))
+    if road_graph.number_of_edges() == 0:
+        raise ValueError("Road graph tidak memiliki jalan kendaraan yang valid.")
+
+    road_graph.graph["ftth_road_profile"] = ROAD_PROFILE_VERSION
+    logger.info(
+        "Road graph sanitized: removed %s non-road edges; %s road edges remain",
+        len(invalid_edges),
+        road_graph.number_of_edges(),
+    )
+    return road_graph
 
 def route_along_road(G, from_latlon, to_latlon):
     """Cari rute terpendek di graf jalan `G` antara dua titik (lat, lon) 
@@ -29,6 +112,8 @@ def route_along_road(G, from_latlon, to_latlon):
             coords[0] = p1
             coords[-1] = p2
         return coords
+
+    G = prepare_road_graph(G)
 
     # 1. Snap start and end
     try:
@@ -69,14 +154,14 @@ def route_along_road(G, from_latlon, to_latlon):
     for s in valid_starts:
         for e in valid_ends:
             try:
-                length = nx.shortest_path_length(G, s, e, weight="length")
+                length = nx.shortest_path_length(G, s, e, weight="routing_cost")
                 dist_s = haversine_m(snapped_start[0], snapped_start[1], G.nodes[s]['y'], G.nodes[s]['x'])
                 dist_e = haversine_m(snapped_end[0], snapped_end[1], G.nodes[e]['y'], G.nodes[e]['x'])
                 total_len = dist_s + length + dist_e
                 
                 if total_len < best_len:
                     best_len = total_len
-                    best_path = nx.shortest_path(G, s, e, weight="length")
+                    best_path = nx.shortest_path(G, s, e, weight="routing_cost")
             except (nx.NetworkXNoPath, nx.NodeNotFound):
                 continue
 
@@ -99,7 +184,7 @@ def route_along_road(G, from_latlon, to_latlon):
         v = best_path[i + 1]
         edge_data = G.get_edge_data(u, v)
         if edge_data:
-            data = min(edge_data.values(), key=lambda d: d.get("length", float('inf')))
+            data = min(edge_data.values(), key=lambda d: d.get("routing_cost", float('inf')))
             if "geometry" in data:
                 coords = [(lat, lon) for lon, lat in data["geometry"].coords]
                 u_coord = (G.nodes[u]["y"], G.nodes[u]["x"])
@@ -165,6 +250,7 @@ def locate_on_road(road_graph, lat, lon):
     import osmnx as ox
     from shapely.geometry import Point as ShPoint
 
+    road_graph = prepare_road_graph(road_graph)
     u, v, key = ox.distance.nearest_edges(road_graph, X=lon, Y=lat)
     line, len_m = _edge_geometry_and_length(road_graph, u, v, key)
     t_deg = line.project(ShPoint(lon, lat))
@@ -253,8 +339,9 @@ def enforce_min_distance_between_odcs_on_road(road_graph, odcs, min_dist_m=40.0,
     dengan BERJALAN DI SEPANJANG JALAN (walk_along_road) dari posisi ODC
     lainnya sejauh min_dist_m -- dicoba beberapa arah/percabangan supaya
     hasilnya juga tidak bertumpuk dengan ODC lain yang sudah diproses.
-    Fallback ke offset garis lurus (dengan peringatan) kalau tidak ada opsi
-    jalan yang valid ditemukan. Mutasi in-place."""
+    Kalau tidak ada posisi alternatif yang valid, pertahankan posisi jalan
+    semula agar ODC tidak pernah terdorong ke rel, sungai, atau pekarangan.
+    Mutasi in-place."""
     n = len(odcs)
     for _ in range(max_passes):
         moved = False
@@ -285,10 +372,11 @@ def enforce_min_distance_between_odcs_on_road(road_graph, odcs, min_dist_m=40.0,
                         break
 
                 if result is None:
-                    bearing = (137.5 * j) % 360 if d < 1e-6 else bearing_between(a.lat, a.lon, b.lat, b.lon)
-                    result = offset_latlon(a.lat, a.lon, min_dist_m, bearing)
-                    print(f"  Peringatan: {b.id} tidak bisa dipindah di jalan (jalan lurus tanpa "
-                          f"persimpangan terdekat), pakai offset garis lurus.")
+                    print(
+                        f"  Peringatan: {b.id} tidak bisa dipindah {min_dist_m:.0f} m di jaringan jalan; "
+                        "posisi jalan semula dipertahankan."
+                    )
+                    continue
 
                 b.lat, b.lon = result
                 moved = True
@@ -399,7 +487,13 @@ def build_feeder_chain(pop, odcs, road_graph=None):
             try:
                 path = route_along_road(road_graph, current_latlon, target_latlon)
             except Exception as e:
-                print(f"  Peringatan: gagal routing jalan {current_label}->{odc.id} ({e}), pakai garis lurus.")
+                raise RuntimeError(
+                    f"Gagal membuat feeder {current_label}->{odc.id} melalui jalan: {e}"
+                ) from e
+            if not path:
+                raise RuntimeError(
+                    f"Tidak ada koneksi jalan untuk feeder {current_label}->{odc.id}."
+                )
         if not path:
             path = [current_latlon, target_latlon]
         segments.append({"from_label": current_label, "to_label": odc.id, "coords": path})
@@ -430,7 +524,13 @@ def build_feeder_segments_preserving_order(pop, odcs, road_graph=None):
             try:
                 path = route_along_road(road_graph, current_latlon, target_latlon)
             except Exception as e:
-                print(f"  Peringatan: gagal routing jalan {current_label}->{odc.id} ({e}), pakai garis lurus.")
+                raise RuntimeError(
+                    f"Gagal membuat feeder {current_label}->{odc.id} melalui jalan: {e}"
+                ) from e
+            if not path:
+                raise RuntimeError(
+                    f"Tidak ada koneksi jalan untuk feeder {current_label}->{odc.id}."
+                )
         if not path:
             path = [current_latlon, target_latlon]
         segments.append({"from_label": current_label, "to_label": odc.id, "coords": path})

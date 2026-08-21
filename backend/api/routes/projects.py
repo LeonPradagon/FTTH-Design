@@ -3,13 +3,44 @@ from pydantic import BaseModel
 from typing import List, Optional, Any
 import os
 import shutil
-import time
 from prisma import Json
 
 from ...database import db
 from ..deps import get_current_user
+from backend.services.user_storage import create_user_filename, get_user_storage_dir, user_file_url
 
 router = APIRouter(prefix="/api")
+
+DEFAULT_FEATURE_COLORS = {
+    "pop": "#eab308",
+    "odc": "#ef4444",
+    "odp": "#3b82f6",
+    "house": "#6b7280",
+    "feeder": "#ef4444",
+    "distribution": "#8b5cf6",
+}
+
+LEGACY_DEFAULT_FEATURE_COLORS = {
+    "pop": "#ef4444",
+    "odc": "#3b82f6",
+    "odp": "#10b981",
+    "house": "#6b7280",
+    "feeder": "#ef4444",
+    "distribution": "#3b82f6",
+}
+
+
+def get_allowed_feature_colors(requested_colors: dict, current_user: dict) -> dict:
+    if current_user.get("role") == "admin":
+        uses_legacy_defaults = all(
+            str(requested_colors.get(key, "")).lower() == color
+            for key, color in LEGACY_DEFAULT_FEATURE_COLORS.items()
+        )
+        if uses_legacy_defaults:
+            return DEFAULT_FEATURE_COLORS.copy()
+        return {**DEFAULT_FEATURE_COLORS, **requested_colors}
+    return DEFAULT_FEATURE_COLORS.copy()
+
 
 class ProjectCreate(BaseModel):
     name: str
@@ -24,19 +55,18 @@ class ProjectUpdate(BaseModel):
     feature_colors: Optional[dict] = None
 
 @router.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     """Uploads a file (like a KML) and returns its permanent URL."""
     try:
-        os.makedirs("dashboard/public/data/imports", exist_ok=True)
-        # Create a unique filename to avoid overwrites
-        timestamp = int(time.time())
-        safe_filename = f"{timestamp}_{file.filename}"
-        file_location = f"dashboard/public/data/imports/{safe_filename}"
+        user_dir = get_user_storage_dir(current_user["id"])
+        extension = os.path.splitext(file.filename or "upload.kml")[1] or ".kml"
+        safe_filename = create_user_filename("import", extension)
+        file_location = user_dir / safe_filename
         
         with open(file_location, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        return {"url": f"/data/imports/{safe_filename}"}
+        return {"url": user_file_url(safe_filename)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")
 
@@ -47,7 +77,7 @@ async def create_project(project: ProjectCreate, current_user: dict = Depends(ge
             "name": project.name,
             "layers": Json(project.layers),
             "filters": Json(project.filters),
-            "feature_colors": Json(project.feature_colors),
+            "feature_colors": Json(get_allowed_feature_colors(project.feature_colors, current_user)),
             "userId": current_user["id"]
         }
     )
@@ -55,13 +85,8 @@ async def create_project(project: ProjectCreate, current_user: dict = Depends(ge
 
 @router.get("/projects")
 async def read_projects(skip: int = 0, limit: int = 100, current_user: dict = Depends(get_current_user)):
-    # Admin can see all, user can see only theirs
-    where_clause = {}
-    if current_user.get("role") != "admin":
-        where_clause = {"userId": current_user["id"]}
-
     projects = await db.project.find_many(
-        where=where_clause,
+        where={"userId": current_user["id"]},
         skip=skip,
         take=limit,
         order={"updated_at": "desc"}
@@ -74,7 +99,7 @@ async def read_project(project_id: str, current_user: dict = Depends(get_current
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
         
-    if current_user.get("role") != "admin" and project.userId != current_user["id"]:
+    if project.userId != current_user["id"]:
         raise HTTPException(status_code=403, detail="Forbidden")
         
     return project
@@ -85,7 +110,7 @@ async def update_project(project_id: str, project_update: ProjectUpdate, current
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
         
-    if current_user.get("role") != "admin" and project.userId != current_user["id"]:
+    if project.userId != current_user["id"]:
         raise HTTPException(status_code=403, detail="Forbidden")
     
     update_data = project_update.dict(exclude_unset=True)
@@ -93,8 +118,12 @@ async def update_project(project_id: str, project_update: ProjectUpdate, current
         update_data["layers"] = Json(update_data["layers"])
     if "filters" in update_data and update_data["filters"] is not None:
         update_data["filters"] = Json(update_data["filters"])
-    if "feature_colors" in update_data and update_data["feature_colors"] is not None:
-        update_data["feature_colors"] = Json(update_data["feature_colors"])
+    if current_user.get("role") != "admin":
+        update_data["feature_colors"] = Json(DEFAULT_FEATURE_COLORS.copy())
+    elif "feature_colors" in update_data and update_data["feature_colors"] is not None:
+        update_data["feature_colors"] = Json(
+            get_allowed_feature_colors(update_data["feature_colors"], current_user)
+        )
 
     updated_project = await db.project.update(
         where={"id": project_id},
@@ -108,7 +137,7 @@ async def delete_project(project_id: str, current_user: dict = Depends(get_curre
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
         
-    if current_user.get("role") != "admin" and project.userId != current_user["id"]:
+    if project.userId != current_user["id"]:
         raise HTTPException(status_code=403, detail="Forbidden")
         
     try:

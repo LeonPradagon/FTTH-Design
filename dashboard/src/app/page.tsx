@@ -7,6 +7,8 @@ import { Navbar } from "../components/Navbar";
 import { CheckCircle, AlertCircle, Info, X } from "lucide-react";
 
 import { Sidebar, FeatureFilters } from "../components/Sidebar";
+import { useSession } from "@/lib/auth-client";
+import { DEFAULT_FEATURE_COLORS, resolveFeatureColors } from "@/lib/feature-colors";
 
 // Dynamically import the MapComponent so it only renders on the client
 // Leaflet requires window, which is undefined on the server
@@ -53,6 +55,8 @@ const defaultFeatureFilters: FeatureFilters = {
 };
 
 export default function Home() {
+  const { data: session } = useSession();
+  const canEditColors = (session?.user as { role?: string } | undefined)?.role === "admin";
   const [layers, setLayers] = useState<LayerConfig[]>(initialLayers);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRegeneratingCables, setIsRegeneratingCables] = useState(false);
@@ -65,14 +69,9 @@ export default function Home() {
     ...defaultFeatureFilters,
   }));
 
-  const [featureColors, setFeatureColors] = useState<Record<string, string>>({
-    pop: '#ef4444',
-    odc: '#3b82f6',
-    odp: '#10b981',
-    house: '#6b7280',
-    feeder: '#ef4444',
-    distribution: '#3b82f6',
-  });
+  const [featureColors, setFeatureColors] = useState<Record<string, string>>(() => ({
+    ...DEFAULT_FEATURE_COLORS,
+  }));
 
   // Project State
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
@@ -202,11 +201,11 @@ export default function Home() {
       setCurrentProjectId(data.id);
       setProjectName(data.name);
       
-      const parseJson = (val: any, fallback: any) => {
+      const parseJson = <T,>(val: unknown, fallback: T): T => {
         if (typeof val === 'string') {
-          try { return JSON.parse(val); } catch { return fallback; }
+          try { return JSON.parse(val) as T; } catch { return fallback; }
         }
-        return val || fallback;
+        return (val as T) || fallback;
       };
 
       const rawLayers = parseJson(data.layers, []);
@@ -220,9 +219,8 @@ export default function Home() {
       setLayers(uniqueLayers);
       const loadedFilters = parseJson(data.filters, defaultFeatureFilters);
       setFilters({ ...defaultFeatureFilters, ...loadedFilters });
-      setFeatureColors(parseJson(data.feature_colors, {
-        pop: '#ef4444', odc: '#3b82f6', odp: '#10b981', house: '#6b7280', feeder: '#ef4444', distribution: '#3b82f6'
-      }));
+      const savedFeatureColors = parseJson(data.feature_colors, {});
+      setFeatureColors(resolveFeatureColors(savedFeatureColors, canEditColors));
       addToast('Proyek berhasil dimuat!', 'success');
     } catch {
       addToast(`Gagal memuat proyek: Akses ditolak`, 'error');
@@ -236,6 +234,7 @@ export default function Home() {
     setKmzUrl(null);
     setCsvUrl(null);
     setFilters({ ...defaultFeatureFilters });
+    setFeatureColors({ ...DEFAULT_FEATURE_COLORS });
     setKmlTrees({});
     addToast('Proyek ditutup', 'info');
   };
@@ -526,6 +525,7 @@ export default function Home() {
         isRegeneratingCables={isRegeneratingCables}
         hasDesign={visibleLayers.some((l: LayerConfig) => l.id === "design")}
         projectName={projectName}
+        featureColors={featureColors}
       />
       <div className="map-container" style={{ position: 'relative' }}>
         <Sidebar 
@@ -538,8 +538,9 @@ export default function Home() {
           isCollapsed={isSidebarCollapsed}
           onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           featureColors={featureColors}
-          onColorChange={(key, color) => setFeatureColors(prev => ({ ...prev, [key]: color }))}
-          onChangeLayerColor={handleLayerColorChange}
+          canEditColors={canEditColors}
+          onColorChange={canEditColors ? (key, color) => setFeatureColors(prev => ({ ...prev, [key]: color })) : undefined}
+          onChangeLayerColor={canEditColors ? handleLayerColorChange : undefined}
           savedProjects={savedProjects}
           onLoadProject={loadProject}
           onUnloadProject={unloadProject}

@@ -5,21 +5,34 @@ from shapely.geometry import Polygon
 from backend.core.logging import logger
 from backend.services.generator.models import Splitter, ODP, ODC
 from backend.services.generator.osm_local import fetch_road_graph
-from backend.services.generator.routing import build_feeder_segments_preserving_order, build_feeder_chain
+from backend.services.generator.routing import (
+    build_feeder_segments_preserving_order,
+    build_feeder_chain,
+    prepare_road_graph,
+    snap_to_road,
+)
 from backend.services.generator.kml_builder import export_kmz
 from backend.services.generator.csv_exporter import export_csv
 from backend.services.generator.kml_parser import read_custom_mapped_kml
 from backend.utils.geometry import haversine_m
 
 CACHE_DIR = os.path.abspath("cache")
-DESIGN_STATE_PATH = os.path.join(CACHE_DIR, "design_state.json")
-ROAD_GRAPH_PATH = os.path.join(CACHE_DIR, "road_graph.pkl")
 
-def save_design_state(pop, odcs, road_graph=None):
+def _cache_paths(cache_dir=None):
+    resolved_cache_dir = os.path.abspath(cache_dir or CACHE_DIR)
+    return (
+        resolved_cache_dir,
+        os.path.join(resolved_cache_dir, "design_state.json"),
+        os.path.join(resolved_cache_dir, "road_graph.pkl"),
+    )
+
+
+def save_design_state(pop, odcs, road_graph=None, cache_dir=None):
     """Simpan posisi POP, ODC, ODP, dan rumah ke file JSON, serta road graph
     ke pickle. Ini memungkinkan regenerate kabel tanpa menjalankan ulang
     clustering & placement dari awal."""
-    os.makedirs(CACHE_DIR, exist_ok=True)
+    resolved_cache_dir, design_state_path, road_graph_path = _cache_paths(cache_dir)
+    os.makedirs(resolved_cache_dir, exist_ok=True)
 
     state = {
         "pop": pop,
@@ -47,25 +60,29 @@ def save_design_state(pop, odcs, road_graph=None):
             odc_data["odps"].append(odp_data)
         state["odcs"].append(odc_data)
 
-    with open(DESIGN_STATE_PATH, "w") as f:
+    with open(design_state_path, "w") as f:
         json.dump(state, f, indent=2)
-    print(f"Design state disimpan di: {DESIGN_STATE_PATH}")
+    print(f"Design state disimpan di: {design_state_path}")
 
     if road_graph is not None:
-        with open(ROAD_GRAPH_PATH, "wb") as f:
+        with open(road_graph_path, "wb") as f:
             pickle.dump(road_graph, f)
-        print(f"Road graph disimpan di: {ROAD_GRAPH_PATH}")
+        print(f"Road graph disimpan di: {road_graph_path}")
+    elif os.path.exists(road_graph_path):
+        # Jangan gunakan graph dari design sebelumnya saat pengambilan OSM terbaru gagal.
+        os.remove(road_graph_path)
 
 
-def load_design_state():
+def load_design_state(cache_dir=None):
     """Muat design state dari cache JSON. Return (pop, odcs) yang siap dipakai
     untuk regenerate kabel. Raise FileNotFoundError kalau belum pernah generate."""
-    if not os.path.exists(DESIGN_STATE_PATH):
+    _, design_state_path, _ = _cache_paths(cache_dir)
+    if not os.path.exists(design_state_path):
         raise FileNotFoundError(
             "Belum ada design state yang tersimpan. Jalankan 'Generate Design' terlebih dahulu."
         )
 
-    with open(DESIGN_STATE_PATH, "r") as f:
+    with open(design_state_path, "r") as f:
         state = json.load(f)
 
     pop = state["pop"]
@@ -100,15 +117,16 @@ def load_design_state():
     return pop, odcs
 
 
-def load_road_graph():
+def load_road_graph(cache_dir=None):
     """Muat road graph dari pickle cache. Return None kalau tidak ada."""
-    if not os.path.exists(ROAD_GRAPH_PATH):
+    _, _, road_graph_path = _cache_paths(cache_dir)
+    if not os.path.exists(road_graph_path):
         return None
-    with open(ROAD_GRAPH_PATH, "rb") as f:
-        return pickle.load(f)
+    with open(road_graph_path, "rb") as f:
+        return prepare_road_graph(pickle.load(f))
 
 
-def regenerate_cables_only(output_path, include_homepass=False, output_csv=None):
+def regenerate_cables_only(output_path, include_homepass=False, output_csv=None, cache_dir=None):
     """Regenerate HANYA jalur kabel (feeder, distribusi, drop) tanpa mengubah
     posisi ODC/ODP/tiang/rumah. Membaca posisi dari design state cache dan
     road graph dari pickle cache, lalu menjalankan routing + export KMZ.
@@ -118,8 +136,9 @@ def regenerate_cables_only(output_path, include_homepass=False, output_csv=None)
     print("REGENERATE KABEL ONLY — posisi tiang/ODC/ODP/rumah TETAP")
     print("=" * 60)
 
-    pop, odcs = load_design_state()
-    road_graph = load_road_graph()
+    _, _, road_graph_path = _cache_paths(cache_dir)
+    pop, odcs = load_design_state(cache_dir=cache_dir)
+    road_graph = load_road_graph(cache_dir=cache_dir)
 
     logger.info(f"load_road_graph returned: {'None' if road_graph is None else 'Graph with ' + str(len(road_graph.nodes)) + ' nodes'}")
 
@@ -143,17 +162,22 @@ def regenerate_cables_only(output_path, include_homepass=False, output_csv=None)
                 if road_graph is not None:
                     # Simpan ke cache agar percobaan berikutnya lebih cepat
                     import pickle
-                    with open(ROAD_GRAPH_PATH, "wb") as f:
+                    with open(road_graph_path, "wb") as f:
                         pickle.dump(road_graph, f)
                     logger.info("Successfully fetched and cached road graph.")
                 else:
                     logger.warning("fetch_road_graph returned None")
             except Exception as e:
-                logger.exception(f"Gagal mengunduh ulang road graph ({e}), kabel akan pakai garis lurus.")
-                print(f"  Peringatan: Gagal mengunduh ulang road graph ({e}), kabel akan pakai garis lurus.")
+                logger.exception(f"Gagal mengunduh ulang road graph ({e}); regenerate akan dihentikan.")
+                print(f"  Peringatan: Gagal mengunduh ulang road graph ({e}); regenerate akan dihentikan.")
         else:
-            logger.warning("Tidak ada data koordinat untuk mengunduh road graph, kabel akan pakai garis lurus.")
-            print("  Peringatan: Tidak ada data koordinat untuk mengunduh road graph, kabel akan pakai garis lurus.")
+            logger.warning("Tidak ada data koordinat untuk mengunduh road graph; regenerate akan dihentikan.")
+            print("  Peringatan: Tidak ada data koordinat untuk mengunduh road graph; regenerate akan dihentikan.")
+
+    if road_graph is None:
+        raise RuntimeError(
+            "Jaringan jalan OSM tidak tersedia. Regenerate dihentikan agar kabel tidak dibuat sebagai garis lurus."
+        )
 
     total_odp = sum(len(odc.odps) for odc in odcs)
     total_houses = sum(len(odp.houses) for odc in odcs for odp in odc.odps)
@@ -161,10 +185,10 @@ def regenerate_cables_only(output_path, include_homepass=False, output_csv=None)
 
     if road_graph is not None:
         import random
-        # Tambahkan variasi acak (noise) ke bobot jalan agar rute mencari alternatif baru
+        # Variasi kecil untuk alternatif rute tanpa mengalahkan prioritas kelas jalan.
         for u, v, k, data in road_graph.edges(keys=True, data=True):
-            if "length" in data:
-                data["length"] = data["length"] * random.uniform(0.5, 2.0)
+            if "routing_cost" in data:
+                data["routing_cost"] = float(data["routing_cost"]) * random.uniform(0.9, 1.1)
 
     # Route feeder tanpa mengubah urutan ODC (sudah benar dari cache)
     feeder_segments, odcs = build_feeder_segments_preserving_order(pop, odcs, road_graph=road_graph)
@@ -181,7 +205,7 @@ def regenerate_cables_only(output_path, include_homepass=False, output_csv=None)
     return output_path
 
 
-def generate_cables_from_custom_points(file_path, output_path, include_homepass=False, output_csv=None):
+def generate_cables_from_custom_points(file_path, output_path, include_homepass=False, output_csv=None, cache_dir=None):
     """
     Men-generate jalur kabel (routing mengikuti jalan OSM) dari file KML custom 
     yang sudah berisi titik-titik mapping OLT, ODC, ODP, dan RUMAH.
@@ -245,7 +269,22 @@ def generate_cables_from_custom_points(file_path, output_path, include_homepass=
     try:
         road_graph = fetch_road_graph(bbox, pop, buffer_deg=0.015)
     except Exception as e:
-        print(f"Peringatan: Gagal mengambil data jalan ({e}), kabel akan menggunakan garis lurus.")
+        raise RuntimeError(
+            f"Gagal mengambil data jalan ({e}). Generate dihentikan agar kabel tidak memotong rel atau sungai."
+        ) from e
+
+    if road_graph is None:
+        raise RuntimeError(
+            "Jaringan jalan OSM tidak tersedia. Generate dihentikan agar kabel tidak dibuat sebagai garis lurus."
+        )
+
+    try:
+        for odc in odcs:
+            odc.lat, odc.lon = snap_to_road(road_graph, odc.lat, odc.lon)
+            for odp in odc.odps:
+                odp.lat, odp.lon = snap_to_road(road_graph, odp.lat, odp.lon)
+    except Exception as e:
+        raise RuntimeError(f"ODC/ODP custom tidak dapat ditempatkan pada jalan kendaraan: {e}") from e
         
     # 4. Routing Feeder (POP -> ODCs)
     print("Membangun rantai kabel feeder...")
@@ -262,7 +301,7 @@ def generate_cables_from_custom_points(file_path, output_path, include_homepass=
     
     # 6. Cache design state untuk fitur regenerate-cables
     try:
-        save_design_state(pop, odcs, road_graph=road_graph)
+        save_design_state(pop, odcs, road_graph=road_graph, cache_dir=cache_dir)
     except Exception as e:
         print(f"Peringatan: gagal menyimpan custom design state ({e}), regenerate-cables tidak tersedia.")
     

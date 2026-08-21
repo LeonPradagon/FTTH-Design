@@ -24,7 +24,8 @@ def export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=False, 
     # -- OLT --
     fol_olt = kml.newfolder(name="OLT")
     p = fol_olt.newpoint(name=pop["name"], description="SERVER OLT", coords=[(pop["lon"], pop["lat"])])
-    p.style.iconstyle.color = simplekml.Color.red
+    p.style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/shapes/electronics.png"
+    p.style.iconstyle.color = simplekml.Color.yellow
     p.style.iconstyle.scale = 1.3
 
     # -- LINE FD (feeder): rantai POP -> ODC1 -> ODC2 -> ... mengikuti jalan --
@@ -89,8 +90,9 @@ def export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=False, 
             coords = [(odc.lon, odc.lat), (odp.lon, odp.lat)]
             if road_graph and road_feeder:
                 path = route_along_road(road_graph, (odc.lat, odc.lon), (odp.lat, odp.lon))
-                if path:
-                    coords = [(lon, lat) for lat, lon in path]
+                if not path:
+                    raise RuntimeError(f"Tidak ada koneksi jalan untuk kabel distribusi {odc_label} -> {odp_label}.")
+                coords = [(lon, lat) for lat, lon in path]
             
             if len(coords) == 1:
                 coords.append((coords[0][0] + 0.00001, coords[0][1] + 0.00001))
@@ -99,7 +101,7 @@ def export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=False, 
                 name=f"ODC {i:02d} TO ODP {odp_label}",
                 coords=coords,
             )
-            dist.style.linestyle.color = simplekml.Color.blue
+            dist.style.linestyle.color = simplekml.Color.rgb(139, 92, 246)
             dist.style.linestyle.width = 2
 
             if not include_homepass:
@@ -122,8 +124,9 @@ def export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=False, 
                 drop_coords = [(odp.lon, odp.lat), (h_lon, h_lat)]
                 if road_graph and road_feeder:
                     path = route_along_road(road_graph, (odp.lat, odp.lon), (h_lat, h_lon))
-                    if path:
-                        drop_coords = [(lon, lat) for lat, lon in path]
+                    if not path:
+                        raise RuntimeError(f"Tidak ada koneksi jalan untuk kabel drop {odp_label} -> {hc_label}.")
+                    drop_coords = [(lon, lat) for lat, lon in path]
                 
                 if len(drop_coords) == 1:
                     drop_coords.append((drop_coords[0][0] + 0.00001, drop_coords[0][1] + 0.00001))

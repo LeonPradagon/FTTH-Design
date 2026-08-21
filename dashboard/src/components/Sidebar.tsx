@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronDown, ChevronRight, Filter, MapPin, Target, Home, Route, Cable, Layers, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronDown, ChevronRight, Filter, Server, Triangle, Home, Route, Cable, Layers, Trash2 } from 'lucide-react';
 import { LayerConfig, KmlNode } from '../app/page';
 import { KmlTreeViewer } from './KmlTreeViewer';
 
@@ -23,6 +23,7 @@ interface SidebarProps {
   isCollapsed: boolean;
   onToggle: () => void;
   featureColors?: Record<string, string>;
+  canEditColors?: boolean;
   onColorChange?: (key: string, color: string) => void;
   onChangeLayerColor?: (id: string, color: string) => void;
   savedProjects?: { id: string; name: string; updated_at?: string; created_at?: string }[];
@@ -32,14 +33,14 @@ interface SidebarProps {
   currentProjectId?: string | null;
 }
 
-export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTrees, onToggleTreeNode, isCollapsed, onToggle, featureColors, onColorChange, onChangeLayerColor, savedProjects = [], onLoadProject, onUnloadProject, onDeleteProject, currentProjectId }: SidebarProps) {
+export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTrees, onToggleTreeNode, isCollapsed, onToggle, featureColors, canEditColors = false, onColorChange, onChangeLayerColor, savedProjects = [], onLoadProject, onUnloadProject, onDeleteProject, currentProjectId }: SidebarProps) {
   const [isProjectsExpanded, setIsProjectsExpanded] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<{id: string, name: string} | null>(null);
 
   const filterItems: { key: keyof FeatureFilters; colorKey: string; label: string; icon: React.ReactNode }[] = [
-    { key: 'showPop', colorKey: 'pop', label: 'Server OLT (POP)', icon: <MapPin size={16} /> },
-    { key: 'showOdc', colorKey: 'odc', label: 'ODC (Cabinet)', icon: <Target size={16} /> },
-    { key: 'showOdp', colorKey: 'odp', label: 'ODP (Tiang)', icon: <MapPin size={16} /> },
+    { key: 'showPop', colorKey: 'pop', label: 'Server OLT (POP)', icon: <Server size={16} /> },
+    { key: 'showOdc', colorKey: 'odc', label: 'ODC (Cabinet)', icon: <Triangle size={16} fill="currentColor" /> },
+    { key: 'showOdp', colorKey: 'odp', label: 'ODP (Tiang)', icon: <Triangle size={16} fill="currentColor" /> },
     { key: 'showHouse', colorKey: 'house', label: 'Rumah (HC) & Kabel Drop', icon: <Home size={16} /> },
     { key: 'showFeeder', colorKey: 'feeder', label: 'Kabel Feeder', icon: <Cable size={16} /> },
     { key: 'showDistribution', colorKey: 'distribution', label: 'Kabel Distribusi', icon: <Route size={16} /> },
@@ -150,7 +151,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
             </div>
             
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              {featureColors && onColorChange && (
+              {canEditColors && featureColors && onColorChange && (
                 <input
                   type="color"
                   value={featureColors[item.colorKey]}
@@ -237,7 +238,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
                 </div>
                 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  {onChangeLayerColor && (
+                  {canEditColors && onChangeLayerColor && (
                     <input
                       type="color"
                       value={layer.color || '#3b82f6'}
