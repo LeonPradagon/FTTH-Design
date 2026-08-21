@@ -5,7 +5,8 @@ Aplikasi berbasis web untuk merancang dan membuat generator desain Fiber To The 
 ## Arsitektur Aplikasi
 - **Web**: Next.js di `app/web` (Port 3000)
 - **Server**: FastAPI + Python di `app/server` (Port 8000)
-- **Database**: PostgreSQL (Eksternal)
+- **Database**: PostgreSQL
+- **Object storage**: SeaweedFS melalui API S3-compatible
 
 ```text
 app/
@@ -24,7 +25,7 @@ Untuk mendeploy aplikasi ini ke server production (VPS / Cloud), sangat disarank
 
 ### Prasyarat
 1. Server Linux / Windows dengan **Docker** dan **Docker Compose** telah terinstal.
-2. Server Database **PostgreSQL** eksternal yang sudah menyala (contoh: Supabase, Neon, AWS RDS, atau VPS terpisah).
+2. RAM minimal 4 GB direkomendasikan untuk menjalankan web, generator geospasial, PostgreSQL, dan SeaweedFS pada satu server.
 
 ### 1. Konfigurasi Environment (Production)
 Sebelum menjalankan Docker, Anda wajib membuat file `.env.prod` khusus untuk lingkungan *production*. 
@@ -32,42 +33,54 @@ Sebelum menjalankan Docker, Anda wajib membuat file `.env.prod` khusus untuk lin
 Salin file *template* ke file aslinya:
 ```bash
 cp .env.prod.example .env.prod
-cp app/web/.env.prod.example app/web/.env.prod
 ```
 
 Buka dan sesuaikan isi file **`.env.prod`** (di root folder):
 ```ini
-# Ganti dengan kredensial PostgreSQL Anda yang sebenarnya
-DATABASE_URL=postgresql://user:password@alamat_server:5432/ftth_db
-```
-
-Buka dan sesuaikan isi file **`app/web/.env.prod`**:
-```ini
+POSTGRES_PASSWORD=ganti_dengan_password_acak_yang_panjang
 BETTER_AUTH_SECRET=ganti_dengan_teks_acak_yang_sangat_panjang_dan_rahasia
-JWT_SECRET=ganti_dengan_teks_acak_yang_sangat_panjang_dan_rahasia
-
-# PENTING: Ganti dengan IP Publik atau Domain dari server tempat Anda melakukan deployment (Contoh: http://192.168.1.10:3000)
-BETTER_AUTH_URL=http://localhost:3000
+APP_URL=https://domain-anda.example
 ```
 
 ### 2. Jalankan Aplikasi
-Di dalam folder utama (*root*) project tempat file `compose.yml` berada, jalankan perintah berikut:
+Di dalam folder utama (*root*) project, jalankan konfigurasi production berikut:
 ```bash
-docker compose up -d --build
+docker compose --env-file .env.prod -f compose.prod.yaml up -d --build
 ```
 
 Docker akan secara otomatis:
 1. Mengunduh base image `python` dan `node`.
 2. Melakukan instalasi seluruh *dependency* server maupun web.
 3. Men-generate *client* Prisma untuk menghubungkan ke database PostgreSQL Anda.
-4. Menghidupkan *service* Server di **Port 8000** dan Web di **Port 3000**.
+4. Menjalankan PostgreSQL dan SeaweedFS pada jaringan internal Docker.
+5. Menghidupkan *service* Server di **Port 8000** dan Web di **Port 80**.
 
 ### 3. Akses Aplikasi
 Aplikasi sekarang dapat diakses melalui browser:
-- **Web**: `http://<IP_SERVER_ANDA>:3000`
+- **Web**: `http://<IP_SERVER_ANDA>`
 - **Server API Docs (Swagger)**: `http://<IP_SERVER_ANDA>:8000/docs`
 
-> **Penting:** Pastikan aturan *Firewall* (seperti `ufw` atau di pengaturan AWS/GCP Anda) sudah mengizinkan trafik masuk pada Port `3000` dan Port `8000`.
+> **Penting:** Port SeaweedFS tidak dipublikasikan ke host. Objek diakses melalui route aplikasi `/data/...`.
+
+## Penyimpanan Objek dan Migrasi ke OBS
+
+Import permanen serta hasil KML/KMZ/CSV disimpan sebagai object key di bucket S3-compatible. Folder `app/server/data` hanya dipakai untuk scratch generator sementara; cache OSM/desain tetap berada di `app/server/cache`.
+
+SeaweedFS menyimpan data pada named volume `seaweed_data`. Jangan menjalankan `docker compose down -v` kecuali data tersebut memang boleh dihapus, dan sertakan volume ini dalam backup server.
+
+Untuk beralih ke Huawei OBS, ubah variabel berikut di `.env.prod`, lalu buat ulang container `server`:
+
+```ini
+STORAGE_ENDPOINT_URL=https://obs.<region>.myhuaweicloud.com
+STORAGE_ACCESS_KEY_ID=<OBS access key>
+STORAGE_SECRET_ACCESS_KEY=<OBS secret key>
+STORAGE_BUCKET=<OBS bucket>
+STORAGE_REGION=<OBS region>
+STORAGE_FORCE_PATH_STYLE=false
+```
+
+Tidak ada URL SeaweedFS yang disimpan di project; format `/data/{object-key}` tetap sama saat backend berpindah ke OBS.
+Kredensial `SEAWEEDFS_*` terpisah dari `STORAGE_*`, jadi access key OBS tidak diteruskan ke container SeaweedFS ketika endpoint diganti.
 
 ---
 
@@ -76,18 +89,18 @@ Aplikasi sekarang dapat diakses melalui browser:
 **Melihat Log Aplikasi:**
 ```bash
 # Log Web
-docker logs -f ftth-web
+docker compose --env-file .env.prod -f compose.prod.yaml logs -f web
 
 # Log Server
-docker logs -f ftth-server
+docker compose --env-file .env.prod -f compose.prod.yaml logs -f server
 ```
 
 **Mematikan Aplikasi:**
 ```bash
-docker compose down
+docker compose --env-file .env.prod -f compose.prod.yaml down
 ```
 
 **Restart Aplikasi setelah update kode:**
 ```bash
-docker compose up -d --build
+docker compose --env-file .env.prod -f compose.prod.yaml up -d --build
 ```

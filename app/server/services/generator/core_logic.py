@@ -6,7 +6,10 @@ from server.core.logging import logger
 from server.core.paths import CACHE_DIR
 from server.services.generator.models import Splitter, ODP, ODC
 from server.services.generator.osm_local import fetch_road_graph
-from server.services.generator.routing import build_feeder_segments_preserving_order, build_feeder_chain
+from server.services.generator.routing import (
+    build_feeder_segments_preserving_order,
+    build_feeder_chain,
+)
 from server.services.generator.kml_builder import export_kmz
 from server.services.generator.csv_exporter import export_csv
 from server.services.generator.kml_parser import read_custom_mapped_kml
@@ -14,6 +17,7 @@ from server.utils.geometry import haversine_m
 
 DESIGN_STATE_PATH = os.path.join(CACHE_DIR, "design_state.json")
 ROAD_GRAPH_PATH = os.path.join(CACHE_DIR, "road_graph.pkl")
+
 
 def save_design_state(pop, odcs, road_graph=None):
     """Simpan posisi POP, ODC, ODP, dan rumah ke file JSON, serta road graph
@@ -121,39 +125,67 @@ def regenerate_cables_only(output_path, include_homepass=False, output_csv=None)
     pop, odcs = load_design_state()
     road_graph = load_road_graph()
 
-    logger.info(f"load_road_graph returned: {'None' if road_graph is None else 'Graph with ' + str(len(road_graph.nodes)) + ' nodes'}")
+    logger.info(
+        f"load_road_graph returned: {'None' if road_graph is None else 'Graph with ' + str(len(road_graph.nodes)) + ' nodes'}"
+    )
 
     if road_graph is None:
-        logger.warning("road graph cache tidak ditemukan. Mencoba mengunduh ulang dari OSM...")
-        print("  Peringatan: road graph cache tidak ditemukan. Mencoba mengunduh ulang dari OSM...")
-        all_lats = [pop["lat"]] + [odc.lat for odc in odcs] + [odp.lat for odc in odcs for odp in odc.odps]
-        all_lons = [pop["lon"]] + [odc.lon for odc in odcs] + [odp.lon for odc in odcs for odp in odc.odps]
-        
+        logger.warning(
+            "road graph cache tidak ditemukan. Mencoba mengunduh ulang dari OSM..."
+        )
+        print(
+            "  Peringatan: road graph cache tidak ditemukan. Mencoba mengunduh ulang dari OSM..."
+        )
+        all_lats = (
+            [pop["lat"]]
+            + [odc.lat for odc in odcs]
+            + [odp.lat for odc in odcs for odp in odc.odps]
+        )
+        all_lons = (
+            [pop["lon"]]
+            + [odc.lon for odc in odcs]
+            + [odp.lon for odc in odcs for odp in odc.odps]
+        )
+
         if all_lats and all_lons:
             from shapely.geometry import Polygon
+
             min_lat, max_lat = min(all_lats), max(all_lats)
             min_lon, max_lon = min(all_lons), max(all_lons)
-            bbox = Polygon([
-                (min_lon, min_lat), (min_lon, max_lat),
-                (max_lon, max_lat), (max_lon, min_lat)
-            ])
+            bbox = Polygon(
+                [
+                    (min_lon, min_lat),
+                    (min_lon, max_lat),
+                    (max_lon, max_lat),
+                    (max_lon, min_lat),
+                ]
+            )
             try:
                 logger.info(f"Fetching road graph for bbox: {bbox}")
                 road_graph = fetch_road_graph(bbox, pop, buffer_deg=0.015)
                 if road_graph is not None:
                     # Simpan ke cache agar percobaan berikutnya lebih cepat
                     import pickle
+
                     with open(ROAD_GRAPH_PATH, "wb") as f:
                         pickle.dump(road_graph, f)
                     logger.info("Successfully fetched and cached road graph.")
                 else:
                     logger.warning("fetch_road_graph returned None")
             except Exception as e:
-                logger.exception(f"Gagal mengunduh ulang road graph ({e}), kabel akan pakai garis lurus.")
-                print(f"  Peringatan: Gagal mengunduh ulang road graph ({e}), kabel akan pakai garis lurus.")
+                logger.exception(
+                    f"Gagal mengunduh ulang road graph ({e}), kabel akan pakai garis lurus."
+                )
+                print(
+                    f"  Peringatan: Gagal mengunduh ulang road graph ({e}), kabel akan pakai garis lurus."
+                )
         else:
-            logger.warning("Tidak ada data koordinat untuk mengunduh road graph, kabel akan pakai garis lurus.")
-            print("  Peringatan: Tidak ada data koordinat untuk mengunduh road graph, kabel akan pakai garis lurus.")
+            logger.warning(
+                "Tidak ada data koordinat untuk mengunduh road graph, kabel akan pakai garis lurus."
+            )
+            print(
+                "  Peringatan: Tidak ada data koordinat untuk mengunduh road graph, kabel akan pakai garis lurus."
+            )
 
     total_odp = sum(len(odc.odps) for odc in odcs)
     total_houses = sum(len(odp.houses) for odc in odcs for odp in odc.odps)
@@ -161,109 +193,152 @@ def regenerate_cables_only(output_path, include_homepass=False, output_csv=None)
 
     if road_graph is not None:
         import random
+
         # Tambahkan variasi acak (noise) ke bobot jalan agar rute mencari alternatif baru
         for u, v, k, data in road_graph.edges(keys=True, data=True):
             if "length" in data:
                 data["length"] = data["length"] * random.uniform(0.5, 2.0)
 
     # Route feeder tanpa mengubah urutan ODC (sudah benar dari cache)
-    feeder_segments, odcs = build_feeder_segments_preserving_order(pop, odcs, road_graph=road_graph)
+    feeder_segments, odcs = build_feeder_segments_preserving_order(
+        pop, odcs, road_graph=road_graph
+    )
 
     # Export KMZ dengan routing kabel baru
-    export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=include_homepass, road_graph=road_graph, road_feeder=True)
+    export_kmz(
+        pop,
+        odcs,
+        feeder_segments,
+        output_path,
+        include_homepass=include_homepass,
+        road_graph=road_graph,
+        road_feeder=True,
+    )
     if output_csv:
-        try:
-            export_csv(pop, odcs, feeder_segments, output_csv)
-        except Exception as e:
-            logger.warning(f"Gagal generate CSV: {e}")
+        export_csv(pop, odcs, feeder_segments, output_csv)
     print(f"Selesai! File KMZ disimpan di {output_path}")
 
     return output_path
 
 
-def generate_cables_from_custom_points(file_path, output_path, include_homepass=False, output_csv=None):
+def generate_cables_from_custom_points(
+    file_path, output_path, include_homepass=False, output_csv=None
+):
     """
-    Men-generate jalur kabel (routing mengikuti jalan OSM) dari file KML custom 
+    Men-generate jalur kabel (routing mengikuti jalan OSM) dari file KML custom
     yang sudah berisi titik-titik mapping OLT, ODC, ODP, dan RUMAH.
     """
     points = read_custom_mapped_kml(file_path)
-    
-    if not points['olt']:
-        raise ValueError("Tidak ditemukan titik OLT/POP di file custom KML. Pastikan ada nama yang mengandung 'OLT' atau 'POP'.")
-    if not points['odc']:
-        raise ValueError("Tidak ditemukan titik ODC di file custom KML. Pastikan ada nama yang mengandung 'ODC'.")
-    if not points['odp']:
-        raise ValueError("Tidak ditemukan titik ODP di file custom KML. Pastikan ada nama yang mengandung 'ODP'.")
-        
-    pop = points['olt'][0]
-    
+
+    if not points["olt"]:
+        raise ValueError(
+            "Tidak ditemukan titik OLT/POP di file custom KML. Pastikan ada nama yang mengandung 'OLT' atau 'POP'."
+        )
+    if not points["odc"]:
+        raise ValueError(
+            "Tidak ditemukan titik ODC di file custom KML. Pastikan ada nama yang mengandung 'ODC'."
+        )
+    if not points["odp"]:
+        raise ValueError(
+            "Tidak ditemukan titik ODP di file custom KML. Pastikan ada nama yang mengandung 'ODP'."
+        )
+
+    pop = points["olt"][0]
+
     # 1. Kelompokkan HC ke ODP terdekat
     odp_objects = []
-    for odp_pt in points['odp']:
-        odp = ODP(id=odp_pt['name'], lat=odp_pt['lat'], lon=odp_pt['lon'], houses=[], splitter=Splitter(ratio="1:8", location="ODP"))
+    for odp_pt in points["odp"]:
+        odp = ODP(
+            id=odp_pt["name"],
+            lat=odp_pt["lat"],
+            lon=odp_pt["lon"],
+            houses=[],
+            splitter=Splitter(ratio="1:8", location="ODP"),
+        )
         odp_objects.append(odp)
-        
-    for hc in points['hc']:
+
+    for hc in points["hc"]:
         if not odp_objects:
             break
         # Cari ODP terdekat
-        nearest_odp = min(odp_objects, key=lambda o: haversine_m(hc['lat'], hc['lon'], o.lat, o.lon))
-        nearest_odp.houses.append((hc['lat'], hc['lon']))
-        
+        nearest_odp = min(
+            odp_objects, key=lambda o: haversine_m(hc["lat"], hc["lon"], o.lat, o.lon)
+        )
+        nearest_odp.houses.append((hc["lat"], hc["lon"]))
+
     # 2. Kelompokkan ODP ke ODC terdekat
     odcs = []
-    for i, odc_pt in enumerate(points['odc'], start=1):
-        odc = ODC(id=odc_pt['name'], lat=odc_pt['lat'], lon=odc_pt['lon'], odps=[], closure_id=f"CL-{i:03d}", splitter=Splitter(ratio="1:4", location="ODC"))
+    for i, odc_pt in enumerate(points["odc"], start=1):
+        odc = ODC(
+            id=odc_pt["name"],
+            lat=odc_pt["lat"],
+            lon=odc_pt["lon"],
+            odps=[],
+            closure_id=f"CL-{i:03d}",
+            splitter=Splitter(ratio="1:4", location="ODC"),
+        )
         odcs.append(odc)
-        
+
     for odp in odp_objects:
         if not odcs:
             break
-        nearest_odc = min(odcs, key=lambda o: haversine_m(odp.lat, odp.lon, o.lat, o.lon))
+        nearest_odc = min(
+            odcs, key=lambda o: haversine_m(odp.lat, odp.lon, o.lat, o.lon)
+        )
         nearest_odc.odps.append(odp)
-        
+
     # 3. Buat bounding box dari semua titik untuk mengambil road graph
-    all_lats = [p['lat'] for p in points['olt'] + points['odc'] + points['odp'] + points['hc']]
-    all_lons = [p['lon'] for p in points['olt'] + points['odc'] + points['odp'] + points['hc']]
-    
+    all_lats = [
+        p["lat"] for p in points["olt"] + points["odc"] + points["odp"] + points["hc"]
+    ]
+    all_lons = [
+        p["lon"] for p in points["olt"] + points["odc"] + points["odp"] + points["hc"]
+    ]
+
     if not all_lats:
         raise ValueError("Tidak ada titik valid dalam KML.")
-        
+
     min_lat, max_lat = min(all_lats), max(all_lats)
     min_lon, max_lon = min(all_lons), max(all_lons)
-    
+
     # Polygon bounding box
-    bbox = Polygon([
-        (min_lon, min_lat),
-        (min_lon, max_lat),
-        (max_lon, max_lat),
-        (max_lon, min_lat)
-    ])
-    
+    bbox = Polygon(
+        [(min_lon, min_lat), (min_lon, max_lat), (max_lon, max_lat), (max_lon, min_lat)]
+    )
+
     print("Mengambil data jalan untuk custom routing...")
     road_graph = None
     try:
         road_graph = fetch_road_graph(bbox, pop, buffer_deg=0.015)
     except Exception as e:
-        print(f"Peringatan: Gagal mengambil data jalan ({e}), kabel akan menggunakan garis lurus.")
-        
+        print(
+            f"Peringatan: Gagal mengambil data jalan ({e}), kabel akan menggunakan garis lurus."
+        )
+
     # 4. Routing Feeder (POP -> ODCs)
     print("Membangun rantai kabel feeder...")
     feeder_segments, odcs = build_feeder_chain(pop, odcs, road_graph=road_graph)
-    
+
     # 5. Export (otomatis melakukan routing Distribusi & Drop)
     print("Mengekspor ke KMZ dengan jalur kabel...")
     export_kmz(
-        pop, odcs, feeder_segments, output_path,
+        pop,
+        odcs,
+        feeder_segments,
+        output_path,
         include_homepass=include_homepass,
         road_graph=road_graph,
         road_feeder=(road_graph is not None),
     )
-    
+    if output_csv:
+        export_csv(pop, odcs, feeder_segments, output_csv)
+
     # 6. Cache design state untuk fitur regenerate-cables
     try:
         save_design_state(pop, odcs, road_graph=road_graph)
     except Exception as e:
-        print(f"Peringatan: gagal menyimpan custom design state ({e}), regenerate-cables tidak tersedia.")
-    
+        print(
+            f"Peringatan: gagal menyimpan custom design state ({e}), regenerate-cables tidak tersedia."
+        )
+
     return output_path

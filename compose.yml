@@ -1,4 +1,51 @@
 services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ftth}
+      POSTGRES_USER: ${POSTGRES_USER:-ftth}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ftth-dev-password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  migrate:
+    build:
+      context: .
+      dockerfile: app/web/Dockerfile
+      target: migrate
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ftth}:${POSTGRES_PASSWORD:-ftth-dev-password}@db:5432/${POSTGRES_DB:-ftth}?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.34
+    command: ["mini", "-dir=/data", "-ip=seaweedfs"]
+    restart: unless-stopped
+    environment:
+      AWS_ACCESS_KEY_ID: ${SEAWEEDFS_ACCESS_KEY_ID:-ftth-local}
+      AWS_SECRET_ACCESS_KEY: ${SEAWEEDFS_SECRET_ACCESS_KEY:-ftth-local-secret}
+      S3_BUCKET: ${SEAWEEDFS_BUCKET:-ftth-designs}
+    volumes:
+      - seaweed_data:/data
+    expose:
+      - "8333"
+    healthcheck:
+      test: ["CMD", "curl", "-sS", "-o", "/dev/null", "http://127.0.0.1:8333/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
   server:
     build:
       context: .
@@ -6,12 +53,30 @@ services:
     container_name: ftth-server
     ports:
       - "8000:8000"
-    env_file:
-      - .env.prod
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ftth}:${POSTGRES_PASSWORD:-ftth-dev-password}@db:5432/${POSTGRES_DB:-ftth}?schema=public
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-only-secret-that-is-at-least-32-characters}
+      STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL:-http://seaweedfs:8333}
+      STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:-${SEAWEEDFS_ACCESS_KEY_ID:-ftth-local}}
+      STORAGE_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY:-${SEAWEEDFS_SECRET_ACCESS_KEY:-ftth-local-secret}}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-${SEAWEEDFS_BUCKET:-ftth-designs}}
+      STORAGE_REGION: ${STORAGE_REGION:-us-east-1}
+      STORAGE_FORCE_PATH_STYLE: ${STORAGE_FORCE_PATH_STYLE:-true}
     restart: unless-stopped
     volumes:
       - ./app/server/cache:/workspace/app/server/cache
       - ./app/server/data:/workspace/app/server/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      seaweedfs:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/docs', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   web:
     build:
@@ -20,10 +85,17 @@ services:
     container_name: ftth-web
     ports:
       - "3000:3000"
-    env_file:
-      - app/web/.env.prod
     environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ftth}:${POSTGRES_PASSWORD:-ftth-dev-password}@db:5432/${POSTGRES_DB:-ftth}?schema=public
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-only-secret-that-is-at-least-32-characters}
+      BETTER_AUTH_URL: ${APP_URL:-http://localhost:3000}
       FTTH_SERVER_URL: http://server:8000
     depends_on:
-      - server
+      server:
+        condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  postgres_data:
+  seaweed_data:
