@@ -9,6 +9,8 @@ def export_kmz(
     include_homepass=False,
     road_graph=None,
     road_feeder=False,
+    road_drop=False,
+    distribution_segments=None,
     progress_callback=None,
 ):
     """Export desain ke KMZ dengan struktur folder & penamaan mengikuti
@@ -100,7 +102,7 @@ def export_kmz(
             # cables below start at the same ODP, so they can reuse the
             # expensive graph traversal without retaining every ODP's tree
             # in memory.
-            odp_route_cache = {"distances": {}}
+            odp_route_cache = {"distances": {}, "targeted": True}
 
             opt = fol_odp.newpoint(
                 name=odp_label,
@@ -114,7 +116,13 @@ def export_kmz(
             opt.style.iconstyle.scale = 0.9
 
             coords = [(odc.lon, odc.lat), (odp.lon, odp.lat)]
-            if road_graph and road_feeder:
+            cached_distribution = (
+                distribution_segments.get(odp.id)
+                if distribution_segments is not None else None
+            )
+            if cached_distribution is not None:
+                coords = [(lon, lat) for lat, lon in cached_distribution]
+            elif road_graph and road_feeder:
                 path = route_along_road(
                     road_graph, (odc.lat, odc.lon), (odp.lat, odp.lon),
                     use_external_routing=False,
@@ -123,6 +131,8 @@ def export_kmz(
                 if not path:
                     raise RuntimeError(f"Tidak ada koneksi jalan untuk kabel distribusi {odc_label} -> {odp_label}.")
                 coords = [(lon, lat) for lat, lon in path]
+                if distribution_segments is not None:
+                    distribution_segments[odp.id] = list(path)
             
             if len(coords) == 1:
                 coords.append((coords[0][0] + 0.00001, coords[0][1] + 0.00001))
@@ -155,7 +165,10 @@ def export_kmz(
                 hc.style.iconstyle.scale = 0.6
 
                 drop_coords = [(odp.lon, odp.lat), (h_lon, h_lat)]
-                if road_graph and road_feeder:
+                # Drop cable is intentionally a direct visual connection from
+                # the ODP/pole to the house. It must not follow the road graph;
+                # otherwise one ODP serving up to 10 houses is hard to see.
+                if road_graph and road_feeder and road_drop:
                     path = route_along_road(
                         road_graph, (odp.lat, odp.lon), (h_lat, h_lon),
                         use_external_routing=False,

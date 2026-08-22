@@ -36,6 +36,7 @@ os.makedirs(REGION_CACHE_DIR, exist_ok=True)
 # 0.05° ≈ 5.5 km — cukup besar untuk mencakup boundary + buffer
 GRID_SIZE = 0.05
 ROAD_CACHE_VERSION = "v3"
+OSM_CACHE_MAX_AGE_SECONDS = int(os.getenv("OSM_CACHE_MAX_AGE_SECONDS", str(24 * 60 * 60)))
 
 # Overpass API endpoints for fallback
 OVERPASS_ENDPOINTS = [
@@ -73,6 +74,38 @@ def _region_bbox(polygon):
     """Bounding box (Shapely box) untuk region tile."""
     gx1, gy1, gx2, gy2 = _region_key(polygon)
     return box(gx1, gy1, gx2, gy2)
+
+
+def _cache_is_fresh(path: str, force_refresh: bool = False) -> bool:
+    if force_refresh or not os.path.exists(path):
+        return False
+    metadata_path = f"{path}.meta.json"
+    try:
+        if os.path.exists(metadata_path):
+            import json
+            with open(metadata_path) as metadata_file:
+                metadata = json.load(metadata_file)
+            return float(metadata.get("expires_at", 0)) >= time.time()
+    except Exception:
+        logger.warning("Metadata cache OSM rusak, memakai mtime: %s", metadata_path)
+    return (time.time() - os.path.getmtime(path)) <= OSM_CACHE_MAX_AGE_SECONDS
+
+
+def _write_cache_metadata(path: str, polygon, feature_count: int, source: str):
+    import json
+    now = time.time()
+    metadata = {
+        "created_at": now,
+        "expires_at": now + OSM_CACHE_MAX_AGE_SECONDS,
+        "bbox": list(polygon.bounds),
+        "feature_count": feature_count,
+        "source": source,
+        "cache_version": ROAD_CACHE_VERSION,
+    }
+    temporary = f"{path}.meta.json.tmp"
+    with open(temporary, "w") as metadata_file:
+        json.dump(metadata, metadata_file)
+    os.replace(temporary, f"{path}.meta.json")
 
 
 def _safe_native_features(polygon, tags):
@@ -156,12 +189,12 @@ def _safe_native_graph(polygon, network_type="all"):
 
 # ========== Cache Layer: Buildings ==========
 
-def _get_buildings_cached(polygon):
+def _get_buildings_cached(polygon, force_refresh=False):
     """Ambil bangunan dari cache lokal. Return GeoDataFrame atau None."""
     rhash = _region_hash(polygon)
     cache_path = os.path.join(REGION_CACHE_DIR, f"buildings_{rhash}.gpkg")
     
-    if os.path.exists(cache_path):
+    if os.path.exists(cache_path) and _cache_is_fresh(cache_path, force_refresh):
         logger.info(f"Loading buildings from local cache: {cache_path}")
         try:
             gdf = gpd.read_file(cache_path)
@@ -184,6 +217,7 @@ def _save_buildings_cache(polygon, gdf):
         if not cols:
             cols = ['geometry']
         gdf[cols].to_file(cache_path, driver='GPKG')
+        _write_cache_metadata(cache_path, polygon, len(gdf), "overpass")
         logger.info(f"Cached {len(gdf)} buildings to {cache_path}")
     except Exception as e:
         logger.warning(f"Failed to save buildings cache: {e}")
@@ -191,7 +225,7 @@ def _save_buildings_cache(polygon, gdf):
 
 # ========== Cache Layer: Road Graph ==========
 
-def _get_road_graph_cached(polygon):
+def _get_road_graph_cached(polygon, force_refresh=False):
     """Ambil road graph dari cache GraphML lokal. Return nx.Graph atau None."""
     rhash = _region_hash(polygon)
     cache_paths = [
@@ -201,7 +235,7 @@ def _get_road_graph_cached(polygon):
     ]
 
     for cache_path in cache_paths:
-        if not os.path.exists(cache_path):
+        if not os.path.exists(cache_path) or not _cache_is_fresh(cache_path, force_refresh):
             continue
         logger.info(f"Loading road graph from local cache: {cache_path}")
         try:
@@ -222,6 +256,7 @@ def _save_road_graph_cache(polygon, G):
     cache_path = os.path.join(REGION_CACHE_DIR, f"roads_{ROAD_CACHE_VERSION}_{rhash}.graphml")
     try:
         ox.save_graphml(G, cache_path)
+        _write_cache_metadata(cache_path, polygon, len(G.nodes), "osm")
         logger.info(f"Cached road graph ({len(G.nodes)} nodes) to {cache_path}")
     except Exception as e:
         logger.warning(f"Failed to save road graph cache: {e}")
@@ -264,7 +299,7 @@ def _save_pois_cache(polygon, gdf, tag_key, tag_value):
 # PUBLIC API — Pengganti fungsi-fungsi di osm_client.py
 # =============================================================
 
-def fetch_houses_in_boundary(polygon):
+def fetch_houses_in_boundary(polygon, force_refresh=False):
     """Ambil titik centroid tiap bangunan di dalam boundary.
     Cache-first: baca dari disk jika tersedia, lalu Overpass API."""
     
@@ -273,7 +308,7 @@ def fetch_houses_in_boundary(polygon):
     
     # 1. Cek cache lokal
     region = _region_bbox(polygon)
-    cached = _get_buildings_cached(region)
+    cached = _get_buildings_cached(region, force_refresh=force_refresh)
     
     if cached is not None and not cached.empty:
         # Filter ke polygon aktual
@@ -418,7 +453,7 @@ def find_strategic_pop(boundary, buffer_deg=0.01):
     return {"name": "Auto POP (Titik Tengah)", "lon": boundary.centroid.x, "lat": boundary.centroid.y}
 
 
-def fetch_road_graph(boundary, pop, buffer_deg=0.002):
+def fetch_road_graph(boundary, pop, buffer_deg=0.002, force_refresh=False):
     """Ambil graf jaringan jalan.
     Cache-first: baca dari GraphML lokal jika tersedia."""
     
@@ -430,7 +465,7 @@ def fetch_road_graph(boundary, pop, buffer_deg=0.002):
     region = _region_bbox(query_area)
     
     # 1. Cek cache lokal (GraphML)
-    cached_graph = _get_road_graph_cached(region)
+    cached_graph = _get_road_graph_cached(region, force_refresh=force_refresh)
     if cached_graph is not None:
         G = prepare_road_graph(cached_graph)
         G = ox.truncate.largest_component(G, strongly=False)

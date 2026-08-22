@@ -7,6 +7,7 @@ import { WebMercatorViewport } from "@deck.gl/core";
 import { TileLayer } from "@deck.gl/geo-layers";
 import { BitmapLayer, GeoJsonLayer } from "@deck.gl/layers";
 import { kml } from "@tmcw/togeojson";
+import JSZip from "jszip";
 import { LayerConfig, KmlNode } from "../app/page";
 import { DEFAULT_FEATURE_COLORS } from "@/lib/feature-colors";
 
@@ -302,7 +303,16 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
       loadingKeysRef.current.add(cacheKey);
       try {
           const res = await fetch(layer.url, { cache: "no-store" });
-          const body = await res.text();
+          let body: string;
+          const isKmz = layer.url.toLowerCase().split("?")[0].endsWith(".kmz");
+          if (isKmz) {
+            const archive = await JSZip.loadAsync(await res.arrayBuffer());
+            const kmlEntry = Object.keys(archive.files).find(name => name.toLowerCase().endsWith(".kml"));
+            if (!kmlEntry) throw new Error(`KMZ ${layer.name} tidak berisi file KML`);
+            body = await archive.files[kmlEntry].async("text");
+          } else {
+            body = await res.text();
+          }
           if (!res.ok) {
             throw new Error(`Gagal memuat ${layer.name} (${res.status})`);
           }

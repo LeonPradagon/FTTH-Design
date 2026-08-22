@@ -51,6 +51,10 @@ class GenerationConfig(BaseModel):
         default=True,
         description="Include HC points and drop cables in the KMZ export.",
     )
+    force_refresh_osm: bool = Field(
+        default=False,
+        description="Ignore cache OSM yang masih tersedia dan mengambil data terbaru.",
+    )
 
     # ── Radius limits ───────────────────────────────────────────────
     max_odp_radius_m: float = Field(

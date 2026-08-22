@@ -30,15 +30,22 @@ interface SidebarProps {
   savedProjects?: { id: string; name: string; updated_at?: string; created_at?: string }[];
   onLoadProject?: (id: string) => void;
   onUnloadProject?: () => void;
+  onNewProject?: () => void;
   onDeleteProject?: (id: string) => void;
   currentProjectId?: string | null;
   stats?: DesignStats | null;
   validation?: ValidationResult | null;
+  isGenerationLocked?: boolean;
 }
 
-export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTrees, onToggleTreeNode, isCollapsed, onToggle, featureColors, canEditColors = false, onColorChange, onChangeLayerColor, savedProjects = [], onLoadProject, onUnloadProject, onDeleteProject, currentProjectId, stats, validation }: SidebarProps) {
+export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTrees, onToggleTreeNode, isCollapsed, onToggle, featureColors, canEditColors = false, onColorChange, onChangeLayerColor, savedProjects = [], onLoadProject, onUnloadProject, onNewProject, onDeleteProject, currentProjectId, stats, validation, isGenerationLocked = false }: SidebarProps) {
   const [isProjectsExpanded, setIsProjectsExpanded] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<{id: string, name: string} | null>(null);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const groupFirstIndex = new Map<string, number>();
+  layers.forEach((layer, index) => {
+    if (layer.groupId && !groupFirstIndex.has(layer.groupId)) groupFirstIndex.set(layer.groupId, index);
+  });
 
   const filterItems: { key: keyof FeatureFilters; colorKey: string; label: string; icon: React.ReactNode }[] = [
     { key: 'showPop', colorKey: 'pop', label: 'Server OLT (POP)', icon: <Server size={16} /> },
@@ -207,17 +214,29 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
               <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: '#1f2937' }}>Filter Berkas</h3>
             </div>
             
-            {layers.map((layer) => (
+            {layers.map((layer, index) => (
             <React.Fragment key={layer.id}>
+              {layer.groupId && groupFirstIndex.get(layer.groupId) === index && (
+                <div
+                  onClick={() => setCollapsedGroups(prev => ({ ...prev, [layer.groupId as string]: !prev[layer.groupId as string] }))}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 8px', margin: '4px 0', borderRadius: '7px', background: '#f3f4f6', cursor: 'pointer' }}
+                >
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: '#4b5563' }}>{layer.groupName || 'Batch Design'}</span>
+                  <ChevronDown size={14} style={{ transform: collapsedGroups[layer.groupId] ? 'rotate(-90deg)' : undefined }} />
+                </div>
+              )}
+              {layer.groupId && collapsedGroups[layer.groupId] ? null : <>
               <div 
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  cursor: 'pointer',
+                  cursor: isGenerationLocked ? 'not-allowed' : 'pointer',
+                  opacity: isGenerationLocked ? 0.7 : 1,
                   padding: '4px 0'
                 }}
-                onClick={() => onToggleLayer(layer.id)}
+                onClick={() => { if (!isGenerationLocked) onToggleLayer(layer.id); }}
+                title={isGenerationLocked ? "Boundary/POP tidak dapat diganti selama proses generate" : layer.name}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
                   <div style={{ 
@@ -300,6 +319,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
                   />
                 </div>
               )}
+              </>}
             </React.Fragment>
             ))}
           </>
@@ -307,28 +327,49 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
       </div>
 
       {/* Database Projects Section */}
-      {!isCollapsed && savedProjects && savedProjects.length > 0 && (
+      {!isCollapsed && onNewProject && (
         <div style={{ padding: '0', borderTop: '1px solid rgba(0,0,0,0.05)', backgroundColor: '#f9fafb' }}>
-          <div 
-            onClick={() => setIsProjectsExpanded(!isProjectsExpanded)}
-            style={{ 
+          <div style={{
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'space-between', 
-              padding: '16px 20px', 
-              cursor: 'pointer',
-              userSelect: 'none'
-            }}
-          >
+              padding: '12px 20px 8px',
+            }}>
             <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#4b5563', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Proyek Tersimpan ({savedProjects.length})
             </h4>
+            <button
+              type="button"
+              onClick={() => {
+                if (!isGenerationLocked) onNewProject();
+              }}
+              disabled={isGenerationLocked}
+              style={{
+                border: 'none',
+                borderRadius: '6px',
+                padding: '5px 8px',
+                background: isGenerationLocked ? '#e5e7eb' : '#dbeafe',
+                color: isGenerationLocked ? '#9ca3af' : '#1d4ed8',
+                cursor: isGenerationLocked ? 'not-allowed' : 'pointer',
+                fontSize: '11px',
+                fontWeight: 600,
+              }}
+              title="Tutup proyek aktif dan mulai proyek baru"
+            >
+              + Proyek Baru
+            </button>
+          </div>
+          <div
+            onClick={() => setIsProjectsExpanded(!isProjectsExpanded)}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 20px 12px', cursor: 'pointer', userSelect: 'none' }}
+          >
+            <span style={{ fontSize: '11px', color: '#6b7280' }}>Buka proyek untuk menambahkan berkas ke dalamnya</span>
             {isProjectsExpanded ? <ChevronDown size={16} color="#6b7280" /> : <ChevronRight size={16} color="#6b7280" />}
           </div>
-          
           {isProjectsExpanded && (
             <div style={{ display: 'flex', flexDirection: 'column', padding: '0 20px 20px 20px', maxHeight: '250px', overflowY: 'auto' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {savedProjects.length === 0 && <div style={{ fontSize: '12px', color: '#6b7280', padding: '4px 0' }}>Belum ada proyek tersimpan.</div>}
                 {savedProjects.map((p) => (
                   <div 
                     key={p.id}
@@ -348,13 +389,14 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
                   >
                     <div 
                       onClick={() => {
-                        if (currentProjectId === p.id && onUnloadProject) {
-                          onUnloadProject();
-                        } else {
-                          onLoadProject?.(p.id);
-                        }
+                        if (isGenerationLocked) return;
+                        // Selecting a saved project always opens it. Starting
+                        // a new project is an explicit action above, so a
+                        // second click cannot accidentally detach the editor
+                        // from the active project before an import.
+                        onLoadProject?.(p.id);
                       }}
-                      style={{ flex: 1 }}
+                      style={{ flex: 1, cursor: isGenerationLocked ? 'not-allowed' : 'pointer', opacity: isGenerationLocked ? 0.6 : 1 }}
                     >
                       <div style={{ fontWeight: 600, color: currentProjectId === p.id ? '#1e40af' : '#1f2937', fontSize: '13px', paddingRight: '24px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {p.name}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { request as httpRequest, type IncomingMessage } from "node:http";
 import { Readable } from "node:stream";
+import { createHmac } from "node:crypto";
 
 export const runtime = "nodejs";
 export const maxDuration = 900;
@@ -74,9 +75,19 @@ async function proxy(req: NextRequest) {
         if (sessionRes.ok) {
           const sessionData = await sessionRes.json();
           if (sessionData && sessionData.user) {
-            headers.set('X-User-Id', sessionData.user.id);
-            headers.set('X-User-Role', sessionData.user.role || 'user');
-            headers.set('X-User-Email', sessionData.user.email || '');
+            const userId = String(sessionData.user.id);
+            const role = String(sessionData.user.role || 'user');
+            const email = String(sessionData.user.email || '');
+            headers.set('X-User-Id', userId);
+            headers.set('X-User-Role', role);
+            headers.set('X-User-Email', email);
+            const proxySecret = process.env.BACKEND_PROXY_SECRET;
+            if (proxySecret) {
+              const timestamp = Math.floor(Date.now() / 1000).toString();
+              const payload = `${userId}|${timestamp}|${role}|${email}`;
+              const signature = createHmac('sha256', proxySecret).update(payload).digest('hex');
+              headers.set('X-Proxy-Auth', `${payload}|${signature}`);
+            }
           }
         }
       } catch (err) {

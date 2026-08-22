@@ -12,6 +12,9 @@ interface NavbarProps {
   onRegenerateCables?: () => void;
   isRegeneratingCables?: boolean;
   hasDesign?: boolean;
+  onGenerateHomepass?: () => void;
+  isGeneratingHomepass?: boolean;
+  hasNetworkCore?: boolean;
   featureColors?: Record<string, string>;
   projectName?: string | null;
   onConfigClick?: () => void;
@@ -25,6 +28,9 @@ export function Navbar({
   onRegenerateCables, 
   isRegeneratingCables, 
   hasDesign,
+  onGenerateHomepass,
+  isGeneratingHomepass,
+  hasNetworkCore,
   featureColors,
   onConfigClick,
   onVersionHistoryClick,
@@ -64,7 +70,7 @@ export function Navbar({
         {/* Right: Actions */}
         <div className="navbar-group">
           {session?.user && (
-            <div style={{ display: 'flex', alignItems: 'center', marginRight: '16px', borderRight: '1px solid #e5e7eb', paddingRight: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginRight: '16px', borderRight: '1px solid #e5e7eb', paddingRight: '16px', position: 'relative' }}>
               <button 
                 onClick={() => setShowAccountCenter(true)}
                 style={{
@@ -136,6 +142,19 @@ export function Navbar({
             </div>
           )}
 
+          {onGenerateHomepass && hasNetworkCore && (
+            <button
+              onClick={onGenerateHomepass}
+              disabled={isGeneratingHomepass || isGenerating}
+              className={`regenerate-cable-btn ${isGeneratingHomepass ? 'loading' : ''}`}
+              title="Tambahkan titik rumah dan kabel ODP ke rumah"
+              style={{ marginLeft: '8px', cursor: (isGeneratingHomepass || isGenerating) ? 'not-allowed' : 'pointer' }}
+            >
+              <Home size={14} style={{ marginRight: '6px' }} />
+              {isGeneratingHomepass ? "..." : "Generate Homepass"}
+            </button>
+          )}
+
           <button 
             onClick={() => fileInputRef.current?.click()} 
             className="regenerate-cable-btn"
@@ -144,7 +163,6 @@ export function Navbar({
             <Upload size={14} style={{ marginRight: '6px' }} />
             Import KML
           </button>
-
           <div style={{ marginLeft: '8px', paddingLeft: '16px', borderLeft: '1px solid rgba(128,128,128,0.2)' }}>
             <ThemeToggle />
           </div>

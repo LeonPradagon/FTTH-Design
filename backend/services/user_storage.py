@@ -29,12 +29,27 @@ except Exception as e:
 
 USER_CACHE_ROOT = Path(os.getenv("USER_CACHE_ROOT", "/tmp/ftth_cache")).resolve()
 
+def _safe_scope(value: str) -> str:
+    """Return a filesystem-safe, non-sensitive scope identifier."""
+    return hashlib.sha256(str(value).encode("utf-8")).hexdigest()[:32]
+
 def get_user_cache_dir(user_id: str) -> Path:
     """Return an opaque, account-specific cache directory for local processing."""
-    account_key = hashlib.sha256(user_id.encode("utf-8")).hexdigest()[:32]
+    account_key = _safe_scope(user_id)
     cache_dir = USER_CACHE_ROOT / account_key
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
+
+
+def get_generation_cache_dir(user_id: str, project_id: str | None = None,
+                             batch_id: str | None = None,
+                             item_id: str | None = None) -> Path:
+    """Return an isolated cache directory for one generation scope."""
+    path = get_user_cache_dir(user_id)
+    for value in (project_id or "default-project", batch_id or "single-job", item_id or "single-item"):
+        path = path / _safe_scope(value)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 def get_user_storage_dir(user_id: str) -> Path:
     """Deprecated: Alias for get_user_cache_dir for backward compatibility during processing."""

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import JSZip from 'jszip';
@@ -38,6 +38,11 @@ export type LayerConfig = {
   url: string;
   visible: boolean;
   color?: string;
+  groupId?: string;
+  groupName?: string;
+  designName?: string;
+  boundaryName?: string;
+  status?: string;
 };
 
 export type KmlNode = {
@@ -59,6 +64,13 @@ const defaultFeatureFilters: FeatureFilters = {
   showDistribution: true,
 };
 
+const boundaryGroupKey = (name: string) => {
+  const stem = name.replace(/\.[^.]+$/, '').toLowerCase()
+    .replace(/(boundary|polygon|pop|olt|sentral)/g, ' ')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return `boundary:${stem || 'design'}`;
+};
+
 export default function Home() {
   const { data: session, isPending } = useSession();
   const router = useRouter();
@@ -78,6 +90,9 @@ export default function Home() {
   const [designStats, setDesignStats] = useState<DesignStats | null>(null);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [isRegeneratingCables, setIsRegeneratingCables] = useState(false);
+  const [isGeneratingHomepass, setIsGeneratingHomepass] = useState(false);
+  const [hasNetworkCore, setHasNetworkCore] = useState(false);
+  const [batchFiles, setBatchFiles] = useState<File[]>([]);
   const [kmzUrl, setKmzUrl] = useState<string | null>(null);
   const [csvUrl, setCsvUrl] = useState<string | null>(null);
   const [showDownloadPopup, setShowDownloadPopup] = useState(false);
@@ -98,6 +113,13 @@ export default function Home() {
   const [projectName, setProjectName] = useState<string>("");
   const [savedProjects, setSavedProjects] = useState<{ id: string, name: string, updated_at: string, created_at: string }[]>([]);
   const [kmlTrees, setKmlTrees] = useState<Record<string, KmlNode[]>>({});
+  // React state updates are asynchronous. Keep the active project identity in
+  // refs as well so a burst of imports cannot create several projects before
+  // the first POST response has updated state.
+  const currentProjectIdRef = useRef<string | null>(null);
+  const projectNameRef = useRef("");
+  const projectSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const projectContextRef = useRef(0);
 
   const handleTreeLoaded = useCallback((layerId: string, tree: KmlNode[]) => {
     setKmlTrees(prev => ({ ...prev, [layerId]: tree }));
@@ -146,10 +168,65 @@ export default function Home() {
     }, 4000);
   };
 
+  const rememberJob = (jobId: string) => {
+    if (typeof window === "undefined") return;
+    const jobs = JSON.parse(window.localStorage.getItem("ftth_active_jobs") || "[]") as string[];
+    if (!jobs.includes(jobId)) window.localStorage.setItem("ftth_active_jobs", JSON.stringify([...jobs, jobId]));
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const restore = async () => {
+      if (typeof window === "undefined") return;
+      const jobs = JSON.parse(window.localStorage.getItem("ftth_active_jobs") || "[]") as string[];
+      const activeJobs: string[] = [];
+      for (const jobId of jobs) {
+        try {
+          const response = await fetch(`/api/proxy/generate/status/${encodeURIComponent(jobId)}`, { cache: "no-store" });
+          if (!response.ok) {
+            // Expired Redis jobs are no longer resumable.
+            continue;
+          }
+          const payload = await response.json();
+          const state = payload.data;
+          if (state?.done) continue;
+          activeJobs.push(jobId);
+          if (!cancelled && state) {
+            setIsGenerating(true);
+            setGenerationProgress({ stage: state.stage, message: state.message, percent: state.percent || 0 });
+          }
+        } catch { /* A refresh must not prevent the map from loading. */ }
+      }
+      if (!cancelled) window.localStorage.setItem("ftth_active_jobs", JSON.stringify(activeJobs));
+    };
+    void restore();
+    const timer = window.setInterval(() => { void restore(); }, 2000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, []);
+
   const toggleLayer = (id: string) => {
-    setLayers(prev => prev.map(layer => 
-      layer.id === id ? { ...layer, visible: !layer.visible } : layer
-    ));
+    setLayers(prev => {
+      const target = prev.find(layer => layer.id === id);
+      if (!target) return prev;
+      const isBoundary = (layer: LayerConfig) =>
+        layer.name.toLowerCase().includes('boundary') || layer.id === 'boundary';
+      const hasOtherVisibleBoundary = isBoundary(target) && prev.some(layer =>
+        layer.id !== id && isBoundary(layer) && layer.visible
+      );
+      // When several boundaries are visible (for example from an older
+      // saved project), clicking one selects it instead of accidentally
+      // turning the clicked boundary off.
+      const nextVisible = hasOtherVisibleBoundary ? true : !target.visible;
+      return prev.map(layer => {
+        if (layer.id === id) return { ...layer, visible: nextVisible };
+        // A generation must never silently use another visible boundary.
+        // Turning one boundary on makes it the active boundary.
+        if (nextVisible && isBoundary(target) && isBoundary(layer)) {
+          return { ...layer, visible: false };
+        }
+        return layer;
+      });
+    });
   };
 
   const handleLayerColorChange = (id: string, color: string) => {
@@ -183,34 +260,48 @@ export default function Home() {
     overrideLayers?: LayerConfig[],
     overrideFilters?: FeatureFilters,
   ) => {
-    try {
-      const payload = {
-        name: name,
-        layers: overrideLayers || layers,
-        filters: overrideFilters || filters,
-        feature_colors: featureColors
-      };
+    // Serialize writes. The first save may be a POST; every queued save then
+    // observes the newly returned id and becomes a PUT to that same project.
+    const contextAtRequest = projectContextRef.current;
+    projectSaveQueueRef.current = projectSaveQueueRef.current.then(async () => {
+      try {
+        // If the user explicitly opened/created another project while a save
+        // was waiting, never apply the old payload to the new project.
+        if (contextAtRequest !== projectContextRef.current) return;
+        const payload = {
+          name,
+          layers: overrideLayers || layers,
+          filters: overrideFilters || filters,
+          feature_colors: featureColors
+        };
 
-      const url = currentProjectId ? `/api/proxy/api/projects/${currentProjectId}` : '/api/proxy/api/projects';
-      const method = currentProjectId ? 'PUT' : 'POST';
+        const activeProjectId = currentProjectIdRef.current;
+        const url = activeProjectId
+          ? `/api/proxy/api/projects/${activeProjectId}`
+          : '/api/proxy/api/projects';
+        const method = activeProjectId ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
 
-      if (!res.ok) throw new Error('Failed to save project');
+        if (!res.ok) throw new Error('Failed to save project');
 
-      const data = await res.json();
-      const project = data.data || data;
-      setCurrentProjectId(project.id);
-      setProjectName(project.name);
-      addToast('Proyek berhasil disimpan!', 'success');
-      fetchProjects(); // Refresh the list
-    } catch {
-      addToast(`Gagal menyimpan proyek: Pastikan Anda sudah login`, 'error');
-    }
+        const data = await res.json();
+        const project = data.data || data;
+        currentProjectIdRef.current = project.id;
+        projectNameRef.current = project.name;
+        setCurrentProjectId(project.id);
+        setProjectName(project.name);
+        addToast('Proyek berhasil disimpan!', 'success');
+        await fetchProjects();
+      } catch {
+        addToast(`Gagal menyimpan proyek: Pastikan Anda sudah login`, 'error');
+      }
+    });
+    return projectSaveQueueRef.current;
   };
 
   const loadProject = async (id: string) => {
@@ -220,6 +311,9 @@ export default function Home() {
       
       const resp = await res.json();
       const data = resp.data || resp;
+      projectContextRef.current += 1;
+      currentProjectIdRef.current = data.id;
+      projectNameRef.current = data.name;
       setCurrentProjectId(data.id);
       setProjectName(data.name);
       
@@ -238,7 +332,48 @@ export default function Home() {
         return l;
       });
 
-      setLayers(uniqueLayers);
+      // Migrate legacy projects where the old single `design` layer had no
+      // parent folder. A visible boundary is the safest owner for that old
+      // result; new generations already carry explicit group metadata.
+      const boundaryLayers = uniqueLayers.filter((layer: LayerConfig) =>
+        layer.name.toLowerCase().includes('boundary') || layer.id === 'boundary'
+      );
+      const activeBoundary = boundaryLayers.find((layer: LayerConfig) => layer.visible) || boundaryLayers[boundaryLayers.length - 1];
+      const normalizedLayers = uniqueLayers.map((layer: LayerConfig) => {
+        const isBoundary = layer.name.toLowerCase().includes('boundary') || layer.id === 'boundary';
+        if (isBoundary && !layer.groupId) {
+          return {
+            ...layer,
+            groupId: `boundary:${layer.id}`,
+            groupName: layer.name,
+            boundaryName: layer.name,
+          };
+        }
+        if (layer.id === 'design' && activeBoundary) {
+          return {
+            ...layer,
+            name: layer.name === 'FTTH Design' ? `FTTH Design - ${activeBoundary.name}` : layer.name,
+            groupId: activeBoundary.groupId || `boundary:${activeBoundary.id}`,
+            groupName: activeBoundary.groupName || activeBoundary.name,
+            boundaryName: activeBoundary.name,
+            designName: activeBoundary.name,
+          };
+        }
+        if (layer.id.startsWith('design:') && layer.boundaryName) {
+          return {
+            ...layer,
+            groupId: boundaryGroupKey(layer.boundaryName),
+            groupName: layer.boundaryName,
+          };
+        }
+        return layer;
+      });
+
+      setLayers(normalizedLayers);
+      // Project yang sudah memiliki layer FTTH Design dianggap memiliki
+      // kandidat Network Core. Endpoint Homepass tetap memvalidasi cache
+      // versi terbaru sebelum job benar-benar dijalankan.
+      setHasNetworkCore(normalizedLayers.some((layer: LayerConfig) => layer.id === 'design' || layer.id.startsWith('design:')));
       const loadedFilters = parseJson(data.filters, defaultFeatureFilters);
       setFilters({ ...defaultFeatureFilters, ...loadedFilters });
       const savedFeatureColors = parseJson(data.feature_colors, {});
@@ -250,9 +385,13 @@ export default function Home() {
   };
 
   const unloadProject = () => {
+    projectContextRef.current += 1;
+    currentProjectIdRef.current = null;
+    projectNameRef.current = "";
     setCurrentProjectId(null);
     setProjectName("");
     setLayers([]);
+    setHasNetworkCore(false);
     setKmzUrl(null);
     setCsvUrl(null);
     setFilters({ ...defaultFeatureFilters });
@@ -269,6 +408,9 @@ export default function Home() {
       if (!res.ok) throw new Error('Failed to delete project');
       addToast('Proyek berhasil dihapus!', 'success');
       if (currentProjectId === id) {
+        projectContextRef.current += 1;
+        currentProjectIdRef.current = null;
+        projectNameRef.current = "";
         setCurrentProjectId(null);
         setProjectName("");
       }
@@ -343,8 +485,24 @@ export default function Home() {
     return file;
   };
 
-  const handleImportLayer = async (files: File[]) => {
+  const handleImportLayer = async (files: File[], preserveBatch = false) => {
     if (files.length === 0) return;
+    if (isGenerating || isGeneratingHomepass) {
+      addToast("Boundary/POP tidak dapat diganti selama proses generate berlangsung.", "error");
+      return;
+    }
+
+    // Import KML supports multiple boundary/POP files directly. Keep the
+    // original files for the batch API while uploading a combined preview
+    // layer to the map for convenience.
+    if (!preserveBatch) setBatchFiles(files.length > 1 ? files : []);
+    if (files.length > 1) {
+      addToast(`${files.length} file dipilih. Generate Design akan memprosesnya sebagai batch.`, "info");
+      // Keep each boundary as its own parent layer. The generation request
+      // still uses the original files together, but the sidebar stays clear.
+      for (const file of files) await handleImportLayer([file], true);
+      return;
+    }
     
     // Unpack any KMZ files first so the rest of the app only deals with KML
     const kmlFiles = await Promise.all(files.map(extractKmlFromFile));
@@ -368,30 +526,44 @@ export default function Home() {
       const resp = await res.json();
       const uploadData = resp.data || resp;
       const url = `/api/proxy${uploadData.url}`;
+      const isBoundary = fileToUse.name.toLowerCase().includes('boundary');
+      const newLayerId = `import-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const newGroupId = isBoundary ? boundaryGroupKey(fileToUse.name) : layers.find(layer =>
+        layer.name.toLowerCase().includes('boundary') && layer.groupId
+      )?.groupId || boundaryGroupKey(fileToUse.name);
+      const boundaryGroupName = isBoundary ? fileToUse.name : layers.find(layer =>
+        layer.name.toLowerCase().includes('boundary') && layer.groupName
+      )?.groupName;
       
       const newLayer: LayerConfig = {
-        id: `import-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        id: newLayerId,
         name: fileToUse.name,
         url,
         visible: true,
-        color: "#3b82f6" // Default blue color
+        color: "#3b82f6", // Default blue color
+        groupId: newGroupId,
+        groupName: boundaryGroupName || fileToUse.name.replace(/\.[^.]+$/, '').replace(/(pop|olt|sentral)/ig, '').trim(),
+        boundaryName: isBoundary ? fileToUse.name : undefined,
       };
       
-      const prjName = projectName || fileToUse.name.replace(/\.[^/.]+$/, "");
-      if (!projectName) {
+      // An imported file belongs to the project currently open. Only the
+      // first import after explicitly creating a new project gets a name.
+      const prjName = projectNameRef.current || fileToUse.name.replace(/\.[^/.]+$/, "");
+      if (!projectNameRef.current) {
+        projectNameRef.current = prjName;
         setProjectName(prjName);
       }
       
       setLayers(prev => {
-        const newLayers = [...prev, newLayer];
-        return newLayers;
+        const updatedLayers = [
+          ...prev.map(layer => isBoundary && layer.name.toLowerCase().includes('boundary')
+            ? { ...layer, visible: false }
+            : layer),
+          newLayer,
+        ];
+        saveProject(prjName, updatedLayers).catch(console.error);
+        return updatedLayers;
       });
-      
-      // Get the latest layers from state (note: this might miss the just-added layer if we don't pass it explicitly, 
-      // so we use the functional approach but invoke saveProject outside)
-      // Actually, we can just pass the new list of layers directly to saveProject
-      const updatedLayers = [...layers, newLayer];
-      saveProject(prjName, updatedLayers).catch(console.error);
       
       addToast(`Berhasil mengimpor: ${fileToUse.name}`, "success");
     } catch {
@@ -399,15 +571,97 @@ export default function Home() {
     }
   };
 
+  const handleBatchGenerate = async () => {
+    if (!batchFiles.length || isGenerating) return;
+    setIsGenerating(true);
+    setGenerationProgress({ stage: "QUEUED", message: "Menyiapkan batch design...", percent: 1 });
+    try {
+      const formData = new FormData();
+      batchFiles.forEach(file => formData.append("files", file, file.name));
+      formData.append("config", JSON.stringify({ ...generationConfig, include_homepass: false }));
+      if (currentProjectId) formData.append("project_id", currentProjectId);
+      const response = await fetch("/api/proxy/generate/batch", { method: "POST", body: formData });
+      const payload = await response.json();
+      if (!payload.success) throw new Error(payload.error?.message || payload.detail || "Batch gagal dibuat");
+      const batchId = payload.data.batch_id;
+      (payload.data.jobs || []).forEach((job: { job_id?: string }) => job.job_id && rememberJob(job.job_id));
+      addToast("Batch generation berjalan maksimal 2 job paralel.", "info");
+
+      const poll = async (): Promise<void> => {
+        const result = await fetch(`/api/proxy/generate/batch/${batchId}`, { cache: "no-store" });
+        const statePayload = await result.json();
+        const state = statePayload.data;
+        if (!state) throw new Error("Status batch tidak ditemukan");
+        const jobs = state.jobs || [];
+        const totalPercent = jobs.length
+          ? Math.round(jobs.reduce((sum: number, job: { percent?: number }) => sum + (job.percent || 0), 0) / jobs.length)
+          : 100;
+        const active = jobs.find((job: { status: string }) => job.status === "RUNNING" || job.status === "QUEUED");
+        setGenerationProgress({
+          stage: active?.stage || state.status,
+          message: active?.message || `${state.completed}/${state.total} design selesai`,
+          percent: totalPercent,
+        });
+
+        if (state.status === "COMPLETED") {
+          const newLayers: LayerConfig[] = jobs
+            .filter((job: { status: string; result?: { url?: string }; item_id: string }) => job.status === "COMPLETED" && job.result?.url)
+            .map((job: { item_id: string; design_name: string; boundary_name: string; result: { url: string } }) => ({
+              id: `design:batch:${batchId}:${job.item_id}`,
+              name: job.design_name,
+              url: `/api/proxy${job.result.url}`,
+              visible: true,
+              color: "#22c55e",
+              groupId: boundaryGroupKey(job.boundary_name),
+              groupName: job.boundary_name,
+              designName: job.design_name,
+              boundaryName: job.boundary_name,
+            } as LayerConfig));
+          setLayers(prev => {
+            const merged = [...prev, ...newLayers.filter(layer => !prev.some(existing => existing.id === layer.id))];
+            saveProject(projectName || "Untitled Project", merged).catch(console.error);
+            return merged;
+          });
+          setBatchFiles([]);
+          setHasNetworkCore(newLayers.length > 0);
+          setIsGenerating(false);
+          setTimeout(() => setGenerationProgress(null), 1500);
+          addToast("Batch design berhasil dibuat.", "success");
+          return;
+        }
+        if (state.status === "FAILED") throw new Error("Semua job batch gagal");
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return poll();
+      };
+      await poll();
+    } catch (error) {
+      console.error("Batch generation failed:", error);
+      setIsGenerating(false);
+      setGenerationProgress(null);
+      addToast(error instanceof Error ? error.message : "Batch generation gagal", "error");
+    }
+  };
+
   const handleSmartGenerate = async () => {
+    if (batchFiles.length > 0) {
+      await handleBatchGenerate();
+      return;
+    }
     // Determine which layers are which
-    const visibleLayers = layers.filter(l => l.visible && l.id !== 'design');
-    const boundaryLayer = visibleLayers.find(l => l.name.toLowerCase().includes('boundary'));
+    const visibleLayers = layers.filter(l => l.visible && l.id !== 'design' && !l.id.startsWith('design:'));
+    const boundaryLayers = visibleLayers.filter(l => l.name.toLowerCase().includes('boundary') || l.id === 'boundary');
+    const boundaryLayer = boundaryLayers[0];
     const popLayer = visibleLayers.find(l => l.name.toLowerCase().includes('pop') || l.name.toLowerCase().includes('olt'));
+
+    if (boundaryLayers.length > 1) {
+      addToast("Pilih satu boundary saja sebelum Generate Design.", "error");
+      return;
+    }
     
     if (boundaryLayer) {
       // FULL GENERATE (POP is optional)
       setIsGenerating(true);
+      setHasNetworkCore(false);
       addToast(popLayer ? "Mengambil data Boundary dan POP dari peta..." : "Mengambil data Boundary (POP akan digenerate otomatis)...", "info");
       try {
         const boundaryRes = await fetch(boundaryLayer.url);
@@ -424,10 +678,14 @@ export default function Home() {
           formData.append("popFile", popBlob, popLayer.name);
         }
 
-        formData.append("config", JSON.stringify(generationConfig));
+        // The primary UI flow is Network Core. The legacy config field is
+        // retained for compatibility, but Homepass is now a separate job.
+        formData.append("config", JSON.stringify({ ...generationConfig, include_homepass: false }));
+        formData.append("mode", "CORE");
 
         const jobId = `job-${Date.now()}`;
         formData.append("job_id", jobId);
+        rememberJob(jobId);
 
         let eventSource: EventSource | null = null;
         const handleProgress = (event: MessageEvent) => {
@@ -435,6 +693,7 @@ export default function Home() {
           if (pData.error) {
             eventSource?.close();
             setIsGenerating(false);
+            setHasNetworkCore(false);
             addToast("Generation failed: " + pData.error, "error");
             setGenerationProgress(null);
             return;
@@ -444,12 +703,26 @@ export default function Home() {
             eventSource?.close();
             setTimeout(() => setGenerationProgress(null), 1500);
             setIsGenerating(false);
+            setHasNetworkCore(Boolean(pData.result));
             
             if (pData.result) {
               const result = pData.result;
-              const newDesign: LayerConfig = { id: "design", name: "FTTH Design", url: `/api/proxy${result.url}`, visible: true, color: "#22c55e" };
+              const designId = `design:single:${jobId}`;
+              const designGroupId = boundaryLayer.groupId || `boundary:${boundaryLayer.id}`;
+              const newDesign: LayerConfig = {
+                id: designId,
+                name: `FTTH Design - ${boundaryLayer.name}`,
+                url: `/api/proxy${result.url}`,
+                visible: true,
+                color: "#22c55e",
+                groupId: designGroupId,
+                groupName: boundaryLayer.groupName || boundaryLayer.name,
+                designName: boundaryLayer.name,
+                boundaryName: boundaryLayer.name,
+                status: "COMPLETED",
+              };
               setLayers(prev => {
-                const newLayers = [...prev.filter(l => l.id !== 'design'), newDesign];
+                const newLayers = [...prev, newDesign];
                 setFilters(prevFilters => {
                   const generatedFilters = { ...prevFilters, showHouse: false };
                   // We do the side effect here safely because this block only runs once per job completion
@@ -467,7 +740,7 @@ export default function Home() {
               if (result.csv_url) setCsvUrl(`/api/proxy${result.csv_url}`);
               if (result.stats) setDesignStats(result.stats);
               if (result.validation) setValidationResult(result.validation);
-              addToast("FTTH Design successfully generated and updated!", "success");
+              addToast("Network Core selesai. Generate Homepass tersedia jika titik rumah diperlukan.", "success");
             }
           }
         };
@@ -499,6 +772,7 @@ export default function Home() {
       // CUSTOM GENERATE (Hanya Tarik Kabel)
       const customLayer = visibleLayers[0];
       setIsGenerating(true);
+      setHasNetworkCore(false);
       addToast(`Menganalisis file ${customLayer.name} untuk tarik kabel...`, "info");
       try {
         const customRes = await fetch(customLayer.url);
@@ -510,6 +784,7 @@ export default function Home() {
         
         const jobId = `job-${Date.now()}`;
         formData.append("job_id", jobId);
+        rememberJob(jobId);
 
         let eventSource: EventSource | null = null;
         const handleProgress = (event: MessageEvent) => {
@@ -585,6 +860,8 @@ export default function Home() {
       const formData = new FormData();
       const jobId = `job-${Date.now()}`;
       formData.append("job_id", jobId);
+      rememberJob(jobId);
+      rememberJob(jobId);
 
       let eventSource: EventSource | null = null;
       const handleProgress = (event: MessageEvent) => {
@@ -651,11 +928,94 @@ export default function Home() {
     }
   };
 
+  const handleGenerateHomepass = async () => {
+    if (!hasNetworkCore || isGenerating || isGeneratingHomepass) return;
+    setIsGeneratingHomepass(true);
+    try {
+      const formData = new FormData();
+      const jobId = `job-${Date.now()}`;
+      formData.append("job_id", jobId);
+      const activeBoundary = layers.find(layer => layer.visible && (
+        layer.name.toLowerCase().includes("boundary") || layer.id === "boundary"
+      ));
+      const selectedDesign = layers.find(layer => layer.visible && activeBoundary?.groupId && layer.groupId === activeBoundary.groupId && (
+        layer.id.startsWith("design:batch:") || layer.id.startsWith("design:single:") || layer.id === "design"
+      )) || layers.find(layer => layer.visible && (
+        layer.id.startsWith("design:batch:") || layer.id.startsWith("design:single:") || layer.id === "design"
+      ));
+      if (currentProjectId) formData.append("project_id", currentProjectId);
+      if (selectedDesign?.id.startsWith("design:batch:")) {
+        const parts = selectedDesign.id.split(":");
+        formData.append("batch_id", parts[2]);
+        formData.append("item_id", parts[3]);
+      }
+      let eventSource: EventSource | null = null;
+      const handleProgress = (event: MessageEvent) => {
+        const pData = JSON.parse(event.data);
+        if (pData.error) {
+          eventSource?.close();
+          setIsGeneratingHomepass(false);
+          setGenerationProgress(null);
+          addToast("Generate Homepass gagal: " + pData.error, "error");
+          return;
+        }
+        setGenerationProgress({ stage: pData.stage, message: pData.message, percent: pData.percent });
+        if (pData.done) {
+          eventSource?.close();
+          setTimeout(() => setGenerationProgress(null), 1500);
+          setIsGeneratingHomepass(false);
+          if (pData.result) {
+            const result = pData.result;
+            const newDesign: LayerConfig = { id: selectedDesign?.id || "design", name: selectedDesign ? `${selectedDesign.name} + Homepass` : "FTTH Design + Homepass", url: `/api/proxy${result.url}`, visible: true, color: "#22c55e", groupId: selectedDesign?.groupId, groupName: selectedDesign?.groupName, boundaryName: selectedDesign?.boundaryName, status: "COMPLETED" };
+            setLayers(prev => {
+              const newLayers = selectedDesign
+                ? prev.map(layer => layer.id === selectedDesign.id ? newDesign : layer)
+                : [...prev.filter(l => l.id !== 'design'), newDesign];
+              setFilters(prevFilters => {
+                const generatedFilters = { ...prevFilters, showHouse: true };
+                saveProject(projectName || "Untitled Project", newLayers, generatedFilters).catch(console.error);
+                return generatedFilters;
+              });
+              return newLayers;
+            });
+            if (result.kmz_url) setKmzUrl(`/api/proxy${result.kmz_url}`);
+            if (result.csv_url) setCsvUrl(`/api/proxy${result.csv_url}`);
+            addToast("Homepass berhasil ditambahkan tanpa mengulang routing utama.", "success");
+          }
+        }
+      };
+      const response = await fetch("/api/proxy/generate-homepass", { method: "POST", body: formData });
+      const resp = await response.json();
+      if (resp.success) {
+        eventSource = new EventSource(`/api/proxy/generate/progress/${jobId}`);
+        eventSource.onmessage = handleProgress;
+        eventSource.onerror = () => {
+          // EventSource can retry transiently; only surface a failure after
+          // the browser has permanently closed the stream.
+          if (eventSource?.readyState === EventSource.CLOSED) {
+            setIsGeneratingHomepass(false);
+            setGenerationProgress(null);
+            addToast("Koneksi progress Homepass terputus. Periksa backend lalu coba lagi.", "error");
+          }
+        };
+        addToast("Pembuatan Homepass sedang berjalan...", "info");
+      } else {
+        setIsGeneratingHomepass(false);
+        addToast("Generate Homepass gagal: " + (resp.error?.message || resp.detail), "error");
+      }
+    } catch (error) {
+      console.error("Error generating homepass:", error);
+      setIsGeneratingHomepass(false);
+      setGenerationProgress(null);
+      addToast("Error Generate Homepass. Pastikan API dan worker berjalan.", "error");
+    }
+  };
+
   const visibleLayers = layers.filter(l => l.visible);
+  const canGenerateHomepass = hasNetworkCore;
 
   return (
     <div className="dashboard-container">
-      <GenerationProgressModal progress={generationProgress} />
       {showVersionHistory && currentProjectId && (
         <VersionHistoryPanel 
           projectId={currentProjectId}
@@ -791,11 +1151,14 @@ export default function Home() {
       />
       <Navbar 
         onImportLayer={handleImportLayer} 
-        onSmartGenerate={visibleLayers.some((l: LayerConfig) => l.name.toLowerCase().includes('boundary') || l.name.toLowerCase().includes('pop') || l.name.toLowerCase().includes('olt')) ? handleSmartGenerate : undefined}
+        onSmartGenerate={batchFiles.length > 0 || visibleLayers.some((l: LayerConfig) => l.name.toLowerCase().includes('boundary') || l.name.toLowerCase().includes('pop') || l.name.toLowerCase().includes('olt')) ? handleSmartGenerate : undefined}
         isGenerating={isGenerating}
         onRegenerateCables={visibleLayers.some((l: LayerConfig) => l.id === "design") ? handleRegenerateCables : undefined}
         isRegeneratingCables={isRegeneratingCables}
         hasDesign={layers.some(l => l.id === 'design' && l.visible)}
+        onGenerateHomepass={handleGenerateHomepass}
+        isGeneratingHomepass={isGeneratingHomepass}
+        hasNetworkCore={canGenerateHomepass}
         projectName={projectName}
         featureColors={featureColors}
         onConfigClick={() => setIsConfigModalOpen(true)}
@@ -824,10 +1187,12 @@ export default function Home() {
           savedProjects={savedProjects}
           onLoadProject={loadProject}
           onUnloadProject={unloadProject}
+          onNewProject={unloadProject}
           onDeleteProject={deleteProject}
           currentProjectId={currentProjectId}
           stats={designStats}
           validation={validationResult}
+          isGenerationLocked={isGenerating || isGeneratingHomepass}
         />
         <MapComponent 
           layers={layers} 
@@ -838,6 +1203,19 @@ export default function Home() {
           isSidebarCollapsed={isSidebarCollapsed}
           featureColors={featureColors}
         />
+        {generationProgress && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '232px',
+              right: '20px',
+              zIndex: 2000,
+            }}
+            title="Progress generate"
+          >
+            <GenerationProgressModal progress={generationProgress} />
+          </div>
+        )}
       </div>
       
       {/* Download Floating Card */}

@@ -5,6 +5,7 @@ export interface GenerationConfig {
   odp_capacity: number;
   odc_capacity: number;
   include_homepass: boolean;
+  force_refresh_osm: boolean;
   max_odp_radius_m: number;
   max_odc_radius_m: number;
   max_feeder_length_m: number;
@@ -17,6 +18,7 @@ export const DEFAULT_CONFIG: GenerationConfig = {
   odp_capacity: 10,
   odc_capacity: 4,
   include_homepass: true,
+  force_refresh_osm: false,
   max_odp_radius_m: 150.0,
   max_odc_radius_m: 500.0,
   max_feeder_length_m: 2000.0,
@@ -111,6 +113,14 @@ export default function GenerationConfigModal({ isOpen, onClose, config, onSave 
                     <span className="block text-xs text-gray-600 mt-1">
                       Matikan untuk boundary besar agar KMZ lebih cepat dibuat.
                     </span>
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3 rounded-md border border-amber-100 bg-amber-50 p-3">
+                  <input type="checkbox" name="force_refresh_osm" checked={formData.force_refresh_osm} onChange={handleChange} className="mt-1 h-4 w-4" />
+                  <span>
+                    <span className="block text-sm font-medium">Refresh data OSM</span>
+                    <span className="block text-xs text-gray-600 mt-1">Ambil data terbaru dan abaikan cache OSM yang masih berlaku.</span>
                   </span>
                 </label>
               </div>

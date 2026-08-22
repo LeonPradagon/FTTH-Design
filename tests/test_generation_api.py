@@ -73,3 +73,44 @@ def test_generate_custom(tmp_path, mock_redis_pool, mock_progress_manager, mock_
     mock_redis_pool.enqueue_job.assert_called_once()
     args, kwargs = mock_redis_pool.enqueue_job.call_args
     assert args[0] == "generate_custom_task"
+
+
+def test_generate_homepass_requires_and_queues_core_cache(mock_redis_pool, mock_progress_manager, mock_minio):
+    with patch("backend.api.routes.generation.load_network_state", return_value=({}, [], {"version": 2})):
+        response = client.post("/generate-homepass", data={"job_id": "test-job-homepass"})
+
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+    mock_redis_pool.enqueue_job.assert_called_once()
+    assert mock_redis_pool.enqueue_job.call_args.args[0] == "generate_homepass_task"
+
+
+def test_generate_homepass_rejects_missing_core_cache(mock_redis_pool, mock_progress_manager, mock_minio):
+    from backend.core.errors import DesignStateNotFoundError
+
+    with patch(
+        "backend.api.routes.generation.load_network_state",
+        side_effect=DesignStateNotFoundError(message="Cache Network Core belum tersedia"),
+    ):
+        response = client.post("/generate-homepass", data={"job_id": "test-job-no-core"})
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "DESIGN_STATE_NOT_FOUND"
+
+
+def test_generate_batch_pairs_boundary_and_pop(tmp_path, mock_redis_pool, mock_progress_manager, mock_minio):
+    boundary = """<kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark><Polygon><outerBoundaryIs><LinearRing><coordinates>106.14,-6.12 106.16,-6.12 106.16,-6.10 106.14,-6.10 106.14,-6.12</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark></Document></kml>"""
+    pop = """<kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark><name>POP A</name><Point><coordinates>106.15,-6.11</coordinates></Point></Placemark></Document></kml>"""
+    response = client.post(
+        "/generate/batch",
+        files=[
+            ("files", ("area_a_boundary.kml", boundary, "application/vnd.google-earth.kml+xml")),
+            ("files", ("area_a_pop.kml", pop, "application/vnd.google-earth.kml+xml")),
+        ],
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert "batch_id" in data
+    assert data["total"] == 1
+    assert data["jobs"][0]["status"] == "QUEUED"
+    assert mock_redis_pool.enqueue_job.call_args.args[0] == "generate_task"

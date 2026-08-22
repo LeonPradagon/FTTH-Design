@@ -184,14 +184,28 @@ def route_along_road(
             # the same. Reuse the Dijkstra distance tree for that source
             # instead of traversing the entire graph for every house.
             distance_cache = route_cache.setdefault("distances", {}) if route_cache is not None else {}
-            if s not in distance_cache:
-                distance_cache[s] = nx.single_source_dijkstra_path_length(
-                    G, s, weight="routing_cost"
-                )
-            distances = distance_cache[s]
-
             for e in valid_ends:
-                length = distances.get(e)
+                if route_cache is not None and route_cache.get("targeted"):
+                    # For feeder/distribution there is one destination.
+                    # A* stops at that destination instead of exploring the
+                    # complete graph like a full Dijkstra tree.
+                    def heuristic(node, goal):
+                        return 0.85 * haversine_m(
+                            G.nodes[node]["y"], G.nodes[node]["x"],
+                            G.nodes[goal]["y"], G.nodes[goal]["x"],
+                        )
+                    try:
+                        length = nx.astar_path_length(
+                            G, s, e, heuristic=heuristic, weight="routing_cost"
+                        )
+                    except (nx.NetworkXNoPath, nx.NodeNotFound):
+                        length = None
+                else:
+                    if s not in distance_cache:
+                        distance_cache[s] = nx.single_source_dijkstra_path_length(
+                            G, s, weight="routing_cost"
+                        )
+                    length = distance_cache[s].get(e)
                 if length is None:
                     continue
                 dist_s = haversine_m(
@@ -218,9 +232,21 @@ def route_along_road(
     # Reconstruct only the selected path. Distances are cached per ODP, while
     # this path remains specific to this house/target.
     try:
-        best_path = nx.shortest_path(
-            G, best_source, best_target, weight="routing_cost"
-        )
+        if route_cache is not None and route_cache.get("targeted"):
+            best_path = nx.astar_path(
+                G,
+                best_source,
+                best_target,
+                heuristic=lambda node, goal: 0.85 * haversine_m(
+                    G.nodes[node]["y"], G.nodes[node]["x"],
+                    G.nodes[goal]["y"], G.nodes[goal]["x"],
+                ),
+                weight="routing_cost",
+            )
+        else:
+            best_path = nx.shortest_path(
+                G, best_source, best_target, weight="routing_cost"
+            )
     except (nx.NetworkXNoPath, nx.NodeNotFound):
         logger.warning(f"No path found in road_graph from {from_latlon} to {to_latlon}")
         return None
@@ -545,7 +571,10 @@ def build_feeder_chain(pop, odcs, road_graph=None):
         path = None
         if road_graph is not None:
             try:
-                path = route_along_road(road_graph, current_latlon, target_latlon)
+                path = route_along_road(
+                    road_graph, current_latlon, target_latlon,
+                    route_cache={"distances": {}, "targeted": True},
+                )
             except Exception as e:
                 raise RuntimeError(
                     f"Gagal membuat feeder {current_label}->{odc.id} melalui jalan: {e}"
@@ -582,7 +611,10 @@ def build_feeder_segments_preserving_order(pop, odcs, road_graph=None):
         path = None
         if road_graph is not None:
             try:
-                path = route_along_road(road_graph, current_latlon, target_latlon)
+                path = route_along_road(
+                    road_graph, current_latlon, target_latlon,
+                    route_cache={"distances": {}, "targeted": True},
+                )
             except Exception as e:
                 raise RuntimeError(
                     f"Gagal membuat feeder {current_label}->{odc.id} melalui jalan: {e}"
