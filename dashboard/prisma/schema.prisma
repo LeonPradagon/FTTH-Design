@@ -1,11 +1,15 @@
-
-generator client {
-  provider = "prisma-client-js"
-}
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+generator py_client {
+  provider             = "prisma-client-py"
+  recursive_type_depth = 5
+}
+
+generator js_client {
+  provider = "prisma-client-js"
 }
 
 model User {
@@ -22,6 +26,8 @@ model User {
   banExpires    DateTime?
   sessions      Session[]
   accounts      Account[]
+  projects      Project[]
+  auditLogs     AuditLog[]
 
   @@unique([email])
   @@map("user")
@@ -81,10 +87,57 @@ model Jwks {
   id         String    @id
   publicKey  String
   privateKey String
-  createdAt  DateTime
+  createdAt  DateTime  @default(now())
   expiresAt  DateTime?
   alg        String?
   crv        String?
 
   @@map("jwks")
+}
+
+model Project {
+  id             String   @id @default(uuid())
+  name           String
+  layers         Json     @default("[]")
+  filters        Json     @default("{}")
+  feature_colors Json     @default("{}")
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  versions       DesignVersion[]
+
+  @@index([userId])
+  @@map("project")
+}
+
+model DesignVersion {
+  id            String   @id @default(uuid())
+  projectId     String
+  version       Int
+  config        Json     // GenerationConfig snapshot
+  metadata      Json     // GenerationMetadata
+  validation    Json     // ValidationResult
+  stats         Json     // {odc_count, odp_count, customer_count, feeder_km, distribution_km}
+  status        String   // "COMPLETED" | "FAILED"
+  createdAt     DateTime @default(now())
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, version])
+  @@map("design_version")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String
+  action     String   // "GENERATE", "DELETE_VERSION", "UPDATE_CONFIG", etc.
+  projectId  String?
+  versionId  String?
+  details    Json     @default("{}")
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([projectId])
+  @@map("audit_log")
 }

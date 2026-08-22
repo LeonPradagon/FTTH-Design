@@ -1,48 +1,52 @@
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
 }
 
 generator py_client {
   provider             = "prisma-client-py"
   recursive_type_depth = 5
+  previewFeatures      = ["postgresqlExtensions"]
 }
 
 generator js_client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 model User {
-  id            String    @id @default(uuid())
+  id            String    @id
   name          String
   email         String
   emailVerified Boolean   @default(false)
   image         String?
-  role          String    @default("user")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  role          String?   @default("user")
   banned        Boolean?  @default(false)
   banReason     String?
   banExpires    DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
   sessions      Session[]
   accounts      Account[]
   projects      Project[]
+  auditLogs     AuditLog[]
 
   @@unique([email])
   @@map("user")
 }
 
 model Session {
-  id        String   @id @default(uuid())
-  userId    String
-  token     String
-  expiresAt DateTime
-  ipAddress String?
-  userAgent String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id
+  expiresAt      DateTime
+  token          String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  ipAddress      String?
+  userAgent      String?
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   impersonatedBy String?
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([token])
   @@index([userId])
@@ -50,39 +54,36 @@ model Session {
 }
 
 model Account {
-  id                    String    @id @default(uuid())
-  userId                String
+  id                    String    @id
   accountId             String
   providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   accessToken           String?
   refreshToken          String?
   idToken               String?
-  issuer                String?
   accessTokenExpiresAt  DateTime?
   refreshTokenExpiresAt DateTime?
   scope                 String?
   password              String?
+  issuer                String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("account")
 }
 
-model Project {
-  id             String   @id @default(uuid())
-  name           String
-  layers         Json     @default("[]")
-  filters        Json     @default("{}")
-  feature_colors Json     @default("{}")
-  userId         String?
-  user           User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  created_at     DateTime @default(now())
-  updated_at     DateTime @updatedAt
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  @@index([userId])
-  @@map("project")
+  @@index([identifier])
+  @@map("verification")
 }
 
 model Jwks {
@@ -95,4 +96,104 @@ model Jwks {
   crv        String?
 
   @@map("jwks")
+}
+
+model Project {
+  id             String   @id @default(uuid())
+  name           String
+  layers         Json     @default("[]")
+  filters        Json     @default("{}")
+  feature_colors Json     @default("{}")
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  versions       DesignVersion[]
+  customers      ProjectCustomer[]
+
+  @@index([userId])
+  @@map("project")
+}
+
+model DesignVersion {
+  id            String   @id @default(uuid())
+  projectId     String
+  version       Int
+  config        Json     // GenerationConfig snapshot
+  metadata      Json     // GenerationMetadata
+  validation    Json     // ValidationResult
+  stats         Json     // {odc_count, odp_count, customer_count, feeder_km, distribution_km}
+  status        String   // "COMPLETED" | "FAILED"
+  createdAt     DateTime @default(now())
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  odcs          DesignODC[]
+  odps          DesignODP[]
+  cables        DesignCable[]
+
+  @@unique([projectId, version])
+  @@map("design_version")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String
+  action     String   // "GENERATE", "DELETE_VERSION", "UPDATE_CONFIG", etc.
+  projectId  String?
+  versionId  String?
+  details    Json     @default("{}")
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([projectId])
+  @@map("audit_log")
+}
+
+model ProjectCustomer {
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  location  Unsupported("geometry(Point, 4326)")
+  
+  @@index([projectId])
+  @@map("project_customer")
+}
+
+model DesignODC {
+  id              String   @id @default(uuid())
+  designVersionId String
+  designVersion   DesignVersion @relation(fields: [designVersionId], references: [id], onDelete: Cascade)
+  label           String
+  location        Unsupported("geometry(Point, 4326)")
+  odps            DesignODP[]
+  
+  @@index([designVersionId])
+  @@map("design_odc")
+}
+
+model DesignODP {
+  id              String   @id @default(uuid())
+  designVersionId String
+  designVersion   DesignVersion @relation(fields: [designVersionId], references: [id], onDelete: Cascade)
+  odcId           String
+  odc             DesignODC @relation(fields: [odcId], references: [id], onDelete: Cascade)
+  label           String
+  location        Unsupported("geometry(Point, 4326)")
+  
+  @@index([designVersionId])
+  @@map("design_odp")
+}
+
+model DesignCable {
+  id              String   @id @default(uuid())
+  designVersionId String
+  designVersion   DesignVersion @relation(fields: [designVersionId], references: [id], onDelete: Cascade)
+  type            String   // "feeder" | "distribution"
+  sourceLabel     String
+  targetLabel     String
+  length          Float
+  path            Unsupported("geometry(LineString, 4326)")
+  
+  @@index([designVersionId])
+  @@map("design_cable")
 }

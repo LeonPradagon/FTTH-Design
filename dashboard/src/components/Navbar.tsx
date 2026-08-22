@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, X, Home, Info, Cable, User, Server, Triangle } from 'lucide-react';
+import { Upload, X, Home, Info, Cable, User, Server, Triangle, Settings } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { AccountCenterModal } from './AccountCenterModal';
 import { useSession } from '@/lib/auth-client';
@@ -14,6 +14,8 @@ interface NavbarProps {
   hasDesign?: boolean;
   featureColors?: Record<string, string>;
   projectName?: string | null;
+  onConfigClick?: () => void;
+  onVersionHistoryClick?: () => void;
 }
 
 export function Navbar({ 
@@ -24,6 +26,8 @@ export function Navbar({
   isRegeneratingCables, 
   hasDesign,
   featureColors,
+  onConfigClick,
+  onVersionHistoryClick,
 }: NavbarProps) {
   const [showInfo, setShowInfo] = useState(false);
   const [showAccountCenter, setShowAccountCenter] = useState(false);
@@ -120,14 +124,16 @@ export function Navbar({
           )}
 
           {onSmartGenerate && (
-            <button 
-              onClick={onSmartGenerate} 
-              disabled={isGenerating}
-              className={`generate-btn-small ${isGenerating ? 'loading' : ''}`}
-              style={{ marginLeft: '8px', cursor: isGenerating ? 'not-allowed' : 'pointer' }}
-            >
-              {isGenerating ? "Menganalisis..." : "Generate Design"}
-            </button>
+            <div className="flex items-center">
+              <button 
+                onClick={onSmartGenerate} 
+                disabled={isGenerating}
+                className={`generate-btn-small ${isGenerating ? 'loading' : ''}`}
+                style={{ marginLeft: '4px', cursor: isGenerating ? 'not-allowed' : 'pointer' }}
+              >
+                {isGenerating ? "Menganalisis..." : "Generate Design"}
+              </button>
+            </div>
           )}
 
           <button 

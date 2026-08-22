@@ -7,7 +7,9 @@ from shapely.ops import substring
 from backend.utils.geometry import haversine_m, bearing_between, offset_latlon
 from backend.core.logging import logger
 
-ROAD_PROFILE_VERSION = "road-priority-v3"
+# Bump this whenever the allowed edge set or cost model changes.  Existing
+# GraphML caches are re-sanitised instead of silently reusing an old profile.
+ROAD_PROFILE_VERSION = "road-priority-v4"
 ALLOWED_HIGHWAY_TYPES = {
     "motorway", "motorway_link", "trunk", "trunk_link",
     "primary", "primary_link", "secondary", "secondary_link",
@@ -15,21 +17,23 @@ ALLOWED_HIGHWAY_TYPES = {
     "unclassified", "service", "road",
 }
 ROAD_PRIORITY_FACTORS = {
-    "trunk": 0.70,
-    "trunk_link": 0.75,
-    "primary": 0.75,
-    "primary_link": 0.80,
-    "secondary": 0.85,
-    "secondary_link": 0.90,
-    "tertiary": 0.95,
-    "tertiary_link": 1.00,
-    "motorway": 1.00,
-    "motorway_link": 1.05,
-    "residential": 1.15,
-    "unclassified": 1.20,
-    "living_street": 1.25,
-    "road": 1.30,
-    "service": 1.45,
+    # Main roads are deliberately preferred.  A shorter residential/service
+    # shortcut must not win over a practical trunk/primary route.
+    "motorway": 0.90,
+    "motorway_link": 0.95,
+    "trunk": 0.85,
+    "trunk_link": 0.90,
+    "primary": 0.90,
+    "primary_link": 0.95,
+    "secondary": 1.00,
+    "secondary_link": 1.05,
+    "tertiary": 1.15,
+    "tertiary_link": 1.20,
+    "residential": 1.75,
+    "unclassified": 2.00,
+    "living_street": 2.25,
+    "road": 2.50,
+    "service": 3.00,
 }
 
 
@@ -55,15 +59,6 @@ def prepare_road_graph(road_graph):
     Native OSM XML also contains railways and other ways without a ``highway``
     tag. Those edges must never be considered cable routes.
     """
-    if road_graph.graph.get("ftth_road_profile") == ROAD_PROFILE_VERSION:
-        first_edge = next(iter(road_graph.edges(data=True)), None)
-        if first_edge is not None and isinstance(first_edge[2].get("routing_cost"), (int, float)):
-            return road_graph
-        # GraphML memuat atribut custom sebagai string; konversi sekali saat load.
-        for _, _, data in road_graph.edges(data=True):
-            data["routing_cost"] = float(data["routing_cost"])
-        return road_graph
-
     invalid_edges = []
     for u, v, key, data in road_graph.edges(keys=True, data=True):
         highway_types = _highway_values(data.get("highway"))
@@ -89,13 +84,41 @@ def prepare_road_graph(road_graph):
     )
     return road_graph
 
-def route_along_road(G, from_latlon, to_latlon):
+def route_along_road(
+    G,
+    from_latlon,
+    to_latlon,
+    use_external_routing=True,
+    route_cache=None,
+):
     """Cari rute terpendek di graf jalan `G` antara dua titik (lat, lon) 
     dengan menelusuri geometri jalan secara presisi."""
     import networkx as nx
     import osmnx as ox
+    import requests
+    import os
     from shapely.geometry import Point as ShPoint
     from shapely.ops import substring
+
+    # GraphHopper is useful for a small number of feeder routes, but calling
+    # it once for every HC/drop cable makes large exports spend up to the
+    # HTTP timeout on every cable when the service is unavailable. Exporters
+    # can disable it and use the already loaded local graph directly.
+    if use_external_routing:
+        gh_url = os.getenv("GRAPHHOPPER_URL", "http://localhost:8989")
+        try:
+            res = requests.get(
+                f"{gh_url}/route?point={from_latlon[0]},{from_latlon[1]}&point={to_latlon[0]},{to_latlon[1]}&profile=car&points_encoded=false",
+                timeout=2
+            )
+            if res.status_code == 200:
+                data = res.json()
+                if data.get("paths"):
+                    coords = data["paths"][0]["points"]["coordinates"]
+                    # GraphHopper mengembalikan [lon, lat], kita butuh [lat, lon]
+                    return [(lat, lon) for lon, lat in coords]
+        except Exception as e:
+            logger.debug(f"GraphHopper routing skipped/failed: {e}. Fallback to networkx.")
 
     def trace_edge_line(line, p1, p2):
         t1 = line.project(ShPoint(p1[1], p1[0]))
@@ -113,7 +136,10 @@ def route_along_road(G, from_latlon, to_latlon):
             coords[-1] = p2
         return coords
 
-    G = prepare_road_graph(G)
+    # Preparing the graph removes invalid edges and computes routing costs.
+    # It is invariant for the lifetime of this graph, so do it only once.
+    if G.graph.get("ftth_road_profile") != ROAD_PROFILE_VERSION:
+        G = prepare_road_graph(G)
 
     # 1. Snap start and end
     try:
@@ -148,24 +174,54 @@ def route_along_road(G, from_latlon, to_latlon):
     valid_starts = list(set([u_orig, v_orig]))
     valid_ends = list(set([u_dest, v_dest]))
     
-    best_path = None
+    best_source = None
+    best_target = None
     best_len = float('inf')
 
     for s in valid_starts:
-        for e in valid_ends:
-            try:
-                length = nx.shortest_path_length(G, s, e, weight="routing_cost")
-                dist_s = haversine_m(snapped_start[0], snapped_start[1], G.nodes[s]['y'], G.nodes[s]['x'])
-                dist_e = haversine_m(snapped_end[0], snapped_end[1], G.nodes[e]['y'], G.nodes[e]['x'])
+        try:
+            # For all houses belonging to one ODP, the source edge is usually
+            # the same. Reuse the Dijkstra distance tree for that source
+            # instead of traversing the entire graph for every house.
+            distance_cache = route_cache.setdefault("distances", {}) if route_cache is not None else {}
+            if s not in distance_cache:
+                distance_cache[s] = nx.single_source_dijkstra_path_length(
+                    G, s, weight="routing_cost"
+                )
+            distances = distance_cache[s]
+
+            for e in valid_ends:
+                length = distances.get(e)
+                if length is None:
+                    continue
+                dist_s = haversine_m(
+                    snapped_start[0], snapped_start[1],
+                    G.nodes[s]['y'], G.nodes[s]['x'],
+                )
+                dist_e = haversine_m(
+                    snapped_end[0], snapped_end[1],
+                    G.nodes[e]['y'], G.nodes[e]['x'],
+                )
                 total_len = dist_s + length + dist_e
-                
+
                 if total_len < best_len:
                     best_len = total_len
-                    best_path = nx.shortest_path(G, s, e, weight="routing_cost")
-            except (nx.NetworkXNoPath, nx.NodeNotFound):
-                continue
+                    best_source = s
+                    best_target = e
+        except (nx.NetworkXNoPath, nx.NodeNotFound):
+            continue
 
-    if not best_path:
+    if best_source is None or best_target is None:
+        logger.warning(f"No path found in road_graph from {from_latlon} to {to_latlon}")
+        return None
+
+    # Reconstruct only the selected path. Distances are cached per ODP, while
+    # this path remains specific to this house/target.
+    try:
+        best_path = nx.shortest_path(
+            G, best_source, best_target, weight="routing_cost"
+        )
+    except (nx.NetworkXNoPath, nx.NodeNotFound):
         logger.warning(f"No path found in road_graph from {from_latlon} to {to_latlon}")
         return None
 
@@ -250,7 +306,11 @@ def locate_on_road(road_graph, lat, lon):
     import osmnx as ox
     from shapely.geometry import Point as ShPoint
 
-    road_graph = prepare_road_graph(road_graph)
+    # The graph profile is immutable during routing. Re-sanitising every
+    # time a house is snapped makes large exports effectively O(houses *
+    # road_edges), because this function is called for every cable endpoint.
+    if road_graph.graph.get("ftth_road_profile") != ROAD_PROFILE_VERSION:
+        road_graph = prepare_road_graph(road_graph)
     u, v, key = ox.distance.nearest_edges(road_graph, X=lon, Y=lat)
     line, len_m = _edge_geometry_and_length(road_graph, u, v, key)
     t_deg = line.project(ShPoint(lon, lat))

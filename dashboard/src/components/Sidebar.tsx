@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronDown, ChevronRight, Filter, Server, Triangle, Home, Route, Cable, Layers, Trash2 } from 'lucide-react';
 import { LayerConfig, KmlNode } from '../app/page';
 import { KmlTreeViewer } from './KmlTreeViewer';
+import ValidationStatsPanel, { DesignStats, ValidationResult } from './ValidationStatsPanel';
 
 export type FeatureFilters = {
   showPop: boolean;
@@ -31,9 +32,11 @@ interface SidebarProps {
   onUnloadProject?: () => void;
   onDeleteProject?: (id: string) => void;
   currentProjectId?: string | null;
+  stats?: DesignStats | null;
+  validation?: ValidationResult | null;
 }
 
-export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTrees, onToggleTreeNode, isCollapsed, onToggle, featureColors, canEditColors = false, onColorChange, onChangeLayerColor, savedProjects = [], onLoadProject, onUnloadProject, onDeleteProject, currentProjectId }: SidebarProps) {
+export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTrees, onToggleTreeNode, isCollapsed, onToggle, featureColors, canEditColors = false, onColorChange, onChangeLayerColor, savedProjects = [], onLoadProject, onUnloadProject, onDeleteProject, currentProjectId, stats, validation }: SidebarProps) {
   const [isProjectsExpanded, setIsProjectsExpanded] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<{id: string, name: string} | null>(null);
 
@@ -397,6 +400,15 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
           )}
         </div>
       )}
+
+      {/* Validation Stats Section (Hidden per user request) */}
+      {/* 
+      {!isCollapsed && (stats || validation) && (
+        <div style={{ width: '100%', overflowY: 'auto' }}>
+          <ValidationStatsPanel stats={stats || null} validation={validation || null} inline={true} />
+        </div>
+      )} 
+      */}
 
       {/* Delete Confirmation Modal */}
       {projectToDelete && typeof document !== 'undefined' && createPortal(

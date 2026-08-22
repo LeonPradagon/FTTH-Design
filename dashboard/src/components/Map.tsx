@@ -220,16 +220,19 @@ const parseKmlTree = (parentEl: Element, doc: Document, folderPath: string[] = [
   return nodes;
 };
 
-const findNodeVisible = (nodes: KmlNode[] | undefined, targetId: string): boolean | null => {
-  if (!nodes) return null;
-  for (const node of nodes) {
-    if (node.id === targetId) return node.visible;
-    if (node.children) {
-      const res = findNodeVisible(node.children, targetId);
-      if (res !== null) return res;
-    }
-  }
-  return null;
+const buildTreeVisibilityIndex = (trees: Record<string, KmlNode[]> | undefined) => {
+  const index = new Map<string, Map<string, boolean>>();
+  if (!trees) return index;
+  Object.entries(trees).forEach(([layerId, nodes]) => {
+    const layerIndex = new Map<string, boolean>();
+    const visit = (items: KmlNode[]) => items.forEach((node) => {
+      layerIndex.set(node.id, node.visible);
+      if (node.children) visit(node.children);
+    });
+    visit(nodes);
+    index.set(layerId, layerIndex);
+  });
+  return index;
 };
 
 interface MapProps {
@@ -256,6 +259,15 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
   const [selectedFeature, setSelectedFeature] = useState<any>(null);
   const coordsRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Prevent duplicate requests while React re-renders during a layer update.
+  // This is especially important for generated KML files, which can contain
+  // thousands of features and take a noticeable amount of time to parse.
+  const loadingKeysRef = useRef<Set<string>>(new Set());
+  const messageHandlerRef = useRef(onShowMessage);
+  useEffect(() => {
+    messageHandlerRef.current = onShowMessage;
+  }, [onShowMessage]);
+  const treeVisibility = useMemo(() => buildTreeVisibilityIndex(kmlTrees), [kmlTrees]);
 
   // Controlled viewState for map navigation controls
   const [viewState, setViewState] = useState({
@@ -284,20 +296,35 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
 
   useEffect(() => {
     layers.forEach(async (layer) => {
-      if (layer.visible && !geoDataMap[`${layer.id}-${layer.url}`]) {
-        try {
-          const res = await fetch(layer.url);
-          const kmlText = await res.text();
+      const cacheKey = `${layer.id}-${layer.url}`;
+      if (!layer.visible || geoDataMap[cacheKey] || loadingKeysRef.current.has(cacheKey)) return;
+
+      loadingKeysRef.current.add(cacheKey);
+      try {
+          const res = await fetch(layer.url, { cache: "no-store" });
+          const body = await res.text();
+          if (!res.ok) {
+            throw new Error(`Gagal memuat ${layer.name} (${res.status})`);
+          }
+          // A proxy/auth error is JSON.  Do not pass it to the XML parser and
+          // silently render an empty layer.
+          if (!body.trim().startsWith("<")) {
+            throw new Error(`Respons ${layer.name} bukan KML yang valid`);
+          }
           const parser = new DOMParser();
-          const doc = parser.parseFromString(kmlText, "text/xml");
-          
-          const tree = parseKmlTree(doc.documentElement, doc);
-          if (onTreeLoaded) {
-            onTreeLoaded(layer.id, tree);
+          const doc = parser.parseFromString(body, "text/xml");
+          if (doc.getElementsByTagName("parsererror").length > 0 || !doc.documentElement) {
+            throw new Error(`KML ${layer.name} tidak dapat diparse`);
           }
 
+          const tree = parseKmlTree(doc.documentElement, doc);
+          if (onTreeLoaded) onTreeLoaded(layer.id, tree);
+
           const geoJson = kml(doc);
-          setGeoDataMap(prev => ({ ...prev, [`${layer.id}-${layer.url}`]: geoJson }));
+          if (!geoJson || !Array.isArray(geoJson.features)) {
+            throw new Error(`KML ${layer.name} tidak berisi feature`);
+          }
+          setGeoDataMap(prev => ({ ...prev, [cacheKey]: geoJson }));
 
           // Auto-fit bounds
           if (containerRef.current && geoJson.type === 'FeatureCollection' && geoJson.features.length > 0) {
@@ -347,8 +374,10 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
           }
         } catch (err) {
           console.error(`Error loading KML ${layer.name}:`, err);
+          messageHandlerRef.current?.(err instanceof Error ? err.message : `Gagal memuat ${layer.name}`, "error");
+        } finally {
+          loadingKeysRef.current.delete(cacheKey);
         }
-      }
     });
   }, [layers, geoDataMap, onTreeLoaded]);
 
@@ -374,25 +403,29 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
              if (classification.isDistribution && !filters.showDistribution) return false;
            }
 
-           if (kmlTrees && kmlTrees[layer.id]) {
+           const layerTreeVisibility = treeVisibility.get(layer.id);
+           if (layerTreeVisibility) {
              const treeId = f.properties?.treeId;
-             if (treeId) {
-               const isVisible = findNodeVisible(kmlTrees[layer.id], treeId);
-               if (isVisible === false) return false;
-             }
+             if (treeId && layerTreeVisibility.get(treeId) === false) return false;
            }
 
            return true;
         });
 
-        const data = {
+        const validFeatures: GeoJSON.Feature[] = filteredFeatures.map((f: any) => ({
+            type: "Feature",
+            geometry: f.geometry,
+            properties: f.properties || {}
+        }));
+
+        const data: GeoJSON.FeatureCollection = {
            type: "FeatureCollection",
-           features: filteredFeatures
+           features: validFeatures
         };
 
         return new GeoJsonLayer({
           id: `geojson-${layer.id}-${layer.url}`,
-          data: data as any,
+          data: data,
           pickable: true,
           stroked: true,
           filled: true,
@@ -474,7 +507,7 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
         });
       })
       .filter(Boolean);
-  }, [layers, geoDataMap, filters, kmlTrees, featureColors]);
+  }, [layers, geoDataMap, filters, treeVisibility, featureColors]);
 
   const baseTileLayer = new TileLayer({
     id: 'osm-tile-layer',
@@ -484,12 +517,18 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
     tileSize: 256,
     renderSubLayers: props => {
       const bbox = props.tile.bbox as any;
+      // TileLayer stores the loaded image in `props.data`. BitmapLayer uses
+      // `image` for that value and intentionally does not accept a data
+      // container. Passing the image through as `data` makes deck.gl call
+      // count() on ImageBitmap, which causes "count(): argument not a
+      // container" and prevents the base map tiles from rendering.
+      const { data: tileImage, ...bitmapProps } = props;
 
-      return new BitmapLayer(props, {
-        data: undefined,
-        image: props.data,
+      return new BitmapLayer({
+        ...bitmapProps,
+        image: tileImage,
         bounds: [bbox.west, bbox.south, bbox.east, bbox.north]
-      });
+      } as any);
     }
   });
 

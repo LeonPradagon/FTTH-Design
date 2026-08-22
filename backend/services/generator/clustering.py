@@ -4,7 +4,9 @@ import numpy as np
 import concurrent.futures
 import json
 from backend.services.generator.models import Splitter, ODP, ODC
+from backend.services.generator.generation_config import GenerationConfig
 from backend.core.config import settings
+from backend.core.logging import logger
 from backend.services.generator.routing import snap_to_road
 
 def capacitated_clustering(points, capacity):
@@ -59,23 +61,43 @@ def centroid_of(points):
 
 
 def snap_centroid_to_road(target_centroid, road_graph):
-    """Fallback ke road snapping (Nearest Node)."""
+    """Snap a generated cabinet position to a valid vehicle road.
+
+    Returning an unsnapped centroid here creates a straight connector in the
+    exporter, which can cut across a railway, river, or private property.  A
+    routing-backed generation must fail loudly instead so the caller can
+    retry with a larger/valid OSM area.
+    """
     if road_graph is None:
         return target_centroid
-    try:
-        return snap_to_road(road_graph, target_centroid[0], target_centroid[1])
-    except Exception:
-        return target_centroid
+    return snap_to_road(road_graph, target_centroid[0], target_centroid[1])
 
 
-def build_design(houses, odp_capacity=8, odc_capacity=4, road_graph=None):
+def build_design(houses, odp_capacity=None, odc_capacity=None, road_graph=None, config=None):
     """Bangun struktur ODC -> ODP -> rumah dari daftar titik rumah.
     Penomoran ODC di sini masih berdasar urutan cluster (belum urutan
-    rantai feeder) -- akan di-renumber ulang oleh build_feeder_chain()."""
+    rantai feeder) -- akan di-renumber ulang oleh build_feeder_chain().
+
+    Accepts either a ``GenerationConfig`` via *config*, or the legacy
+    *odp_capacity* / *odc_capacity* integers for backward compatibility.
+    """
     import concurrent.futures
 
+    if config is None:
+        config = GenerationConfig(
+            odp_capacity=odp_capacity or 10,
+            odc_capacity=odc_capacity or 4,
+        )
+
+    logger.info(
+        "build_design: odp_capacity=%d, odc_capacity=%d, houses=%d",
+        config.odp_capacity,
+        config.odc_capacity,
+        len(houses),
+    )
+
     # -- Tahap 1: rumah -> ODP (tiap ODP dapat splitter 1:odp_capacity) --
-    house_clusters = capacitated_clustering(houses, odp_capacity)
+    house_clusters = capacitated_clustering(houses, config.odp_capacity)
     
     def process_odp(i, idxs):
         cluster_houses = [houses[j] for j in idxs]
@@ -88,7 +110,7 @@ def build_design(houses, odp_capacity=8, odc_capacity=4, road_graph=None):
             id=f"ODP-{i:03d}",
             lat=lat, lon=lon,
             houses=cluster_houses,
-            splitter=Splitter(ratio=f"1:{odp_capacity}", location="ODP"),
+            splitter=Splitter(ratio=f"1:{config.odp_capacity}", location="ODP"),
         )
 
     odps = []
@@ -103,7 +125,7 @@ def build_design(houses, odp_capacity=8, odc_capacity=4, road_graph=None):
 
     # -- Tahap 2: ODP -> ODC (tiap ODC melayani odc_capacity ODP, splitter 1:odc_capacity) --
     odp_coords = [(o.lat, o.lon) for o in odps]
-    odp_clusters = capacitated_clustering(odp_coords, odc_capacity)
+    odp_clusters = capacitated_clustering(odp_coords, config.odc_capacity)
     
     def process_odc(i, idxs):
         cluster_odps = [odps[j] for j in idxs]
@@ -116,7 +138,7 @@ def build_design(houses, odp_capacity=8, odc_capacity=4, road_graph=None):
             id=f"ODC-{i:03d}",
             lat=lat, lon=lon,
             odps=cluster_odps,
-            splitter=Splitter(ratio=f"1:{odc_capacity}", location="ODC"),
+            splitter=Splitter(ratio=f"1:{config.odc_capacity}", location="ODC"),
             closure_id=f"CL-{i:03d}",
         )
         

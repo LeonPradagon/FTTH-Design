@@ -2,9 +2,14 @@
 
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import JSZip from 'jszip';
 import { Navbar } from "../components/Navbar";
 import { CheckCircle, AlertCircle, Info, X } from "lucide-react";
+import GenerationProgressModal from "@/components/GenerationProgressModal";
+import GenerationConfigModal, { GenerationConfig, DEFAULT_CONFIG } from "@/components/GenerationConfigModal";
+import ValidationStatsPanel, { DesignStats, ValidationResult } from "@/components/ValidationStatsPanel";
+import VersionHistoryPanel, { DesignVersion } from "@/components/VersionHistoryPanel";
 
 import { Sidebar, FeatureFilters } from "../components/Sidebar";
 import { useSession } from "@/lib/auth-client";
@@ -55,14 +60,29 @@ const defaultFeatureFilters: FeatureFilters = {
 };
 
 export default function Home() {
-  const { data: session } = useSession();
+  const { data: session, isPending } = useSession();
+  const router = useRouter();
+  
+  useEffect(() => {
+    if (!isPending && !session) {
+      router.push('/login');
+    }
+  }, [session, isPending, router]);
+
   const canEditColors = (session?.user as { role?: string } | undefined)?.role === "admin";
   const [layers, setLayers] = useState<LayerConfig[]>(initialLayers);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState<{stage: string, message: string, percent: number} | null>(null);
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const [generationConfig, setGenerationConfig] = useState<GenerationConfig>(DEFAULT_CONFIG);
+  const [designStats, setDesignStats] = useState<DesignStats | null>(null);
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [isRegeneratingCables, setIsRegeneratingCables] = useState(false);
   const [kmzUrl, setKmzUrl] = useState<string | null>(null);
   const [csvUrl, setCsvUrl] = useState<string | null>(null);
   const [showDownloadPopup, setShowDownloadPopup] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [compareVersions, setCompareVersions] = useState<[DesignVersion, DesignVersion] | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [toasts, setToasts] = useState<{id: number, message: string, type: 'success' | 'error' | 'info'}[]>([]);
   const [filters, setFilters] = useState<FeatureFilters>(() => ({
@@ -144,7 +164,7 @@ export default function Home() {
       const res = await fetch('/api/proxy/api/projects');
       if (!res.ok) throw new Error('Failed to fetch projects');
       const data = await res.json();
-      setSavedProjects(data);
+      setSavedProjects(data.data || data);
     } catch {
       // Ignore initial fetch errors if not logged in
     }
@@ -183,8 +203,9 @@ export default function Home() {
       if (!res.ok) throw new Error('Failed to save project');
 
       const data = await res.json();
-      setCurrentProjectId(data.id);
-      setProjectName(data.name);
+      const project = data.data || data;
+      setCurrentProjectId(project.id);
+      setProjectName(project.name);
       addToast('Proyek berhasil disimpan!', 'success');
       fetchProjects(); // Refresh the list
     } catch {
@@ -197,7 +218,8 @@ export default function Home() {
       const res = await fetch(`/api/proxy/api/projects/${id}`);
       if (!res.ok) throw new Error('Failed to load project');
       
-      const data = await res.json();
+      const resp = await res.json();
+      const data = resp.data || resp;
       setCurrentProjectId(data.id);
       setProjectName(data.name);
       
@@ -343,8 +365,9 @@ export default function Home() {
       
       if (!res.ok) throw new Error("Upload failed");
       
-      const data = await res.json();
-      const url = `/api/proxy${data.url}`;
+      const resp = await res.json();
+      const uploadData = resp.data || resp;
+      const url = `/api/proxy${uploadData.url}`;
       
       const newLayer: LayerConfig = {
         id: `import-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -401,34 +424,75 @@ export default function Home() {
           formData.append("popFile", popBlob, popLayer.name);
         }
 
+        formData.append("config", JSON.stringify(generationConfig));
+
+        const jobId = `job-${Date.now()}`;
+        formData.append("job_id", jobId);
+
+        let eventSource: EventSource | null = null;
+        const handleProgress = (event: MessageEvent) => {
+          const pData = JSON.parse(event.data);
+          if (pData.error) {
+            eventSource?.close();
+            setIsGenerating(false);
+            addToast("Generation failed: " + pData.error, "error");
+            setGenerationProgress(null);
+            return;
+          }
+          setGenerationProgress({ stage: pData.stage, message: pData.message, percent: pData.percent });
+          if (pData.done) {
+            eventSource?.close();
+            setTimeout(() => setGenerationProgress(null), 1500);
+            setIsGenerating(false);
+            
+            if (pData.result) {
+              const result = pData.result;
+              const newDesign: LayerConfig = { id: "design", name: "FTTH Design", url: `/api/proxy${result.url}`, visible: true, color: "#22c55e" };
+              setLayers(prev => {
+                const newLayers = [...prev.filter(l => l.id !== 'design'), newDesign];
+                setFilters(prevFilters => {
+                  const generatedFilters = { ...prevFilters, showHouse: false };
+                  // We do the side effect here safely because this block only runs once per job completion
+                  saveProject(
+                    projectName || "Untitled Project",
+                    newLayers,
+                    generatedFilters,
+                  ).catch(console.error);
+                  return generatedFilters;
+                });
+                return newLayers;
+              });
+              
+              if (result.kmz_url) setKmzUrl(`/api/proxy${result.kmz_url}`);
+              if (result.csv_url) setCsvUrl(`/api/proxy${result.csv_url}`);
+              if (result.stats) setDesignStats(result.stats);
+              if (result.validation) setValidationResult(result.validation);
+              addToast("FTTH Design successfully generated and updated!", "success");
+            }
+          }
+        };
+
         const response = await fetch("/api/proxy/generate", {
           method: "POST",
           body: formData,
         });
-        
-        const data = await response.json();
-        if (data.status === "success") {
-          const newDesign: LayerConfig = { id: "design", name: "FTTH Design", url: `/api/proxy${data.url}`, visible: true, color: "#22c55e" };
-          const newLayers = [...layers.filter(l => l.id !== 'design'), newDesign];
-          const generatedFilters = { ...filters, showHouse: false };
-          setLayers(newLayers);
-          setFilters(generatedFilters);
-          saveProject(
-            projectName || "Untitled Project",
-            newLayers,
-            generatedFilters,
-          ).catch(console.error);
-          
-          if (data.kmz_url) setKmzUrl(`/api/proxy${data.kmz_url}`);
-          if (data.csv_url) setCsvUrl(`/api/proxy${data.csv_url}`);
-          addToast("FTTH Design successfully generated and updated!", "success");
+
+        const resp = await response.json();
+        if (resp.success) {
+          // The API creates the Redis progress state while accepting the job.
+          // Open SSE only after the POST succeeds to avoid reading the state too early.
+          eventSource = new EventSource(`/api/proxy/generate/progress/${jobId}`);
+          eventSource.onmessage = handleProgress;
+          addToast("Pembuatan desain FTTH sedang berjalan di latar belakang...", "info");
         } else {
-          addToast("Generation failed: " + data.detail, "error");
+          addToast("Generation failed: " + (resp.error?.message || resp.detail), "error");
+          setGenerationProgress(null);
+          setIsGenerating(false);
         }
       } catch (error) {
         console.error("Error generating design:", error);
         addToast("Error generating design. Is the Python API running?", "error");
-      } finally {
+        setGenerationProgress(null);
         setIsGenerating(false);
       }
     } else if (visibleLayers.length > 0) {
@@ -443,35 +507,71 @@ export default function Home() {
         
         const formData = new FormData();
         formData.append("customFile", customBlob, customLayer.name);
+        
+        const jobId = `job-${Date.now()}`;
+        formData.append("job_id", jobId);
+
+        let eventSource: EventSource | null = null;
+        const handleProgress = (event: MessageEvent) => {
+          const pData = JSON.parse(event.data);
+          if (pData.error) {
+            eventSource?.close();
+            setIsGenerating(false);
+            addToast("Generate dari custom KML gagal: " + pData.error, "error");
+            setGenerationProgress(null);
+            return;
+          }
+          setGenerationProgress({ stage: pData.stage, message: pData.message, percent: pData.percent });
+          if (pData.done) {
+            eventSource?.close();
+            setTimeout(() => setGenerationProgress(null), 1500);
+            setIsGenerating(false);
+            
+            if (pData.result) {
+              const result = pData.result;
+              const newDesign: LayerConfig = { id: "design", name: "FTTH Design", url: `/api/proxy${result.url}`, visible: true, color: "#22c55e" };
+              setLayers(prev => {
+                const newLayers = [...prev.filter(l => l.id !== 'design'), newDesign];
+                setFilters(prevFilters => {
+                  const generatedFilters = { ...prevFilters, showHouse: false };
+                  saveProject(
+                    projectName || "Untitled Project",
+                    newLayers,
+                    generatedFilters,
+                  ).catch(console.error);
+                  return generatedFilters;
+                });
+                return newLayers;
+              });
+              
+              if (result.kmz_url) setKmzUrl(`/api/proxy${result.kmz_url}`);
+              if (result.csv_url) setCsvUrl(`/api/proxy${result.csv_url}`);
+              if (result.stats) setDesignStats(result.stats);
+              if (result.validation) setValidationResult(result.validation);
+              addToast("Kabel dari KML custom berhasil dibuat!", "success");
+            }
+          }
+        };
 
         const response = await fetch("/api/proxy/generate-custom", {
           method: "POST",
           body: formData,
         });
 
-        const data = await response.json();
-        if (data.status === "success") {
-          const newDesign: LayerConfig = { id: "design", name: "FTTH Design", url: `/api/proxy${data.url}`, visible: true, color: "#22c55e" };
-          const newLayers = [...layers.filter(l => l.id !== 'design'), newDesign];
-          const generatedFilters = { ...filters, showHouse: false };
-          setLayers(newLayers);
-          setFilters(generatedFilters);
-          saveProject(
-            projectName || "Untitled Project",
-            newLayers,
-            generatedFilters,
-          ).catch(console.error);
-          
-          if (data.kmz_url) setKmzUrl(`/api/proxy${data.kmz_url}`);
-          if (data.csv_url) setCsvUrl(`/api/proxy${data.csv_url}`);
-          addToast("Kabel dari KML custom berhasil dibuat!", "success");
+        const resp = await response.json();
+        if (resp.success) {
+          eventSource = new EventSource(`/api/proxy/generate/progress/${jobId}`);
+          eventSource.onmessage = handleProgress;
+          addToast("Pembuatan kabel dari KML custom sedang berjalan...", "info");
         } else {
-          addToast("Generate dari custom KML gagal: " + data.detail, "error");
+          addToast("Generate dari custom KML gagal: " + (resp.error?.message || resp.detail), "error");
+          setGenerationProgress(null);
+          setIsGenerating(false);
         }
       } catch (error) {
         console.error("Error generating from custom KML:", error);
         addToast("Error generating custom cables. Is the Python API running?", "error");
-      } finally {
+        setGenerationProgress(null);
         setIsGenerating(false);
       }
     } else {
@@ -482,33 +582,71 @@ export default function Home() {
   const handleRegenerateCables = async () => {
     setIsRegeneratingCables(true);
     try {
+      const formData = new FormData();
+      const jobId = `job-${Date.now()}`;
+      formData.append("job_id", jobId);
+
+      let eventSource: EventSource | null = null;
+      const handleProgress = (event: MessageEvent) => {
+        const pData = JSON.parse(event.data);
+        if (pData.error) {
+          eventSource?.close();
+          setIsRegeneratingCables(false);
+          addToast("Regenerate kabel gagal: " + pData.error, "error");
+          setGenerationProgress(null);
+          return;
+        }
+        setGenerationProgress({ stage: pData.stage, message: pData.message, percent: pData.percent });
+        if (pData.done) {
+          eventSource?.close();
+          setTimeout(() => setGenerationProgress(null), 1500);
+          setIsRegeneratingCables(false);
+
+          if (pData.result) {
+            const result = pData.result;
+            const newDesign: LayerConfig = { id: "design", name: "FTTH Design", url: `/api/proxy${result.url}`, visible: true, color: "#22c55e" };
+            setLayers(prev => {
+              const newLayers = [...prev.filter(l => l.id !== 'design'), newDesign];
+              setFilters(prevFilters => {
+                const generatedFilters = { ...prevFilters, showHouse: false };
+                saveProject(
+                  projectName || "Untitled Project",
+                  newLayers,
+                  generatedFilters,
+                ).catch(console.error);
+                return generatedFilters;
+              });
+              return newLayers;
+            });
+            
+            if (result.kmz_url) setKmzUrl(`/api/proxy${result.kmz_url}`);
+            if (result.csv_url) setCsvUrl(`/api/proxy${result.csv_url}`);
+            if (result.stats) setDesignStats(result.stats);
+            if (result.validation) setValidationResult(result.validation);
+            addToast("Regenerate kabel berhasil!", "success");
+          }
+        }
+      };
+
       const response = await fetch("/api/proxy/regenerate-cables", {
         method: "POST",
+        body: formData,
       });
 
-      const data = await response.json();
-      if (data.status === "success") {
-        const newDesign: LayerConfig = { id: "design", name: "FTTH Design", url: `/api/proxy${data.url}`, visible: true, color: "#22c55e" };
-        const newLayers = [...layers.filter(l => l.id !== 'design'), newDesign];
-        const generatedFilters = { ...filters, showHouse: false };
-        setLayers(newLayers);
-        setFilters(generatedFilters);
-        saveProject(
-          projectName || "Untitled Project",
-          newLayers,
-          generatedFilters,
-        ).catch(console.error);
-        
-        if (data.kmz_url) setKmzUrl(`/api/proxy${data.kmz_url}`);
-        if (data.csv_url) setCsvUrl(`/api/proxy${data.csv_url}`);
-        addToast("Regenerate kabel berhasil!", "success");
+      const resp = await response.json();
+      if (resp.success) {
+        eventSource = new EventSource(`/api/proxy/generate/progress/${jobId}`);
+        eventSource.onmessage = handleProgress;
+        addToast("Proses regenerate kabel sedang berjalan...", "info");
       } else {
-        addToast("Regenerate kabel gagal: " + data.detail, "error");
+        addToast("Regenerate kabel gagal: " + (resp.error?.message || resp.detail), "error");
+        setGenerationProgress(null);
+        setIsRegeneratingCables(false);
       }
     } catch (error) {
       console.error("Error regenerating cables:", error);
       addToast("Error regenerating cables. Is the Python API running?", "error");
-    } finally {
+      setGenerationProgress(null);
       setIsRegeneratingCables(false);
     }
   };
@@ -517,15 +655,157 @@ export default function Home() {
 
   return (
     <div className="dashboard-container">
+      <GenerationProgressModal progress={generationProgress} />
+      {showVersionHistory && currentProjectId && (
+        <VersionHistoryPanel 
+          projectId={currentProjectId}
+          onClose={() => setShowVersionHistory(false)}
+          onLoadVersion={(v) => {
+            // Re-apply config
+            setGenerationConfig(v.config);
+            addToast(`Config untuk versi ${v.version} berhasil dimuat. Silakan Generate ulang.`, 'success');
+            // We can't automatically fetch the old KML since we don't have object storage yet, 
+            // but we can set the stats
+            if (v.stats) {
+              setDesignStats(v.stats);
+            }
+            if (v.validation) {
+              setValidationResult(v.validation);
+            }
+            setShowVersionHistory(false);
+          }}
+          onCompareVersions={(v1, v2) => {
+            setCompareVersions([v1, v2]);
+            setShowVersionHistory(false);
+          }}
+        />
+      )}
+
+      {compareVersions && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[500]">
+          <div className="bg-white rounded-xl shadow-xl w-[600px] max-w-[90vw] max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="font-semibold text-lg text-gray-800">Compare Versions</h3>
+              <button onClick={() => setCompareVersions(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-medium text-gray-700 mb-4 border-b pb-2">Version {compareVersions[0].version}</h4>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">ODC Count</span>
+                      <span className="font-medium">{compareVersions[0].stats?.odc_count || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">ODP Count</span>
+                      <span className="font-medium">{compareVersions[0].stats?.odp_count || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Customers</span>
+                      <span className="font-medium">{compareVersions[0].stats?.customer_count || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Feeder (km)</span>
+                      <span className="font-medium">{compareVersions[0].stats?.feeder_length_km?.toFixed(2) || 0}</span>
+                    </div>
+                    <div className="mt-4 pt-4 border-t">
+                      <h5 className="text-xs font-semibold text-gray-500 uppercase mb-2">Config</h5>
+                      <pre className="text-xs bg-gray-50 p-2 rounded max-h-32 overflow-y-auto">
+                        {JSON.stringify(compareVersions[0].config, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <h4 className="font-medium text-gray-700 mb-4 border-b pb-2">Version {compareVersions[1].version}</h4>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">ODC Count</span>
+                      <span className="font-medium">
+                        {compareVersions[1].stats?.odc_count || 0}
+                        {(() => {
+                          const diff = (compareVersions[1].stats?.odc_count || 0) - (compareVersions[0].stats?.odc_count || 0);
+                          return diff !== 0 ? <span className={`ml-2 text-xs ${diff > 0 ? 'text-green-500' : 'text-red-500'}`}>{diff > 0 ? '+' : ''}{diff}</span> : null;
+                        })()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">ODP Count</span>
+                      <span className="font-medium">
+                        {compareVersions[1].stats?.odp_count || 0}
+                        {(() => {
+                          const diff = (compareVersions[1].stats?.odp_count || 0) - (compareVersions[0].stats?.odp_count || 0);
+                          return diff !== 0 ? <span className={`ml-2 text-xs ${diff > 0 ? 'text-green-500' : 'text-red-500'}`}>{diff > 0 ? '+' : ''}{diff}</span> : null;
+                        })()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Customers</span>
+                      <span className="font-medium">
+                        {compareVersions[1].stats?.customer_count || 0}
+                        {(() => {
+                          const diff = (compareVersions[1].stats?.customer_count || 0) - (compareVersions[0].stats?.customer_count || 0);
+                          return diff !== 0 ? <span className={`ml-2 text-xs ${diff > 0 ? 'text-green-500' : 'text-red-500'}`}>{diff > 0 ? '+' : ''}{diff}</span> : null;
+                        })()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Feeder (km)</span>
+                      <span className="font-medium">
+                        {compareVersions[1].stats?.feeder_length_km?.toFixed(2) || 0}
+                        {(() => {
+                          const diff = (compareVersions[1].stats?.feeder_length_km || 0) - (compareVersions[0].stats?.feeder_length_km || 0);
+                          return diff !== 0 ? <span className={`ml-2 text-xs ${diff > 0 ? 'text-red-500' : 'text-green-500'}`}>{diff > 0 ? '+' : ''}{diff.toFixed(2)}</span> : null;
+                        })()}
+                      </span>
+                    </div>
+                    <div className="mt-4 pt-4 border-t">
+                      <h5 className="text-xs font-semibold text-gray-500 uppercase mb-2">Config</h5>
+                      <pre className="text-xs bg-gray-50 p-2 rounded max-h-32 overflow-y-auto">
+                        {JSON.stringify(compareVersions[1].config, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 border-t bg-gray-50 flex justify-end">
+              <button 
+                onClick={() => setCompareVersions(null)}
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-md text-sm font-medium transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <GenerationConfigModal 
+        isOpen={isConfigModalOpen} 
+        onClose={() => setIsConfigModalOpen(false)} 
+        config={generationConfig} 
+        onSave={setGenerationConfig} 
+      />
       <Navbar 
         onImportLayer={handleImportLayer} 
         onSmartGenerate={visibleLayers.some((l: LayerConfig) => l.name.toLowerCase().includes('boundary') || l.name.toLowerCase().includes('pop') || l.name.toLowerCase().includes('olt')) ? handleSmartGenerate : undefined}
         isGenerating={isGenerating}
         onRegenerateCables={visibleLayers.some((l: LayerConfig) => l.id === "design") ? handleRegenerateCables : undefined}
         isRegeneratingCables={isRegeneratingCables}
-        hasDesign={visibleLayers.some((l: LayerConfig) => l.id === "design")}
+        hasDesign={layers.some(l => l.id === 'design' && l.visible)}
         projectName={projectName}
         featureColors={featureColors}
+        onConfigClick={() => setIsConfigModalOpen(true)}
+        onVersionHistoryClick={() => {
+          if (!currentProjectId) {
+            addToast("Pilih atau simpan proyek terlebih dahulu untuk melihat versi", "info");
+            return;
+          }
+          setShowVersionHistory(prev => !prev);
+        }}
       />
       <div className="map-container" style={{ position: 'relative' }}>
         <Sidebar 
@@ -546,6 +826,8 @@ export default function Home() {
           onUnloadProject={unloadProject}
           onDeleteProject={deleteProject}
           currentProjectId={currentProjectId}
+          stats={designStats}
+          validation={validationResult}
         />
         <MapComponent 
           layers={layers} 

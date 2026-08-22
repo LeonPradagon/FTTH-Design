@@ -4,23 +4,20 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from backend.core.config import settings
 from backend.database import db
 
-security = HTTPBearer()
+from fastapi import Request
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    token = credentials.credentials
-    try:
-        session = await db.session.find_first(
-            where={"token": token},
-            include={"user": True}
-        )
-        if not session:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Session")
-        if not session.user:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Session")
-            
-        return {"id": session.user.id, "role": getattr(session.user, "role", "user"), "email": session.user.email}
-    except Exception as db_err:
-        if isinstance(db_err, HTTPException):
-            raise
-        print(f"DB Query Exception: {type(db_err).__name__}: {str(db_err)}")
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Database query failed: {str(db_err)}")
+async def get_optional_user(request: Request):
+    user_id = request.headers.get("x-user-id")
+    if not user_id:
+        return {"id": "anonymous", "role": "guest", "email": ""}
+        
+    return {
+        "id": user_id,
+        "role": request.headers.get("x-user-role", "user"),
+        "email": request.headers.get("x-user-email", "")
+    }
+
+async def get_current_user(user: dict = Depends(get_optional_user)):
+    if user["id"] == "anonymous":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+    return user

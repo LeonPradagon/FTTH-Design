@@ -64,10 +64,24 @@ async function proxy(req: NextRequest) {
     headers.delete('connection');
     
     if (sessionToken) {
-      // Determine if it's a signed opaque token (split by .) or full JWT
-      const parts = sessionToken.split('.');
-      const token = parts.length === 3 ? sessionToken : parts[0];
-      headers.set('Authorization', `Bearer ${token}`);
+      try {
+        const sessionUrl = new URL('/api/auth/get-session', req.url);
+        const sessionRes = await fetch(sessionUrl.toString(), {
+          headers: {
+            cookie: req.headers.get('cookie') || '',
+          }
+        });
+        if (sessionRes.ok) {
+          const sessionData = await sessionRes.json();
+          if (sessionData && sessionData.user) {
+            headers.set('X-User-Id', sessionData.user.id);
+            headers.set('X-User-Role', sessionData.user.role || 'user');
+            headers.set('X-User-Email', sessionData.user.email || '');
+          }
+        }
+      } catch (err) {
+        console.error("Proxy session verification error:", err);
+      }
     }
 
     const reqBody = req.method === 'GET' || req.method === 'HEAD'
