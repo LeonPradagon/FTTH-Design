@@ -17,6 +17,7 @@ RUN pnpm install --frozen-lockfile
 FROM dependencies AS migrate
 
 COPY --chown=node:node app/server/schema.prisma ./schema.prisma
+RUN pnpm exec prisma generate --generator js_client --schema ./schema.prisma
 
 CMD ["pnpm", "exec", "prisma", "db", "push", "--schema", "/workspace/app/web/schema.prisma", "--skip-generate"]
 
