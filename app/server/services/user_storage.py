@@ -79,7 +79,7 @@ def resolve_user_file(user_id: str, filename: str) -> Path:
     """Deprecated: used by legacy local file download endpoint."""
     if not filename or Path(filename).name != filename:
         raise ValueError("Invalid filename")
-    
+
     user_dir = get_user_cache_dir(user_id)
     file_path = (user_dir / filename).resolve()
     if file_path.parent != user_dir:

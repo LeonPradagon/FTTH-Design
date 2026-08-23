@@ -22,14 +22,14 @@ def sample_data():
 def test_export_kmz(tmp_path, sample_data):
     pop, odcs, feeder_segments = sample_data
     out_path = tmp_path / "design.kmz"
-    
+
     export_kmz(pop, odcs, feeder_segments, str(out_path), include_homepass=True, road_graph=None, road_feeder=False)
-    
+
     assert os.path.exists(out_path)
     with zipfile.ZipFile(str(out_path), "r") as z:
         namelist = z.namelist()
         assert "doc.kml" in namelist
-        
+
         # Check folders inside KMZ
         doc = z.read("doc.kml").decode("utf-8")
         assert "POP_1" in doc

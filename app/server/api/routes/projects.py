@@ -87,10 +87,10 @@ async def read_project(project_id: str, current_user: dict = Depends(get_current
     project = await db.project.find_unique(where={"id": project_id})
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
-        
+
     if current_user.get("role") != "admin" and project.userId != current_user["id"]:
         raise HTTPException(status_code=403, detail="Forbidden")
-        
+
     return success_response(data=_serialize_project(project))
 
 @router.put("/projects/{project_id}")
@@ -98,10 +98,10 @@ async def update_project(project_id: str, project_update: ProjectUpdate, current
     project = await db.project.find_unique(where={"id": project_id})
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
-        
+
     if current_user.get("role") != "admin" and project.userId != current_user["id"]:
         raise HTTPException(status_code=403, detail="Forbidden")
-    
+
     update_data = project_update.dict(exclude_unset=True)
     if "layers" in update_data and update_data["layers"] is not None:
         update_data["layers"] = Json(update_data["layers"])
@@ -125,10 +125,10 @@ async def delete_project(project_id: str, current_user: dict = Depends(get_gener
     project = await db.project.find_unique(where={"id": project_id})
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
-        
+
     if current_user.get("role") != "admin" and project.userId != current_user["id"]:
         raise HTTPException(status_code=403, detail="Forbidden")
-        
+
     try:
         await db.project.delete(where={"id": project_id})
         return success_response(data={"message": "Project deleted successfully"})

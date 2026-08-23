@@ -118,8 +118,8 @@ export default function VersionHistoryPanel({ projectId, onClose, onLoadVersion,
         ) : (
           <div className="flex flex-col gap-2">
             {versions.map(v => (
-              <div 
-                key={v.id} 
+              <div
+                key={v.id}
                 className={`p-3 rounded-lg border text-sm transition-all ${selectedVersions.includes(v.id) ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}
                 onClick={() => toggleSelect(v.id)}
               >
@@ -127,7 +127,7 @@ export default function VersionHistoryPanel({ projectId, onClose, onLoadVersion,
                   <span className="font-medium text-gray-800">Version {v.version}</span>
                   <span className="text-xs text-gray-500">{new Date(v.createdAt).toLocaleDateString()}</span>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 mb-3">
                   <div>ODC: <span className="font-medium">{v.stats?.odc_count || 0}</span></div>
                   <div>ODP: <span className="font-medium">{v.stats?.odp_count || 0}</span></div>
@@ -136,20 +136,20 @@ export default function VersionHistoryPanel({ projectId, onClose, onLoadVersion,
                 </div>
 
                 <div className="flex items-center gap-2 border-t pt-2 mt-1">
-                  <button 
+                  <button
                     onClick={(e) => { e.stopPropagation(); onLoadVersion(v); }}
                     className="flex-1 flex items-center justify-center gap-1 py-1 px-2 bg-gray-100 hover:bg-blue-100 text-gray-700 hover:text-blue-700 rounded transition-colors text-xs font-medium"
                   >
                     <Play className="w-3 h-3" /> Load Config
                   </button>
-                  <button 
+                  <button
                     onClick={(e) => { e.stopPropagation(); handleDuplicate(v.version); }}
                     className="p-1 text-gray-400 hover:text-blue-600 rounded hover:bg-gray-100 transition-colors"
                     title="Duplicate"
                   >
                     <Copy className="w-4 h-4" />
                   </button>
-                  <button 
+                  <button
                     onClick={(e) => { e.stopPropagation(); handleDelete(v.version); }}
                     className="p-1 text-gray-400 hover:text-red-600 rounded hover:bg-gray-100 transition-colors"
                     title="Delete"
@@ -162,10 +162,10 @@ export default function VersionHistoryPanel({ projectId, onClose, onLoadVersion,
           </div>
         )}
       </div>
-      
+
       {selectedVersions.length === 2 && (
         <div className="p-3 border-t bg-gray-50 rounded-b-xl">
-          <button 
+          <button
             onClick={handleCompare}
             className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors"
           >

@@ -214,14 +214,14 @@ async def generate_design(
     if not job_id:
         import uuid
         job_id = str(uuid.uuid4())
-        
+
     progress_manager.create_job(job_id, user_id=current_user["id"])
-        
+
     try:
         await _require_project_access(project_id, current_user)
         user_dir = get_generation_cache_dir(current_user["id"], project_id)
         cleanup_old_files(user_dir)
-    
+
         if not boundaryFile or not boundaryFile.filename:
             raise InvalidFileError(message="Boundary KML/KMZ wajib diunggah.")
 
@@ -231,29 +231,29 @@ async def generate_design(
         effective_mode = (mode or ("FULL" if gen_config.include_homepass else "CORE")).upper()
         if effective_mode == "CORE":
             gen_config = gen_config.model_copy(update={"include_homepass": False})
-    
+
         boundary_path = user_dir / create_user_filename("boundary", "kml")
         pop_path = None
         has_custom_pop = False
-    
+
         with open(boundary_path, "wb") as buffer:
             shutil.copyfileobj(boundaryFile.file, buffer)
         upload_file(current_user["id"], boundary_path.name, boundary_path)
-    
+
         if popFile and popFile.filename:
             pop_path = user_dir / create_user_filename("pop", "kml")
             with open(pop_path, "wb") as buffer:
                 shutil.copyfileobj(popFile.file, buffer)
             upload_file(current_user["id"], pop_path.name, pop_path)
             has_custom_pop = True
-    
+
         output_kmz_name = create_user_filename("design_ftth", "kmz")
         output_kml_name = create_user_filename("design_ftth", "kml")
         output_csv_name = create_user_filename("design_ftth", "csv")
-        
+
         output_kmz_path = user_dir / output_kmz_name
         output_csv_path = user_dir / output_csv_name
-    
+
         logger.info(f"Enqueuing generate_task for job {job_id}")
         progress_manager.update(job_id, "QUEUED", "Menunggu worker memproses job...", 1)
         await _enqueue_generation_job(
@@ -272,7 +272,7 @@ async def generate_design(
             output_kmz_name=output_kmz_name,
             output_csv_name=output_csv_name,
         )
-    
+
         return success_response(
             data={
                 "message": "Generation job accepted.",
@@ -547,11 +547,11 @@ async def generate_progress(job_id: str, current_user: dict = Depends(get_curren
             if not _can_access_job(data, current_user):
                 yield f"data: {json.dumps({'error': 'Forbidden'})}\n\n"
                 break
-                
+
             if data != last_data:
                 yield f"data: {json.dumps(data)}\n\n"
                 last_data = data.copy()
-                
+
             if data.get("done"):
                 await asyncio.sleep(1)
                 break
@@ -563,7 +563,7 @@ async def generate_progress(job_id: str, current_user: dict = Depends(get_curren
             # polling modest so many concurrent jobs do not create a second
             # source of request/Redis pressure.
             await asyncio.sleep(1)
-            
+
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 

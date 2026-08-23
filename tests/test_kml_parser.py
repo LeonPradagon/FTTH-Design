@@ -22,7 +22,7 @@ def test_read_pop_point():
     with tempfile.NamedTemporaryFile("w", delete=False, suffix=".kml") as f:
         f.write(kml_content)
         temp_path = f.name
-        
+
     try:
         pop = read_pop_point(temp_path)
         assert pop is not None
@@ -58,7 +58,7 @@ def test_read_boundary():
     with tempfile.NamedTemporaryFile("w", delete=False, suffix=".kml") as f:
         f.write(kml_content)
         temp_path = f.name
-        
+
     try:
         boundary = read_boundary(temp_path)
         assert boundary is not None

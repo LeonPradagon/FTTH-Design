@@ -14,12 +14,12 @@ async def get_project_audit(project_id: str, current_user: dict = Depends(get_cu
         current_user.get("role") != "admin" and project.userId != current_user["id"]
     ):
         return error_response("PROJECT_NOT_FOUND", "Project not found or access denied", http_status=404)
-        
+
     logs = await db.auditlog.find_many(
         where={"projectId": project_id},
         order={"createdAt": "desc"}
     )
-    
+
     return success_response(data=[log.model_dump() for log in logs])
 
 
@@ -28,10 +28,10 @@ async def get_all_audit(current_user: dict = Depends(get_current_user)):
     """Get all audit logs (Admin only)."""
     if current_user.get("role") != "admin":
         return error_response("UNAUTHORIZED", "Admin access required", http_status=403)
-        
+
     logs = await db.auditlog.find_many(
         order={"createdAt": "desc"},
         take=100 # limit to 100 for performance
     )
-    
+
     return success_response(data=[log.model_dump() for log in logs])

@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
         logger.info("Local arq worker started.")
     else:
         logger.info("Embedded arq worker disabled; using separate worker service.")
-    
+
     try:
         yield
     finally:

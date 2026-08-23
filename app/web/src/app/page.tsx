@@ -651,7 +651,7 @@ export default function Home() {
                 }
              }
           }
-          
+
           if (!newGroupId) {
              const batchCount = groupsMap.size + 1;
              newGroupId = `boundary:batch-${batchCount}-${importId}`;
@@ -739,7 +739,7 @@ export default function Home() {
                 const matchedBoundary = prev.find(l => l.name === job.boundary_name && l.groupId);
                 const targetGroupId = matchedBoundary?.groupId || boundaryGroupKey(job.boundary_name);
                 const targetGroupName = matchedBoundary?.groupName || job.boundary_name;
-                
+
                 return [{
                   id: `design:batch:${batchId}:${job.item_id}`,
                   name: job.design_name,
@@ -842,12 +842,12 @@ export default function Home() {
             if (pData.result) {
               const result = pData.result;
               const designId = `design:single:${jobId}`;
-              
+
               setLayers(prev => {
                 const latestBoundary = prev.find(l => l.id === boundaryLayer.id) || boundaryLayer;
                 const designGroupId = latestBoundary.groupId || `boundary:${latestBoundary.id}`;
                 const designGroupName = latestBoundary.groupName || latestBoundary.name;
-                
+
                 const newDesign: LayerConfig = {
                   id: designId,
                   name: `FTTH Design - ${latestBoundary.name}`,
@@ -860,7 +860,7 @@ export default function Home() {
                   boundaryName: latestBoundary.name,
                   status: "COMPLETED",
                 };
-                
+
                 const newLayers = [...prev, newDesign];
                 setFilters(prevFilters => {
                   const generatedFilters = { ...prevFilters, showHouse: false };
@@ -1189,7 +1189,7 @@ export default function Home() {
             // Re-apply config
             setGenerationConfig(v.config);
             addToast(`Config untuk versi ${v.version} berhasil dimuat. Silakan Generate ulang.`, 'success');
-            // We can't automatically fetch the old KML since we don't have object storage yet, 
+            // We can't automatically fetch the old KML since we don't have object storage yet,
             // but we can set the stats
             if (v.stats) {
               setDesignStats(v.stats);

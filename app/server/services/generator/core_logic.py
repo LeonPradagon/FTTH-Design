@@ -580,7 +580,7 @@ def regenerate_cables_only(output_path, include_homepass=False, output_csv=None,
         logger.warning("Road graph cache tidak ditemukan. Mencoba mengunduh ulang dari OSM...")
         all_lats = [pop["lat"]] + [odc.lat for odc in odcs] + [odp.lat for odc in odcs for odp in odc.odps]
         all_lons = [pop["lon"]] + [odc.lon for odc in odcs] + [odp.lon for odc in odcs for odp in odc.odps]
-        
+
         if all_lats and all_lons:
             min_lat, max_lat = min(all_lats), max(all_lats)
             min_lon, max_lon = min(all_lons), max(all_lons)
@@ -673,12 +673,12 @@ def regenerate_cables_only(output_path, include_homepass=False, output_csv=None,
 
 def generate_cables_from_custom_points(file_path, output_path, include_homepass=False, output_csv=None, cache_dir=None, job_id=None):
     """
-    Men-generate jalur kabel (routing mengikuti jalan OSM) dari file KML custom 
+    Men-generate jalur kabel (routing mengikuti jalan OSM) dari file KML custom
     yang sudah berisi titik-titik mapping OLT, ODC, ODP, dan RUMAH.
     """
     if job_id: progress_manager.update(job_id, "PARSING", "Membaca file custom KML...", 10)
     points = read_custom_mapped_kml(file_path)
-    
+
     if not points['olt']:
         raise InvalidFileError(
             message="Tidak ditemukan titik OLT/POP di file custom KML. Pastikan ada nama yang mengandung 'OLT' atau 'POP'.",
@@ -691,44 +691,44 @@ def generate_cables_from_custom_points(file_path, output_path, include_homepass=
         raise InvalidFileError(
             message="Tidak ditemukan titik ODP di file custom KML. Pastikan ada nama yang mengandung 'ODP'.",
         )
-        
+
     pop = points['olt'][0]
-    
+
     # 1. Kelompokkan HC ke ODP terdekat
     odp_objects = []
     for odp_pt in points['odp']:
         odp = ODP(id=odp_pt['name'], lat=odp_pt['lat'], lon=odp_pt['lon'], houses=[], splitter=Splitter(ratio="1:10", location="ODP"))
         odp_objects.append(odp)
-        
+
     for hc in points['hc']:
         if not odp_objects:
             break
         # Cari ODP terdekat
         nearest_odp = min(odp_objects, key=lambda o: haversine_m(hc['lat'], hc['lon'], o.lat, o.lon))
         nearest_odp.houses.append((hc['lat'], hc['lon']))
-        
+
     # 2. Kelompokkan ODP ke ODC terdekat
     odcs = []
     for i, odc_pt in enumerate(points['odc'], start=1):
         odc = ODC(id=odc_pt['name'], lat=odc_pt['lat'], lon=odc_pt['lon'], odps=[], closure_id=f"CL-{i:03d}", splitter=Splitter(ratio="1:4", location="ODC"))
         odcs.append(odc)
-        
+
     for odp in odp_objects:
         if not odcs:
             break
         nearest_odc = min(odcs, key=lambda o: haversine_m(odp.lat, odp.lon, o.lat, o.lon))
         nearest_odc.odps.append(odp)
-        
+
     # 3. Buat bounding box dari semua titik untuk mengambil road graph
     all_lats = [p['lat'] for p in points['olt'] + points['odc'] + points['odp'] + points['hc']]
     all_lons = [p['lon'] for p in points['olt'] + points['odc'] + points['odp'] + points['hc']]
-    
+
     if not all_lats:
         raise InvalidFileError(message="Tidak ada titik valid dalam KML.")
-        
+
     min_lat, max_lat = min(all_lats), max(all_lats)
     min_lon, max_lon = min(all_lons), max(all_lons)
-    
+
     # Polygon bounding box
     bbox = Polygon([
         (min_lon, min_lat),
@@ -736,7 +736,7 @@ def generate_cables_from_custom_points(file_path, output_path, include_homepass=
         (max_lon, max_lat),
         (max_lon, min_lat)
     ])
-    
+
     if job_id: progress_manager.update(job_id, "LOADING_ROADS", "Mengambil data jalan dari OSM...", 30)
     logger.info("Mengambil data jalan untuk custom routing...")
     road_graph = None
@@ -761,7 +761,7 @@ def generate_cables_from_custom_points(file_path, output_path, include_homepass=
         raise RoutingFailedError(
             message=f"ODC/ODP custom tidak dapat ditempatkan pada jalan kendaraan: {e}",
         ) from e
-        
+
     if job_id: progress_manager.update(job_id, "ROUTING", "Membangun rantai kabel feeder...", 50)
     # 4. Routing Feeder (POP -> ODCs)
     logger.info("Membangun rantai kabel feeder...")
@@ -771,7 +771,7 @@ def generate_cables_from_custom_points(file_path, output_path, include_homepass=
         distribution_segments.update(
             build_distribution_tree(odc, road_graph)
         )
-    
+
     if job_id: progress_manager.update(job_id, "EXPORTING", "Mengekspor ke KMZ dengan jalur kabel...", 85)
     # 5. Export (otomatis melakukan routing Distribusi & Drop)
     logger.info("Mengekspor ke KMZ dengan jalur kabel...")
@@ -785,7 +785,7 @@ def generate_cables_from_custom_points(file_path, output_path, include_homepass=
             job_id, done, total, message
         ),
     )
-    
+
     # 6. Cache design state untuk fitur regenerate-cables
     try:
         save_design_state(
@@ -798,7 +798,7 @@ def generate_cables_from_custom_points(file_path, output_path, include_homepass=
         )
     except Exception as e:
         logger.warning("Gagal menyimpan custom design state (%s), regenerate-cables tidak tersedia.", e)
-    
+
     return output_path
 
 
@@ -945,7 +945,7 @@ def _run_generator_logic(
     if config is None:
         config = GenerationConfig()
     osm_timestamp = datetime.now(timezone.utc).isoformat()
-    
+
     if job_id: progress_manager.update(job_id, "PARSING", "Membaca file input...", 10)
 
     boundary = read_boundary(boundary_path)
@@ -1086,7 +1086,7 @@ def _run_generator_logic(
         len(odcs),
         sum(len(odc.odps) for odc in odcs),
     )
-    
+
     routing_started = time.perf_counter()
     if job_id: progress_manager.update(job_id, "ROUTING", "Melakukan routing kabel feeder...", 70)
     odc_spacing_started = time.perf_counter()

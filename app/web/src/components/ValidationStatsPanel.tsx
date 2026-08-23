@@ -35,7 +35,7 @@ export default function ValidationStatsPanel({ stats, validation, onClose, inlin
 
   if (!stats && !validation) return null;
 
-  const containerClass = inline 
+  const containerClass = inline
     ? `w-full bg-white border-t flex flex-col ${
         validation?.status === 'ERROR' ? 'border-red-300' :
         validation?.status === 'WARNING' ? 'border-amber-300' : 'border-gray-200'
@@ -48,7 +48,7 @@ export default function ValidationStatsPanel({ stats, validation, onClose, inlin
   return (
     <div className={containerClass}>
       {/* Header */}
-      <div 
+      <div
         className="flex items-center justify-between p-3 border-b border-gray-100 cursor-pointer"
         onClick={() => setIsExpanded(!isExpanded)}
       >
@@ -61,7 +61,7 @@ export default function ValidationStatsPanel({ stats, validation, onClose, inlin
         <div className="flex items-center gap-1">
           {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
           {!inline && onClose && (
-            <button 
+            <button
               onClick={(e) => { e.stopPropagation(); onClose(); }}
               className="p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors"
             >
@@ -126,7 +126,7 @@ export default function ValidationStatsPanel({ stats, validation, onClose, inlin
                   <span className="text-xs text-gray-500 mt-1">Feeder Length (km)</span>
                 </div>
               </div>
-              
+
               {stats.odc_stats && stats.odc_stats.length > 0 && (
                 <div className="mt-4 border border-gray-200 rounded-lg overflow-hidden">
                   <table className="w-full text-xs text-left">
@@ -164,8 +164,8 @@ export default function ValidationStatsPanel({ stats, validation, onClose, inlin
               ) : (
                 <div className="space-y-2">
                   {validation.issues.map((issue, idx) => (
-                    <div 
-                      key={idx} 
+                    <div
+                      key={idx}
                       className={`p-3 rounded-lg border text-sm flex gap-3 ${
                         issue.severity === 'ERROR' ? 'bg-red-50 border-red-200 text-red-800' :
                         issue.severity === 'WARNING' ? 'bg-amber-50 border-amber-200 text-amber-800' :

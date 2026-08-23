@@ -72,10 +72,10 @@ async def generate_task(
             config,
             job_id,
         )
-        
+
         if not os.path.exists(output_kmz_path):
             raise Exception("Script ran successfully but KMZ output not found.")
-            
+
         progress_manager.update(job_id, "EXPORTING", "Memvalidasi desain FTTH...", 89)
         validation_result = await asyncio.to_thread(
             validate_design,
@@ -92,9 +92,9 @@ async def generate_task(
             feeder_segments=feeder_segments,
             distribution_segments=distribution_segments,
         )
-        
+
         input_hash = await asyncio.to_thread(_compute_input_hash, boundary_path, pop_path)
-        
+
         # Publish generated files through the configured S3-compatible storage.
         progress_manager.update(job_id, "EXPORTING", "Mengunggah file ke penyimpanan...", 92)
         await asyncio.to_thread(upload_file, user_id, output_kmz_name, Path(output_kmz_path))
@@ -110,7 +110,7 @@ async def generate_task(
             "osm_timestamp": osm_ts,
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
-        
+
         if project_id:
             transaction_manager = db.tx(timeout=timedelta(minutes=5))
             transaction = await transaction_manager.start()
@@ -120,7 +120,7 @@ async def generate_task(
                     order={"version": "desc"}
                 )
                 next_version = (last_version.version + 1) if last_version else 1
-                
+
                 new_version = await transaction.designversion.create(
                     data={
                         "projectId": project_id,
@@ -132,7 +132,7 @@ async def generate_task(
                         "status": "COMPLETED"
                     }
                 )
-                
+
                 # Insert Spatial Features (ODC, ODP) using Raw SQL
                 query_odc = 'INSERT INTO "design_odc" ("id", "designVersionId", "label", "location") VALUES (gen_random_uuid(), $1, $2, ST_SetSRID(ST_MakePoint($3, $4), 4326)) RETURNING "id"'
                 query_odp = 'INSERT INTO "design_odp" ("id", "designVersionId", "odcId", "label", "location") VALUES '
@@ -162,7 +162,7 @@ async def generate_task(
                         query_odp + ", ".join(odp_values),
                         *odp_params,
                     )
-                
+
                 # Insert Feeder Cables
                 import json as json_lib
                 cable_rows = []
@@ -174,13 +174,13 @@ async def generate_task(
                         "type": "LineString",
                         "coordinates": line_coords
                     })
-                    
+
                     # Calculate length approx
                     from server.utils.geometry import haversine_m
                     length = 0.0
                     for i in range(len(seg['coords']) - 1):
                         length += haversine_m(seg['coords'][i][0], seg['coords'][i][1], seg['coords'][i+1][0], seg['coords'][i+1][1])
-                        
+
                     cable_rows.append((
                         "feeder",
                         seg.get("from_label", ""),
@@ -271,7 +271,7 @@ async def generate_task(
                 status="COMPLETED",
                 result=result_dict,
             )
-        
+
     except Exception as e:
         logger.exception("Job %s failed", job_id)
         progress_manager.error(job_id, str(e))
@@ -287,7 +287,7 @@ async def regenerate_cables_task(ctx, output_path: str, include_homepass: bool, 
             job_id, status="RUNNING", stage="STARTING", progress=2, error=None
         )
         await asyncio.to_thread(regenerate_cables_only, output_path, include_homepass, output_csv, cache_dir, job_id)
-        
+
         output_kmz_name = Path(output_path).name
         output_csv_name = Path(output_csv).name
         await asyncio.to_thread(upload_file, user_id, output_kmz_name, Path(output_path))
@@ -311,7 +311,7 @@ async def regenerate_cables_task(ctx, output_path: str, include_homepass: bool, 
         progress_manager.error(job_id, str(e))
         await _record_job_failure(job_id, e)
         raise
-        
+
 async def generate_custom_task(ctx, custom_path: str, output_kmz_path: str, include_homepass: bool, output_csv: str, cache_dir: str, job_id: str, user_id: str):
     from server.services.generator.core_logic import generate_cables_from_custom_points
     try:
@@ -319,7 +319,7 @@ async def generate_custom_task(ctx, custom_path: str, output_kmz_path: str, incl
             job_id, status="RUNNING", stage="STARTING", progress=2, error=None
         )
         await asyncio.to_thread(generate_cables_from_custom_points, custom_path, output_kmz_path, include_homepass, output_csv, cache_dir, job_id)
-        
+
         output_kmz_name = Path(output_kmz_path).name
         output_csv_name = Path(output_csv).name
         await asyncio.to_thread(upload_file, user_id, output_kmz_name, Path(output_kmz_path))

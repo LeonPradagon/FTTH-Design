@@ -41,7 +41,7 @@ export default function GenerationConfigModal({ isOpen, onClose, config, onSave 
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
-    
+
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox'
@@ -63,14 +63,14 @@ export default function GenerationConfigModal({ isOpen, onClose, config, onSave 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
-        
+
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <Settings className="w-5 h-5 text-blue-600" />
             <h2 className="text-xl font-bold text-gray-800">Generator Configuration</h2>
           </div>
-          <button 
+          <button
             onClick={onClose}
             className="p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-500"
           >
@@ -81,19 +81,19 @@ export default function GenerationConfigModal({ isOpen, onClose, config, onSave 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6 text-gray-700">
           <form id="config-form" onSubmit={handleSubmit} className="space-y-6">
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
+
               {/* Capacity section */}
               <div className="space-y-4">
                 <h3 className="font-semibold text-gray-900 border-b pb-2">Kapasitas Perangkat</h3>
-                
+
                 <div>
                   <label className="block text-sm font-medium mb-1">ODP Capacity (Houses)</label>
                   <input type="number" name="odp_capacity" value={formData.odp_capacity} onChange={handleChange} min={1} max={64} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none" />
                   <p className="text-xs text-gray-500 mt-1">Maksimal pelanggan per ODP (default: 10)</p>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium mb-1">ODC Capacity (ODPs)</label>
                   <input type="number" name="odc_capacity" value={formData.odc_capacity} onChange={handleChange} min={1} max={32} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none" />
@@ -128,13 +128,13 @@ export default function GenerationConfigModal({ isOpen, onClose, config, onSave 
               {/* Radius section */}
               <div className="space-y-4">
                 <h3 className="font-semibold text-gray-900 border-b pb-2">Batas Radius Layanan</h3>
-                
+
                 <div>
                   <label className="block text-sm font-medium mb-1">Max ODP Radius (m)</label>
                   <input type="number" step="0.1" name="max_odp_radius_m" value={formData.max_odp_radius_m} onChange={handleChange} min={10} max={1000} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none" />
                   <p className="text-xs text-gray-500 mt-1">Radius ODP ke pelanggan terjauh (default: 150m)</p>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium mb-1">Max ODC Radius (m)</label>
                   <input type="number" step="0.1" name="max_odc_radius_m" value={formData.max_odc_radius_m} onChange={handleChange} min={50} max={5000} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none" />
@@ -145,13 +145,13 @@ export default function GenerationConfigModal({ isOpen, onClose, config, onSave 
               {/* Cable length section */}
               <div className="space-y-4">
                 <h3 className="font-semibold text-gray-900 border-b pb-2">Batas Panjang Kabel</h3>
-                
+
                 <div>
                   <label className="block text-sm font-medium mb-1">Max Feeder Length (m)</label>
                   <input type="number" step="0.1" name="max_feeder_length_m" value={formData.max_feeder_length_m} onChange={handleChange} min={100} max={20000} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none" />
                   <p className="text-xs text-gray-500 mt-1">Jarak maksimum kabel feeder dari POP ke ODC</p>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium mb-1">Max Distribution Length (m)</label>
                   <input type="number" step="0.1" name="max_distribution_length_m" value={formData.max_distribution_length_m} onChange={handleChange} min={50} max={5000} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none" />
@@ -162,13 +162,13 @@ export default function GenerationConfigModal({ isOpen, onClose, config, onSave 
               {/* Routing section */}
               <div className="space-y-4">
                 <h3 className="font-semibold text-gray-900 border-b pb-2">Parameter Routing</h3>
-                
+
                 <div>
                   <label className="block text-sm font-medium mb-1">Snapping Distance (m)</label>
                   <input type="number" step="0.1" name="snapping_distance_m" value={formData.snapping_distance_m} onChange={handleChange} min={5} max={500} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none" />
                   <p className="text-xs text-gray-500 mt-1">Toleransi max snap perangkat ke jalan OSM</p>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium mb-1">Routing Strategy</label>
                   <select name="routing_strategy" value={formData.routing_strategy} onChange={handleChange} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none bg-white">
@@ -185,25 +185,25 @@ export default function GenerationConfigModal({ isOpen, onClose, config, onSave 
 
         {/* Footer */}
         <div className="p-5 border-t border-gray-100 flex justify-between bg-gray-50 rounded-b-xl">
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={handleReset}
             className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors"
           >
             <RotateCcw className="w-4 h-4" />
             <span>Reset to Default</span>
           </button>
-          
+
           <div className="flex gap-3">
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={onClose}
               className="px-5 py-2 text-gray-600 hover:bg-gray-200 rounded-md transition-colors"
             >
               Cancel
             </button>
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               form="config-form"
               className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-colors shadow-sm"
             >

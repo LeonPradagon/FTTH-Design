@@ -20,12 +20,12 @@ interface NavbarProps {
   onVersionHistoryClick?: () => void;
 }
 
-export function Navbar({ 
-  onImportLayer, 
+export function Navbar({
+  onImportLayer,
   onSmartGenerate,
-  isGenerating, 
-  onRegenerateCables, 
-  isRegeneratingCables, 
+  isGenerating,
+  onRegenerateCables,
+  isRegeneratingCables,
   hasDesign,
   onGenerateHomepass,
   isGeneratingHomepass,
@@ -70,7 +70,7 @@ export function Navbar({
         <div className="navbar-group">
           {session?.user && (
             <div style={{ display: 'flex', alignItems: 'center', marginRight: '16px', borderRight: '1px solid #e5e7eb', paddingRight: '16px', position: 'relative' }}>
-              <button 
+              <button
                 onClick={() => setShowAccountCenter(true)}
                 style={{
                   display: 'flex',
@@ -98,26 +98,26 @@ export function Navbar({
               </button>
 
               {showAccountCenter && (
-                <AccountCenterModal 
+                <AccountCenterModal
                   userEmail={session.user.email}
                   userRole={(session.user as { role?: string }).role || 'user'}
-                  onClose={() => setShowAccountCenter(false)} 
+                  onClose={() => setShowAccountCenter(false)}
                 />
               )}
             </div>
           )}
 
-          <input 
-            type="file" 
+          <input
+            type="file"
             accept=".kml,.kmz"
             multiple
-            ref={fileInputRef} 
-            style={{ display: 'none' }} 
-            onChange={handleFileChange} 
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
           />
           {onRegenerateCables && (
-            <button 
-              onClick={onRegenerateCables} 
+            <button
+              onClick={onRegenerateCables}
               disabled={isRegeneratingCables || !hasDesign}
               className={`regenerate-cable-btn ${isRegeneratingCables ? 'loading' : ''}`}
               title={!hasDesign ? "Generate design terlebih dahulu" : "Regenerate jalur kabel tanpa mengubah posisi tiang"}
@@ -130,8 +130,8 @@ export function Navbar({
 
           {onSmartGenerate && (
             <div className="flex items-center">
-              <button 
-                onClick={onSmartGenerate} 
+              <button
+                onClick={onSmartGenerate}
                 disabled={isGenerating}
                 className={`generate-btn-small ${isGenerating ? 'loading' : ''}`}
                 style={{ marginLeft: '4px', cursor: isGenerating ? 'not-allowed' : 'pointer' }}
@@ -168,8 +168,8 @@ export function Navbar({
             </button>
           )}
 
-          <button 
-            onClick={() => fileInputRef.current?.click()} 
+          <button
+            onClick={() => fileInputRef.current?.click()}
             className="regenerate-cable-btn"
             style={{ marginLeft: '8px', cursor: 'pointer' }}
           >
@@ -212,7 +212,7 @@ export function Navbar({
             </div>
           </div>
         )}
-        <button 
+        <button
           className={`info-fab ${showInfo ? 'active' : ''}`}
           onClick={() => setShowInfo(!showInfo)}
         >

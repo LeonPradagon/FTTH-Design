@@ -51,14 +51,14 @@ def test_generate_design_no_files(mock_redis_pool, mock_progress_manager):
 def test_generate_design_success(tmp_path, mock_redis_pool, mock_progress_manager, mock_storage_upload):
     boundary_file = tmp_path / "boundary.kml"
     boundary_file.write_text("<kml></kml>")
-    
+
     with open(boundary_file, "rb") as f:
         response = client.post("/generate", files={"boundaryFile": ("boundary.kml", f)})
-    
+
     assert response.status_code == 200
     assert response.json()["success"] is True
     assert "job_id" in response.json()["data"]
-    
+
     mock_redis_pool.enqueue_job.assert_called_once()
     args, kwargs = mock_redis_pool.enqueue_job.call_args
     assert args[0] == "generate_task"
@@ -74,7 +74,7 @@ def test_regenerate_cables(mock_redis_pool, mock_progress_manager, mock_storage_
         response = client.post("/regenerate-cables", data={"job_id": "test-job-regen"})
     assert response.status_code == 200
     assert response.json()["success"] is True
-    
+
     mock_redis_pool.enqueue_job.assert_called_once()
     args, kwargs = mock_redis_pool.enqueue_job.call_args
     assert args[0] == "regenerate_cables_task"
@@ -82,13 +82,13 @@ def test_regenerate_cables(mock_redis_pool, mock_progress_manager, mock_storage_
 def test_generate_custom(tmp_path, mock_redis_pool, mock_progress_manager, mock_storage_upload):
     custom_file = tmp_path / "custom.kml"
     custom_file.write_text("<kml></kml>")
-    
+
     with open(custom_file, "rb") as f:
         response = client.post("/generate-custom", files={"customFile": ("custom.kml", f)})
-        
+
     assert response.status_code == 200
     assert response.json()["success"] is True
-    
+
     mock_redis_pool.enqueue_job.assert_called_once()
     args, kwargs = mock_redis_pool.enqueue_job.call_args
     assert args[0] == "generate_custom_task"

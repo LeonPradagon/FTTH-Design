@@ -42,7 +42,7 @@ async def get_optional_user(request: Request):
     user_id = request.headers.get("x-user-id")
     if not user_id:
         return {"id": "anonymous", "role": "guest", "email": ""}
-        
+
     return {
         "id": user_id,
         "role": request.headers.get("x-user-role", "user"),
