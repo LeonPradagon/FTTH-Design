@@ -17,12 +17,12 @@ import { DEFAULT_FEATURE_COLORS, resolveFeatureColors } from "@/lib/feature-colo
 
 // Dynamically import the MapComponent so it only renders on the client
 // Leaflet requires window, which is undefined on the server
-const MapComponent = dynamic(() => import('../components/Map'), { 
+const MapComponent = dynamic(() => import('../components/Map'), {
   ssr: false,
-  loading: () => <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%', backgroundColor: '#f3f4f6' }}>Memuat peta...</div>
-}) as React.ComponentType<{ 
-  layers: LayerConfig[], 
-  onShowMessage?: (msg: string, type: 'success'|'error'|'info') => void, 
+  loading: () => <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%', backgroundColor: '#f3f4f6' }}>Loading map...</div>
+}) as React.ComponentType<{
+  layers: LayerConfig[],
+  onShowMessage?: (msg: string, type: 'success' | 'error' | 'info') => void,
   filters: FeatureFilters,
   kmlTrees?: Record<string, KmlNode[]>,
   onTreeLoaded?: (layerId: string, tree: KmlNode[]) => void,
@@ -74,7 +74,7 @@ const boundaryGroupKey = (name: string) => {
 export default function Home() {
   const { data: session, isPending } = useSession();
   const router = useRouter();
-  
+
   useEffect(() => {
     if (!isPending && !session) {
       router.push('/login');
@@ -84,7 +84,7 @@ export default function Home() {
   const canEditColors = (session?.user as { role?: string } | undefined)?.role === "admin";
   const [layers, setLayers] = useState<LayerConfig[]>(initialLayers);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generationProgress, setGenerationProgress] = useState<{stage: string, message: string, percent: number} | null>(null);
+  const [generationProgress, setGenerationProgress] = useState<{ stage: string, message: string, percent: number } | null>(null);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [generationConfig, setGenerationConfig] = useState<GenerationConfig>(DEFAULT_CONFIG);
   const [designStats, setDesignStats] = useState<DesignStats | null>(null);
@@ -99,7 +99,7 @@ export default function Home() {
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [compareVersions, setCompareVersions] = useState<[DesignVersion, DesignVersion] | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [toasts, setToasts] = useState<{id: number, message: string, type: 'success' | 'error' | 'info'}[]>([]);
+  const [toasts, setToasts] = useState<{ id: number, message: string, type: 'success' | 'error' | 'info' }[]>([]);
   const [filters, setFilters] = useState<FeatureFilters>(() => ({
     ...defaultFeatureFilters,
   }));
@@ -308,7 +308,7 @@ export default function Home() {
     try {
       const res = await fetch(`/api/proxy/api/projects/${id}`);
       if (!res.ok) throw new Error('Failed to load project');
-      
+
       const resp = await res.json();
       const data = resp.data || resp;
       projectContextRef.current += 1;
@@ -316,7 +316,7 @@ export default function Home() {
       projectNameRef.current = data.name;
       setCurrentProjectId(data.id);
       setProjectName(data.name);
-      
+
       const parseJson = <T,>(val: unknown, fallback: T): T => {
         if (typeof val === 'string') {
           try { return JSON.parse(val) as T; } catch { return fallback; }
@@ -353,13 +353,13 @@ export default function Home() {
           return {
             ...layer,
             name: layer.name === 'FTTH Design' ? `FTTH Design - ${activeBoundary.name}` : layer.name,
-            groupId: activeBoundary.groupId || `boundary:${activeBoundary.id}`,
-            groupName: activeBoundary.groupName || activeBoundary.name,
-            boundaryName: activeBoundary.name,
-            designName: activeBoundary.name,
+            groupId: layer.groupId || activeBoundary.groupId || `boundary:${activeBoundary.id}`,
+            groupName: layer.groupName || activeBoundary.groupName || activeBoundary.name,
+            boundaryName: layer.boundaryName || activeBoundary.name,
+            designName: layer.designName || activeBoundary.name,
           };
         }
-        if (layer.id.startsWith('design:') && layer.boundaryName) {
+        if (layer.id.startsWith('design:') && layer.boundaryName && !layer.groupId) {
           return {
             ...layer,
             groupId: boundaryGroupKey(layer.boundaryName),
@@ -423,7 +423,7 @@ export default function Home() {
   const combineKmlFiles = async (files: File[]): Promise<File> => {
     const parser = new DOMParser();
     const serializer = new XMLSerializer();
-    
+
     const combinedDoc = document.implementation.createDocument(null, "kml");
     const kmlEl = combinedDoc.documentElement;
     kmlEl.setAttribute("xmlns", "http://www.opengis.net/kml/2.2");
@@ -433,14 +433,14 @@ export default function Home() {
     for (const file of files) {
       const text = await file.text();
       const doc = parser.parseFromString(text, "text/xml");
-      
+
       const docs = doc.getElementsByTagName("Document");
       if (docs.length > 0) {
         for (let i = 0; i < docs.length; i++) {
-           const children = Array.from(docs[i].children);
-           for (const child of children) {
-             documentEl.appendChild(combinedDoc.importNode(child, true));
-           }
+          const children = Array.from(docs[i].children);
+          for (const child of children) {
+            documentEl.appendChild(combinedDoc.importNode(child, true));
+          }
         }
       } else {
         const kmlNode = doc.getElementsByTagName("kml")[0];
@@ -455,13 +455,13 @@ export default function Home() {
 
     const combinedXml = serializer.serializeToString(combinedDoc);
     const blob = new Blob([combinedXml], { type: "application/vnd.google-earth.kml+xml" });
-    
+
     // Format date DD-MM-YYYY
     const date = new Date();
     const dateString = `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`;
     const firstFileName = files[0].name.replace(/\.[^/.]+$/, ""); // remove extension
     const fileName = `${firstFileName} & ${files.length - 1} others - ${dateString}.kml`;
-    
+
     return new File([blob], fileName, { type: "application/vnd.google-earth.kml+xml" });
   };
 
@@ -503,10 +503,10 @@ export default function Home() {
       for (const file of files) await handleImportLayer([file], true);
       return;
     }
-    
+
     // Unpack any KMZ files first so the rest of the app only deals with KML
     const kmlFiles = await Promise.all(files.map(extractKmlFromFile));
-    
+
     let fileToUse = kmlFiles[0];
     if (kmlFiles.length > 1) {
       fileToUse = await combineKmlFiles(kmlFiles);
@@ -515,37 +515,21 @@ export default function Home() {
     try {
       const formData = new FormData();
       formData.append("file", fileToUse);
-      
+
       const res = await fetch("/api/proxy/api/upload", {
         method: "POST",
         body: formData,
       });
-      
+
       if (!res.ok) throw new Error("Upload failed");
-      
+
       const resp = await res.json();
       const uploadData = resp.data || resp;
       const url = `/api/proxy${uploadData.url}`;
       const isBoundary = fileToUse.name.toLowerCase().includes('boundary');
+      const isPop = fileToUse.name.toLowerCase().includes('pop') || fileToUse.name.toLowerCase().includes('olt');
       const newLayerId = `import-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      const newGroupId = isBoundary ? boundaryGroupKey(fileToUse.name) : layers.find(layer =>
-        layer.name.toLowerCase().includes('boundary') && layer.groupId
-      )?.groupId || boundaryGroupKey(fileToUse.name);
-      const boundaryGroupName = isBoundary ? fileToUse.name : layers.find(layer =>
-        layer.name.toLowerCase().includes('boundary') && layer.groupName
-      )?.groupName;
-      
-      const newLayer: LayerConfig = {
-        id: newLayerId,
-        name: fileToUse.name,
-        url,
-        visible: true,
-        color: "#3b82f6", // Default blue color
-        groupId: newGroupId,
-        groupName: boundaryGroupName || fileToUse.name.replace(/\.[^.]+$/, '').replace(/(pop|olt|sentral)/ig, '').trim(),
-        boundaryName: isBoundary ? fileToUse.name : undefined,
-      };
-      
+
       // An imported file belongs to the project currently open. Only the
       // first import after explicitly creating a new project gets a name.
       const prjName = projectNameRef.current || fileToUse.name.replace(/\.[^/.]+$/, "");
@@ -553,10 +537,70 @@ export default function Home() {
         projectNameRef.current = prjName;
         setProjectName(prjName);
       }
-      
+
       setLayers(prev => {
+        let newGroupId = "";
+        let boundaryGroupName = "";
+
+        const stem = fileToUse.name.replace(/\.[^.]+$/, '').toLowerCase()
+          .replace(/(boundary|polygon|pop|olt|sentral)/g, ' ')
+          .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+        if (stem && stem !== 'kml') {
+          newGroupId = `boundary:${stem}`;
+          boundaryGroupName = fileToUse.name.replace(/\.[^.]+$/, '').replace(/(pop|olt|sentral)/ig, '').trim();
+        } else {
+          const groupsMap = new Map<string, { hasBoundary: boolean, hasPop: boolean, name: string }>();
+          prev.forEach(l => {
+             if (l.groupId) {
+               if (!groupsMap.has(l.groupId)) groupsMap.set(l.groupId, { hasBoundary: false, hasPop: false, name: l.groupName || 'Batch Design' });
+               const g = groupsMap.get(l.groupId)!;
+               if (l.name.toLowerCase().includes('boundary') || l.id === 'boundary') g.hasBoundary = true;
+               if (l.name.toLowerCase().includes('pop') || l.name.toLowerCase().includes('olt')) g.hasPop = true;
+             }
+          });
+
+          let latestGroupId = null;
+          for (let i = prev.length - 1; i >= 0; i--) {
+             if (prev[i].groupId) {
+                latestGroupId = prev[i].groupId;
+                break;
+             }
+          }
+
+          if (latestGroupId) {
+             const g = groupsMap.get(latestGroupId);
+             if (g) {
+                if (isBoundary && !g.hasBoundary) {
+                   newGroupId = latestGroupId;
+                   boundaryGroupName = g.name;
+                } else if (isPop && !g.hasPop) {
+                   newGroupId = latestGroupId;
+                   boundaryGroupName = g.name;
+                }
+             }
+          }
+          
+          if (!newGroupId) {
+             const batchCount = groupsMap.size + 1;
+             newGroupId = `boundary:batch-${batchCount}-${Date.now()}`;
+             boundaryGroupName = `Batch Design ${batchCount}`;
+          }
+        }
+
+        const newLayer: LayerConfig = {
+          id: newLayerId,
+          name: fileToUse.name,
+          url,
+          visible: true,
+          color: "#3b82f6", // Default blue color
+          groupId: newGroupId,
+          groupName: boundaryGroupName || fileToUse.name.replace(/\.[^.]+$/, '').replace(/(pop|olt|sentral)/ig, '').trim(),
+          boundaryName: isBoundary ? fileToUse.name : undefined,
+        };
+
         const updatedLayers = [
-          ...prev.map(layer => isBoundary && layer.name.toLowerCase().includes('boundary')
+          ...prev.map(layer => layer.groupId !== newGroupId
             ? { ...layer, visible: false }
             : layer),
           newLayer,
@@ -564,7 +608,7 @@ export default function Home() {
         saveProject(prjName, updatedLayers).catch(console.error);
         return updatedLayers;
       });
-      
+
       addToast(`Berhasil mengimpor: ${fileToUse.name}`, "success");
     } catch {
       addToast(`Gagal memuat berkas`, "error");
@@ -604,26 +648,33 @@ export default function Home() {
         });
 
         if (state.status === "COMPLETED") {
-          const newLayers: LayerConfig[] = jobs
-            .filter((job: { status: string; result?: { url?: string }; item_id: string }) => job.status === "COMPLETED" && job.result?.url)
-            .map((job: { item_id: string; design_name: string; boundary_name: string; result: { url: string } }) => ({
-              id: `design:batch:${batchId}:${job.item_id}`,
-              name: job.design_name,
-              url: `/api/proxy${job.result.url}`,
-              visible: true,
-              color: "#22c55e",
-              groupId: boundaryGroupKey(job.boundary_name),
-              groupName: job.boundary_name,
-              designName: job.design_name,
-              boundaryName: job.boundary_name,
-            } as LayerConfig));
+          const hasNewDesign = jobs.some((job: any) => job.status === "COMPLETED" && job.result?.url);
           setLayers(prev => {
+            const newLayers: LayerConfig[] = jobs
+              .filter((job: { status: string; result?: { url?: string }; item_id: string }) => job.status === "COMPLETED" && job.result?.url)
+              .map((job: { item_id: string; design_name: string; boundary_name: string; result: { url: string } }) => {
+                const matchedBoundary = prev.find(l => l.name === job.boundary_name && l.groupId);
+                const targetGroupId = matchedBoundary?.groupId || boundaryGroupKey(job.boundary_name);
+                const targetGroupName = matchedBoundary?.groupName || job.boundary_name;
+                
+                return {
+                  id: `design:batch:${batchId}:${job.item_id}`,
+                  name: job.design_name,
+                  url: `/api/proxy${job.result.url}`,
+                  visible: true,
+                  color: "#22c55e",
+                  groupId: targetGroupId,
+                  groupName: targetGroupName,
+                  designName: job.design_name,
+                  boundaryName: job.boundary_name,
+                } as LayerConfig;
+              });
             const merged = [...prev, ...newLayers.filter(layer => !prev.some(existing => existing.id === layer.id))];
             saveProject(projectName || "Untitled Project", merged).catch(console.error);
             return merged;
           });
           setBatchFiles([]);
-          setHasNetworkCore(newLayers.length > 0);
+          setHasNetworkCore(hasNewDesign);
           setIsGenerating(false);
           setTimeout(() => setGenerationProgress(null), 1500);
           addToast("Batch design berhasil dibuat.", "success");
@@ -657,7 +708,7 @@ export default function Home() {
       addToast("Pilih satu boundary saja sebelum Generate Design.", "error");
       return;
     }
-    
+
     if (boundaryLayer) {
       // FULL GENERATE (POP is optional)
       setIsGenerating(true);
@@ -667,10 +718,10 @@ export default function Home() {
         const boundaryRes = await fetch(boundaryLayer.url);
         if (!boundaryRes.ok) throw new Error(`Gagal mengambil file boundary: ${boundaryRes.statusText}`);
         const boundaryBlob = await boundaryRes.blob();
-        
+
         const formData = new FormData();
         formData.append("boundaryFile", boundaryBlob, boundaryLayer.name);
-        
+
         if (popLayer) {
           const popRes = await fetch(popLayer.url);
           if (!popRes.ok) throw new Error(`Gagal mengambil file POP: ${popRes.statusText}`);
@@ -704,24 +755,29 @@ export default function Home() {
             setTimeout(() => setGenerationProgress(null), 1500);
             setIsGenerating(false);
             setHasNetworkCore(Boolean(pData.result));
-            
+
             if (pData.result) {
               const result = pData.result;
               const designId = `design:single:${jobId}`;
-              const designGroupId = boundaryLayer.groupId || `boundary:${boundaryLayer.id}`;
-              const newDesign: LayerConfig = {
-                id: designId,
-                name: `FTTH Design - ${boundaryLayer.name}`,
-                url: `/api/proxy${result.url}`,
-                visible: true,
-                color: "#22c55e",
-                groupId: designGroupId,
-                groupName: boundaryLayer.groupName || boundaryLayer.name,
-                designName: boundaryLayer.name,
-                boundaryName: boundaryLayer.name,
-                status: "COMPLETED",
-              };
+              
               setLayers(prev => {
+                const latestBoundary = prev.find(l => l.id === boundaryLayer.id) || boundaryLayer;
+                const designGroupId = latestBoundary.groupId || `boundary:${latestBoundary.id}`;
+                const designGroupName = latestBoundary.groupName || latestBoundary.name;
+                
+                const newDesign: LayerConfig = {
+                  id: designId,
+                  name: `FTTH Design - ${latestBoundary.name}`,
+                  url: `/api/proxy${result.url}`,
+                  visible: true,
+                  color: "#22c55e",
+                  groupId: designGroupId,
+                  groupName: designGroupName,
+                  designName: latestBoundary.name,
+                  boundaryName: latestBoundary.name,
+                  status: "COMPLETED",
+                };
+                
                 const newLayers = [...prev, newDesign];
                 setFilters(prevFilters => {
                   const generatedFilters = { ...prevFilters, showHouse: false };
@@ -735,7 +791,7 @@ export default function Home() {
                 });
                 return newLayers;
               });
-              
+
               if (result.kmz_url) setKmzUrl(`/api/proxy${result.kmz_url}`);
               if (result.csv_url) setCsvUrl(`/api/proxy${result.csv_url}`);
               if (result.stats) setDesignStats(result.stats);
@@ -778,10 +834,10 @@ export default function Home() {
         const customRes = await fetch(customLayer.url);
         if (!customRes.ok) throw new Error(`Gagal mengambil file custom mapping: ${customRes.statusText}`);
         const customBlob = await customRes.blob();
-        
+
         const formData = new FormData();
         formData.append("customFile", customBlob, customLayer.name);
-        
+
         const jobId = `job-${Date.now()}`;
         formData.append("job_id", jobId);
         rememberJob(jobId);
@@ -801,7 +857,7 @@ export default function Home() {
             eventSource?.close();
             setTimeout(() => setGenerationProgress(null), 1500);
             setIsGenerating(false);
-            
+
             if (pData.result) {
               const result = pData.result;
               const newDesign: LayerConfig = { id: "design", name: "FTTH Design", url: `/api/proxy${result.url}`, visible: true, color: "#22c55e" };
@@ -818,7 +874,7 @@ export default function Home() {
                 });
                 return newLayers;
               });
-              
+
               if (result.kmz_url) setKmzUrl(`/api/proxy${result.kmz_url}`);
               if (result.csv_url) setCsvUrl(`/api/proxy${result.csv_url}`);
               if (result.stats) setDesignStats(result.stats);
@@ -895,7 +951,7 @@ export default function Home() {
               });
               return newLayers;
             });
-            
+
             if (result.kmz_url) setKmzUrl(`/api/proxy${result.kmz_url}`);
             if (result.csv_url) setCsvUrl(`/api/proxy${result.csv_url}`);
             if (result.stats) setDesignStats(result.stats);
@@ -1017,7 +1073,7 @@ export default function Home() {
   return (
     <div className="dashboard-container">
       {showVersionHistory && currentProjectId && (
-        <VersionHistoryPanel 
+        <VersionHistoryPanel
           projectId={currentProjectId}
           onClose={() => setShowVersionHistory(false)}
           onLoadVersion={(v) => {
@@ -1133,7 +1189,7 @@ export default function Home() {
               </div>
             </div>
             <div className="p-4 border-t bg-gray-50 flex justify-end">
-              <button 
+              <button
                 onClick={() => setCompareVersions(null)}
                 className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-md text-sm font-medium transition-colors"
               >
@@ -1143,14 +1199,14 @@ export default function Home() {
           </div>
         </div>
       )}
-      <GenerationConfigModal 
-        isOpen={isConfigModalOpen} 
-        onClose={() => setIsConfigModalOpen(false)} 
-        config={generationConfig} 
-        onSave={setGenerationConfig} 
+      <GenerationConfigModal
+        isOpen={isConfigModalOpen}
+        onClose={() => setIsConfigModalOpen(false)}
+        config={generationConfig}
+        onSave={setGenerationConfig}
       />
-      <Navbar 
-        onImportLayer={handleImportLayer} 
+      <Navbar
+        onImportLayer={handleImportLayer}
         onSmartGenerate={batchFiles.length > 0 || visibleLayers.some((l: LayerConfig) => l.name.toLowerCase().includes('boundary') || l.name.toLowerCase().includes('pop') || l.name.toLowerCase().includes('olt')) ? handleSmartGenerate : undefined}
         isGenerating={isGenerating}
         onRegenerateCables={visibleLayers.some((l: LayerConfig) => l.id === "design") ? handleRegenerateCables : undefined}
@@ -1171,10 +1227,10 @@ export default function Home() {
         }}
       />
       <div className="map-container" style={{ position: 'relative' }}>
-        <Sidebar 
-          filters={filters} 
-          onToggleFilter={handleToggleFilter} 
-          layers={layers} 
+        <Sidebar
+          filters={filters}
+          onToggleFilter={handleToggleFilter}
+          layers={layers}
           onToggleLayer={toggleLayer}
           kmlTrees={kmlTrees}
           onToggleTreeNode={toggleTreeNode}
@@ -1190,13 +1246,14 @@ export default function Home() {
           onNewProject={unloadProject}
           onDeleteProject={deleteProject}
           currentProjectId={currentProjectId}
+          onBackToProjects={unloadProject}
           stats={designStats}
           validation={validationResult}
           isGenerationLocked={isGenerating || isGeneratingHomepass}
         />
-        <MapComponent 
-          layers={layers} 
-          onShowMessage={addToast} 
+        <MapComponent
+          layers={layers}
+          onShowMessage={addToast}
           filters={filters}
           kmlTrees={kmlTrees}
           onTreeLoaded={handleTreeLoaded}
@@ -1217,13 +1274,13 @@ export default function Home() {
           </div>
         )}
       </div>
-      
+
       {/* Download Floating Card */}
       {showDownloadPopup && (kmzUrl || csvUrl) && (
         <div style={{
-          position: 'absolute', 
-          bottom: '90px', 
-          left: '50%', 
+          position: 'absolute',
+          bottom: '90px',
+          left: '50%',
           transform: 'translateX(-50%)',
           zIndex: 1000,
           background: 'rgba(255, 255, 255, 0.9)',
@@ -1240,7 +1297,7 @@ export default function Home() {
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#374151' }}>Unduh Hasil Design</h3>
-            <button 
+            <button
               onClick={() => setShowDownloadPopup(false)}
               style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', padding: 0 }}
             >
@@ -1264,7 +1321,7 @@ export default function Home() {
 
       {/* Floating Download Button (Bottom Center) */}
       {(kmzUrl || csvUrl) && (
-        <button 
+        <button
           onClick={() => setShowDownloadPopup(!showDownloadPopup)}
           title="Unduh Hasil"
           style={{
