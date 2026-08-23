@@ -20,8 +20,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -51,24 +51,24 @@ cache/
 /storage/users/
 *.kmz
 *.kml
-!boundary.kml
-!POP.kml
-!PO.*.kml
+!samples/
+!samples/kml/
+!samples/kml/*.kml
 temp_*.xml
 temp_osm.xml
 
-# Dashboard Public Data Outputs
-dashboard/public/data/*.csv
-dashboard/public/data/*.kml
-dashboard/public/data/*.kmz
-dashboard/public/data/*.log
-dashboard/proxy-error.log
+# Server-generated data outputs
+app/server/data/**/*.csv
+app/server/data/**/*.kml
+app/server/data/**/*.kmz
+app/server/data/**/*.log
+app/web/proxy-error.log
 
 # Database
 *.sqlite
 *.sqlite3
 *.db
-backend/ftth.db
+app/server/ftth.db
 
 
 # IDEs and Editors
@@ -86,3 +86,4 @@ backend/ftth.db
 
 # Environment Variables
 .env*
+!.env.prod.example
