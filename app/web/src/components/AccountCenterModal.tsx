@@ -36,7 +36,7 @@ export function AccountCenterModal({ onClose, userEmail, userRole }: AccountCent
   const [createName, setCreateName] = useState('');
   const [createEmail, setCreateEmail] = useState('');
   const [createPassword, setCreatePassword] = useState('');
-  const [createRole, setCreateRole] = useState<'user' | 'admin'>('user');
+  const [createRole, setCreateRole] = useState<'admin' | 'engineer' | 'viewer'>('engineer');
   const [isCreating, setIsCreating] = useState(false);
   const [createMessage, setCreateMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
@@ -182,7 +182,7 @@ export function AccountCenterModal({ onClose, userEmail, userRole }: AccountCent
         setCreateName('');
         setCreateEmail('');
         setCreatePassword('');
-        setCreateRole('user');
+        setCreateRole('engineer');
         setIsAddingUser(false);
         fetchUsers();
       }
@@ -226,15 +226,17 @@ export function AccountCenterModal({ onClose, userEmail, userRole }: AccountCent
           >
             <Key size={16} /> Keamanan
           </button>
-          <button 
-            onClick={() => setActiveTab('users')}
-            style={{ 
-              padding: '16px 0', marginRight: '24px', background: 'transparent', border: 'none', borderBottom: activeTab === 'users' ? '2px solid #10b981' : '2px solid transparent',
-              color: activeTab === 'users' ? '#10b981' : '#6b7280', fontWeight: 500, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px'
-            }}
-          >
-            <UserPlus size={16} /> Pengguna
-          </button>
+          {userRole === 'admin' && (
+            <button
+              onClick={() => setActiveTab('users')}
+              style={{
+                padding: '16px 0', marginRight: '24px', background: 'transparent', border: 'none', borderBottom: activeTab === 'users' ? '2px solid #10b981' : '2px solid transparent',
+                color: activeTab === 'users' ? '#10b981' : '#6b7280', fontWeight: 500, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px'
+              }}
+            >
+              <UserPlus size={16} /> Pengguna
+            </button>
+          )}
           <button 
             onClick={() => setActiveTab('danger')}
             style={{ 
@@ -291,7 +293,7 @@ export function AccountCenterModal({ onClose, userEmail, userRole }: AccountCent
           )}
 
           {/* USERS TAB */}
-          {activeTab === 'users' && (
+          {activeTab === 'users' && userRole === 'admin' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: '#374151' }}>Manajemen Pengguna</h3>
@@ -329,8 +331,9 @@ export function AccountCenterModal({ onClose, userEmail, userRole }: AccountCent
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#4b5563', marginBottom: '6px' }}>Role</label>
-                    <select value={createRole} onChange={e => setCreateRole(e.target.value as 'user' | 'admin')} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px', boxSizing: 'border-box', backgroundColor: 'white' }}>
-                      <option value="user">User</option>
+                    <select value={createRole} onChange={e => setCreateRole(e.target.value as 'admin' | 'engineer' | 'viewer')} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px', boxSizing: 'border-box', backgroundColor: 'white' }}>
+                      <option value="engineer">Engineer</option>
+                      <option value="viewer">Viewer</option>
                       <option value="admin">Admin</option>
                     </select>
                   </div>

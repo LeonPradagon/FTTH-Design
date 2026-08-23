@@ -60,20 +60,33 @@ class ProjectUpdate(BaseModel):
 
 @router.post("/projects")
 async def create_project(project: ProjectCreate, current_user: dict = Depends(get_generation_user)):
-    db_project = await db.project.create(
-        data={
-            "name": project.name,
-            "layers": Json(project.layers),
-            "filters": Json(project.filters),
-            "feature_colors": Json(get_allowed_feature_colors(project.feature_colors, current_user)),
-            "userId": current_user["id"]
-        }
-    )
+    async with db.tx() as transaction:
+        db_project = await transaction.project.create(
+            data={
+                "name": project.name,
+                "layers": Json(project.layers),
+                "filters": Json(project.filters),
+                "feature_colors": Json(get_allowed_feature_colors(project.feature_colors, current_user)),
+                "userId": current_user["id"]
+            }
+        )
+        await transaction.auditlog.create(
+            data={
+                "userId": current_user["id"],
+                "action": "CREATE_PROJECT",
+                "projectId": db_project.id,
+                "details": Json({"old": None, "new": _serialize_project(db_project)}),
+            }
+        )
     return success_response(data=_serialize_project(db_project))
 
 @router.get("/projects")
 async def read_projects(skip: int = 0, limit: int = 100, current_user: dict = Depends(get_current_user)):
-    where = {} if current_user.get("role") == "admin" else {"userId": current_user["id"]}
+    where = (
+        {}
+        if current_user.get("role") in {"admin", "viewer"}
+        else {"userId": current_user["id"]}
+    )
     projects = await db.project.find_many(
         where=where,
         skip=skip,
@@ -88,7 +101,10 @@ async def read_project(project_id: str, current_user: dict = Depends(get_current
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    if current_user.get("role") != "admin" and project.userId != current_user["id"]:
+    if (
+        current_user.get("role") not in {"admin", "viewer"}
+        and project.userId != current_user["id"]
+    ):
         raise HTTPException(status_code=403, detail="Forbidden")
 
     return success_response(data=_serialize_project(project))
@@ -102,7 +118,8 @@ async def update_project(project_id: str, project_update: ProjectUpdate, current
     if current_user.get("role") != "admin" and project.userId != current_user["id"]:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    update_data = project_update.dict(exclude_unset=True)
+    old_project = _serialize_project(project)
+    update_data = project_update.model_dump(exclude_unset=True)
     if "layers" in update_data and update_data["layers"] is not None:
         update_data["layers"] = Json(update_data["layers"])
     if "filters" in update_data and update_data["filters"] is not None:
@@ -114,10 +131,22 @@ async def update_project(project_id: str, project_update: ProjectUpdate, current
             get_allowed_feature_colors(update_data["feature_colors"], current_user)
         )
 
-    updated_project = await db.project.update(
-        where={"id": project_id},
-        data=update_data
-    )
+    async with db.tx() as transaction:
+        updated_project = await transaction.project.update(
+            where={"id": project_id},
+            data=update_data
+        )
+        await transaction.auditlog.create(
+            data={
+                "userId": current_user["id"],
+                "action": "UPDATE_PROJECT",
+                "projectId": project_id,
+                "details": Json({
+                    "old": old_project,
+                    "new": _serialize_project(updated_project),
+                }),
+            }
+        )
     return success_response(data=_serialize_project(updated_project))
 
 @router.delete("/projects/{project_id}")
@@ -129,11 +158,17 @@ async def delete_project(project_id: str, current_user: dict = Depends(get_gener
     if current_user.get("role") != "admin" and project.userId != current_user["id"]:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    try:
-        await db.project.delete(where={"id": project_id})
-        return success_response(data={"message": "Project deleted successfully"})
-    except Exception:
-        raise HTTPException(status_code=404, detail="Project not found")
+    async with db.tx() as transaction:
+        await transaction.auditlog.create(
+            data={
+                "userId": current_user["id"],
+                "action": "DELETE_PROJECT",
+                "projectId": project_id,
+                "details": Json({"old": _serialize_project(project), "new": None}),
+            }
+        )
+        await transaction.project.delete(where={"id": project_id})
+    return success_response(data={"message": "Project deleted successfully"})
 
 
 def _serialize_project(project) -> dict:

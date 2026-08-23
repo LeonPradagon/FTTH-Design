@@ -4,6 +4,8 @@ import { X, Settings, RotateCcw } from 'lucide-react';
 export interface GenerationConfig {
   odp_capacity: number;
   odc_capacity: number;
+  min_odp_cluster_size: number;
+  min_odc_cluster_size: number;
   include_homepass: boolean;
   force_refresh_osm: boolean;
   max_odp_radius_m: number;
@@ -17,6 +19,8 @@ export interface GenerationConfig {
 export const DEFAULT_CONFIG: GenerationConfig = {
   odp_capacity: 10,
   odc_capacity: 4,
+  min_odp_cluster_size: 1,
+  min_odc_cluster_size: 1,
   include_homepass: true,
   force_refresh_osm: false,
   max_odp_radius_m: 150.0,
@@ -98,6 +102,16 @@ export default function GenerationConfigModal({ isOpen, onClose, config, onSave 
                   <label className="block text-sm font-medium mb-1">ODC Capacity (ODPs)</label>
                   <input type="number" name="odc_capacity" value={formData.odc_capacity} onChange={handleChange} min={1} max={32} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none" />
                   <p className="text-xs text-gray-500 mt-1">Maksimal ODP per ODC (default: 4)</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Minimum Houses per ODP</label>
+                  <input type="number" name="min_odp_cluster_size" value={formData.min_odp_cluster_size} onChange={handleChange} min={1} max={formData.odp_capacity} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none" />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Minimum ODPs per ODC</label>
+                  <input type="number" name="min_odc_cluster_size" value={formData.min_odc_cluster_size} onChange={handleChange} min={1} max={formData.odc_capacity} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
 
                 <label className="flex items-start gap-3 rounded-md border border-blue-100 bg-blue-50 p-3">

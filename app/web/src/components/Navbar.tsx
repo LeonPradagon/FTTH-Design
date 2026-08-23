@@ -38,6 +38,8 @@ export function Navbar({
   const [showAccountCenter, setShowAccountCenter] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: session } = useSession();
+  const userRole = (session?.user as { role?: string } | undefined)?.role || 'engineer';
+  const canGenerate = ['admin', 'engineer', 'user'].includes(userRole);
 
   const legendItems = [
     { label: "Server OLT (POP)", desc: "Titik pusat / sentral", color: featureColors?.pop || DEFAULT_FEATURE_COLORS.pop, shape: "server" },
@@ -100,7 +102,7 @@ export function Navbar({
               {showAccountCenter && (
                 <AccountCenterModal
                   userEmail={session.user.email}
-                  userRole={(session.user as { role?: string }).role || 'user'}
+                  userRole={(session.user as { role?: string }).role || 'engineer'}
                   onClose={() => setShowAccountCenter(false)}
                 />
               )}
@@ -115,7 +117,7 @@ export function Navbar({
             style={{ display: 'none' }}
             onChange={handleFileChange}
           />
-          {onRegenerateCables && (
+          {canGenerate && onRegenerateCables && (
             <button
               onClick={onRegenerateCables}
               disabled={isRegeneratingCables || !hasDesign}
@@ -128,7 +130,7 @@ export function Navbar({
             </button>
           )}
 
-          {onSmartGenerate && (
+          {canGenerate && onSmartGenerate && (
             <div className="flex items-center">
               <button
                 onClick={onSmartGenerate}
@@ -141,7 +143,7 @@ export function Navbar({
             </div>
           )}
 
-          {onGenerateHomepass && hasNetworkCore && (
+          {canGenerate && onGenerateHomepass && hasNetworkCore && (
             <button
               onClick={onGenerateHomepass}
               disabled={isGeneratingHomepass || isGenerating}
@@ -154,7 +156,7 @@ export function Navbar({
             </button>
           )}
 
-          {onConfigClick && (
+          {canGenerate && onConfigClick && (
             <button onClick={onConfigClick} className="regenerate-cable-btn" title="Generation configuration">
               <Settings size={14} style={{ marginRight: '6px' }} />
               Config
@@ -168,14 +170,16 @@ export function Navbar({
             </button>
           )}
 
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="regenerate-cable-btn"
-            style={{ marginLeft: '8px', cursor: 'pointer' }}
-          >
-            <Upload size={14} style={{ marginRight: '6px' }} />
-            Import KML
-          </button>
+          {canGenerate && (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="regenerate-cable-btn"
+              style={{ marginLeft: '8px', cursor: 'pointer' }}
+            >
+              <Upload size={14} style={{ marginRight: '6px' }} />
+              Import KML
+            </button>
+          )}
           <div style={{ marginLeft: '8px', paddingLeft: '16px', borderLeft: '1px solid rgba(128,128,128,0.2)' }}>
             <ThemeToggle />
           </div>

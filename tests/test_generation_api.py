@@ -117,6 +117,21 @@ def test_generate_homepass_rejects_missing_core_cache(mock_redis_pool, mock_prog
     assert response.json()["error"]["code"] == "DESIGN_STATE_NOT_FOUND"
 
 
+@pytest.mark.parametrize("endpoint", ["/generate-homepass", "/regenerate-cables"])
+def test_follow_up_generation_rejects_another_users_project(
+    endpoint,
+    mock_redis_pool,
+    mock_progress_manager,
+):
+    with patch(
+        "server.api.routes.generation.db.project.find_unique",
+        new=AsyncMock(return_value=SimpleNamespace(userId="another-user")),
+    ):
+        response = client.post(endpoint, data={"project_id": "private-project"})
+
+    assert response.status_code == 403
+
+
 def test_generate_batch_pairs_boundary_and_pop(tmp_path, mock_redis_pool, mock_progress_manager, mock_storage_upload):
     boundary = """<kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark><Polygon><outerBoundaryIs><LinearRing><coordinates>106.14,-6.12 106.16,-6.12 106.16,-6.10 106.14,-6.10 106.14,-6.12</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark></Document></kml>"""
     pop = """<kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark><name>POP A</name><Point><coordinates>106.15,-6.11</coordinates></Point></Placemark></Document></kml>"""
@@ -176,3 +191,9 @@ def test_status_falls_back_to_durable_job(mock_progress_manager, mock_generation
     assert response.status_code == 200
     assert response.json()["data"]["done"] is True
     assert response.json()["data"]["result"]["kmz_url"] == "/api/files/design.kmz"
+
+
+def test_worker_allows_running_jobs_to_be_aborted():
+    from server.worker import WorkerSettings
+
+    assert WorkerSettings.allow_abort_jobs is True

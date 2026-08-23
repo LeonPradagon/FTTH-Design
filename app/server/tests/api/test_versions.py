@@ -1,4 +1,5 @@
 import os
+from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -11,6 +12,8 @@ os.environ.setdefault("BETTER_AUTH_SECRET", "test-secret-that-is-at-least-32-cha
 from server.api.deps import get_optional_user
 from server.api.routes.audit import router as audit_router
 from server.api.routes.versions import router as versions_router
+from server.storage.dependencies import get_object_storage
+from server.tests.fakes import InMemoryObjectStorage
 
 
 def _client(user: dict, *routers) -> TestClient:
@@ -26,6 +29,7 @@ def _client(user: dict, *routers) -> TestClient:
     [
         ("delete", "/api/projects/project-1/versions/1"),
         ("post", "/api/projects/project-1/versions/1/duplicate"),
+        ("post", "/api/projects/project-1/versions/1/rollback"),
     ],
 )
 def test_viewer_cannot_mutate_versions(method: str, path: str) -> None:
@@ -37,11 +41,14 @@ def test_viewer_cannot_mutate_versions(method: str, path: str) -> None:
 
 
 def test_admin_can_list_another_users_versions_with_validation() -> None:
-    version = MagicMock()
+    version = MagicMock(version=1)
     version.model_dump.return_value = {
         "id": "version-1",
         "config": {"odp_capacity": 10},
-        "metadata": {"input_hash": "large-payload"},
+        "metadata": {
+            "input_hash": "large-payload",
+            "artifacts": {"kmz": "users/scope/design.kmz"},
+        },
         "validation": {"status": "PASS"},
         "stats": {"odc_count": 2},
     }
@@ -59,6 +66,9 @@ def test_admin_can_list_another_users_versions_with_validation() -> None:
     assert response.status_code == 200
     assert response.json()["data"][0]["validation"] == {"status": "PASS"}
     assert "metadata" not in response.json()["data"][0]
+    assert response.json()["data"][0]["artifacts"]["kmz"].endswith(
+        "/versions/1/export/kmz"
+    )
 
 
 def test_compare_route_is_not_shadowed_by_integer_version_route() -> None:
@@ -85,7 +95,14 @@ def test_compare_route_is_not_shadowed_by_integer_version_route() -> None:
     assert response.json()["data"]["diff"]["odc_count_diff"] == 3
 
 
-def test_duplicate_copies_spatial_records_in_the_same_transaction() -> None:
+@pytest.mark.parametrize(
+    ("operation", "action"),
+    [("duplicate", "DUPLICATE_VERSION"), ("rollback", "ROLLBACK_VERSION")],
+)
+def test_version_copy_copies_spatial_records_in_the_same_transaction(
+    operation: str,
+    action: str,
+) -> None:
     source = MagicMock(id="version-1")
     source.model_dump.return_value = {
         "id": "version-1",
@@ -121,11 +138,34 @@ def test_duplicate_copies_spatial_records_in_the_same_transaction() -> None:
     client = _client({"id": "user-1", "role": "user"}, versions_router)
 
     with patch("server.api.routes.versions.db", fake_db):
-        response = client.post("/api/projects/project-1/versions/1/duplicate")
+        response = client.post(f"/api/projects/project-1/versions/1/{operation}")
 
     assert response.status_code == 200
     assert transaction.execute_raw.await_count == 3
     transaction.auditlog.create.assert_awaited_once()
+    assert transaction.auditlog.create.await_args.kwargs["data"]["action"] == action
+
+
+def test_version_artifact_can_be_exported_from_object_storage() -> None:
+    storage = InMemoryObjectStorage()
+    storage.upload("users/scope/design.kmz", BytesIO(b"saved-version"))
+    version = SimpleNamespace(
+        metadata={"artifacts": {"kmz": "users/scope/design.kmz"}}
+    )
+    fake_db = SimpleNamespace(
+        project=SimpleNamespace(
+            find_unique=AsyncMock(return_value=SimpleNamespace(userId="user-1"))
+        ),
+        designversion=SimpleNamespace(find_unique=AsyncMock(return_value=version)),
+    )
+    client = _client({"id": "user-1", "role": "engineer"}, versions_router)
+    client.app.dependency_overrides[get_object_storage] = lambda: storage
+
+    with patch("server.api.routes.versions.db", fake_db):
+        response = client.get("/api/projects/project-1/versions/1/export/kmz")
+
+    assert response.status_code == 200
+    assert response.content == b"saved-version"
 
 
 def test_admin_can_read_another_users_project_audit() -> None:

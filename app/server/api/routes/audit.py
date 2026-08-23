@@ -11,7 +11,8 @@ async def get_project_audit(project_id: str, current_user: dict = Depends(get_cu
     """Get audit logs for a specific project."""
     project = await db.project.find_unique(where={"id": project_id})
     if not project or (
-        current_user.get("role") != "admin" and project.userId != current_user["id"]
+        current_user.get("role") not in {"admin", "viewer"}
+        and project.userId != current_user["id"]
     ):
         return error_response("PROJECT_NOT_FOUND", "Project not found or access denied", http_status=404)
 

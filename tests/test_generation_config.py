@@ -6,6 +6,8 @@ def test_default_config():
     config = GenerationConfig()
     assert config.odp_capacity == 10
     assert config.odc_capacity == 4
+    assert config.min_odp_cluster_size == 1
+    assert config.min_odc_cluster_size == 1
     assert config.max_odp_radius_m == 150.0
     assert config.max_odc_radius_m == 500.0
     assert config.routing_strategy == "shortest"
@@ -31,3 +33,6 @@ def test_invalid_config():
 
     with pytest.raises(ValidationError):
         GenerationConfig(odc_capacity=0)
+
+    with pytest.raises(ValidationError):
+        GenerationConfig(odp_capacity=4, min_odp_cluster_size=5)

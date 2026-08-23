@@ -616,6 +616,7 @@ async def generate_homepass(
     current_user: dict = Depends(get_generation_user),
 ):
     """Generate HC and direct ODP-to-house lines from the last core cache."""
+    await _require_project_access(project_id, current_user)
     if not job_id:
         import uuid
         job_id = str(uuid.uuid4())
@@ -664,6 +665,7 @@ async def regenerate_cables(
     item_id: Optional[str] = Form(None),
     current_user: dict = Depends(get_generation_user)
 ):
+    await _require_project_access(project_id, current_user)
     if not job_id:
         import uuid
         job_id = str(uuid.uuid4())

@@ -46,6 +46,13 @@ class TestCapacitatedClustering:
         all_indices = sorted(idx for cluster in clusters for idx in cluster)
         assert all_indices == list(range(37))
 
+    def test_minimum_cluster_size_rebalances_the_last_cluster(self):
+        points = [(i, i) for i in range(11)]
+
+        clusters = capacitated_clustering(points, capacity=10, min_size=5)
+
+        assert sorted(map(len, clusters)) == [5, 6]
+
     def test_deterministic(self):
         """Same input → same output (seed=42)."""
         points = [(i * 0.3, i * 0.7) for i in range(30)]

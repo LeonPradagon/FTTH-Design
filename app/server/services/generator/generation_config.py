@@ -10,7 +10,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class RoutingStrategy(str, Enum):
@@ -45,6 +45,18 @@ class GenerationConfig(BaseModel):
         ge=1,
         le=32,
         description="Maximum number of ODPs served by a single ODC.",
+    )
+    min_odp_cluster_size: int = Field(
+        default=1,
+        ge=1,
+        le=64,
+        description="Minimum number of houses grouped into an ODP.",
+    )
+    min_odc_cluster_size: int = Field(
+        default=1,
+        ge=1,
+        le=32,
+        description="Minimum number of ODPs grouped into an ODC.",
     )
 
     include_homepass: bool = Field(
@@ -98,11 +110,21 @@ class GenerationConfig(BaseModel):
         description="Routing cost strategy: 'shortest' uses raw distance, 'priority_road' penalises minor roads.",
     )
 
+    @model_validator(mode="after")
+    def validate_cluster_sizes(self):
+        if self.min_odp_cluster_size > self.odp_capacity:
+            raise ValueError("min_odp_cluster_size cannot exceed odp_capacity")
+        if self.min_odc_cluster_size > self.odc_capacity:
+            raise ValueError("min_odc_cluster_size cannot exceed odc_capacity")
+        return self
+
     model_config = {
         "json_schema_extra": {
             "example": {
                 "odp_capacity": 10,
                 "odc_capacity": 4,
+                "min_odp_cluster_size": 1,
+                "min_odc_cluster_size": 1,
                 "max_odp_radius_m": 150.0,
                 "max_odc_radius_m": 500.0,
                 "max_feeder_length_m": 2000.0,

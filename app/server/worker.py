@@ -13,7 +13,7 @@ from server.services.generator.core_logic import (
 )
 from server.services.generator.validation import validate_design, compute_design_stats
 from server.database import db
-from server.services.user_storage import upload_file, user_file_url
+from server.services.user_storage import upload_file, user_file_url, user_object_key
 from server.storage.dependencies import get_object_storage
 from prisma import Json
 
@@ -109,6 +109,10 @@ async def generate_task(
             "config": used_config.model_dump(),
             "osm_timestamp": osm_ts,
             "generated_at": datetime.now(timezone.utc).isoformat(),
+            "artifacts": {
+                "kmz": user_object_key(user_id, output_kmz_name),
+                "csv": user_object_key(user_id, output_csv_name),
+            },
         }
 
         if project_id:
@@ -238,7 +242,15 @@ async def generate_task(
                         "userId": user_id,
                         "action": "GENERATE",
                         "projectId": project_id,
-                        "details": Json({"version": next_version})
+                        "versionId": new_version.id,
+                        "details": Json({
+                            "old": None,
+                            "new": {
+                                "version": next_version,
+                                "config": used_config.model_dump(),
+                                "artifacts": meta["artifacts"],
+                            },
+                        })
                     }
                 )
             except BaseException:
@@ -396,6 +408,7 @@ class WorkerSettings:
     functions = [generate_task, regenerate_cables_task, generate_custom_task, generate_homepass_task]
     on_startup = startup
     on_shutdown = shutdown
+    allow_abort_jobs = True
     redis_settings = RedisSettings.from_dsn(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
     job_timeout = 3600  # 1 hour timeout for large generation tasks
     # Tune per worker container. Keep the default conservative because one

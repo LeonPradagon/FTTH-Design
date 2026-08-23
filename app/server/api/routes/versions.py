@@ -2,8 +2,11 @@ from fastapi import APIRouter, Depends
 from prisma import Json
 
 from server.api.deps import get_current_user, get_generation_user
+from server.api.routes.files import _download_object
 from server.core.response import error_response, success_response
 from server.database import db
+from server.storage.base import ObjectStorage
+from server.storage.dependencies import get_object_storage
 
 router = APIRouter(prefix="/api/projects/{project_id}/versions")
 
@@ -13,7 +16,7 @@ async def _can_access_project(project_id: str, current_user: dict) -> bool:
     return bool(
         project
         and (
-            current_user.get("role") == "admin"
+            current_user.get("role") in {"admin", "viewer"}
             or project.userId == current_user["id"]
         )
     )
@@ -33,7 +36,13 @@ async def list_versions(project_id: str, current_user: dict = Depends(get_curren
     version_list = []
     for version in versions:
         data = version.model_dump()
-        data.pop("metadata", None)
+        metadata = data.pop("metadata", None) or {}
+        artifact_keys = metadata.get("artifacts", {}) if isinstance(metadata, dict) else {}
+        data["artifacts"] = {
+            kind: f"/api/projects/{project_id}/versions/{version.version}/export/{kind}"
+            for kind in ("kmz", "csv")
+            if artifact_keys.get(kind)
+        }
         version_list.append(data)
 
     return success_response(data=version_list)
@@ -77,6 +86,33 @@ async def compare_versions(
             "diff": diff,
         }
     )
+
+
+@router.get("/{version}/export/{artifact}")
+async def export_version(
+    project_id: str,
+    version: int,
+    artifact: str,
+    current_user: dict = Depends(get_current_user),
+    storage: ObjectStorage = Depends(get_object_storage),
+):
+    """Download a generated artifact saved with a design version."""
+    if not await _can_access_project(project_id, current_user):
+        return error_response("PROJECT_NOT_FOUND", "Project not found or access denied", http_status=404)
+    if artifact not in {"kmz", "csv"}:
+        return error_response("ARTIFACT_NOT_FOUND", "Artifact not found", http_status=404)
+
+    design_version = await db.designversion.find_unique(
+        where={"projectId_version": {"projectId": project_id, "version": version}}
+    )
+    if not design_version:
+        return error_response("VERSION_NOT_FOUND", f"Version {version} not found", http_status=404)
+
+    metadata = design_version.metadata or {}
+    object_key = metadata.get("artifacts", {}).get(artifact)
+    if not object_key:
+        return error_response("ARTIFACT_NOT_FOUND", "Artifact not found", http_status=404)
+    return await _download_object(object_key, storage)
 
 
 @router.get("/{version}")
@@ -124,29 +160,25 @@ async def delete_version(
                 "action": "DELETE_VERSION",
                 "projectId": project_id,
                 "versionId": design_version.id,
-                "details": Json({"version": version}),
+                "details": Json({"old": {"version": version}, "new": None}),
             }
         )
 
     return success_response(data={"message": f"Version {version} deleted successfully"})
 
 
-@router.post("/{version}/duplicate")
-async def duplicate_version(
+async def _copy_version(
     project_id: str,
     version: int,
-    current_user: dict = Depends(get_generation_user),
+    current_user: dict,
+    action: str,
 ):
-    """Duplicate a design version and its persisted spatial records."""
-    if not await _can_access_project(project_id, current_user):
-        return error_response("PROJECT_NOT_FOUND", "Project not found or access denied", http_status=404)
-
     async with db.tx() as transaction:
         source = await transaction.designversion.find_unique(
             where={"projectId_version": {"projectId": project_id, "version": version}}
         )
         if not source:
-            return error_response("VERSION_NOT_FOUND", f"Version {version} not found", http_status=404)
+            return None
 
         last_version = await transaction.designversion.find_first(
             where={"projectId": project_id},
@@ -191,11 +223,44 @@ async def duplicate_version(
         await transaction.auditlog.create(
             data={
                 "userId": current_user["id"],
-                "action": "DUPLICATE_VERSION",
+                "action": action,
                 "projectId": project_id,
                 "versionId": duplicate.id,
-                "details": Json({"src_version": version, "new_version": next_version}),
+                "details": Json({
+                    "old": {"version": version},
+                    "new": {"version": next_version},
+                }),
             }
         )
 
+    return duplicate
+
+
+@router.post("/{version}/duplicate")
+async def duplicate_version(
+    project_id: str,
+    version: int,
+    current_user: dict = Depends(get_generation_user),
+):
+    """Duplicate a design version and its persisted spatial records."""
+    if not await _can_access_project(project_id, current_user):
+        return error_response("PROJECT_NOT_FOUND", "Project not found or access denied", http_status=404)
+    duplicate = await _copy_version(project_id, version, current_user, "DUPLICATE_VERSION")
+    if not duplicate:
+        return error_response("VERSION_NOT_FOUND", f"Version {version} not found", http_status=404)
     return success_response(data=duplicate.model_dump())
+
+
+@router.post("/{version}/rollback")
+async def rollback_version(
+    project_id: str,
+    version: int,
+    current_user: dict = Depends(get_generation_user),
+):
+    """Restore an older design as a new latest version."""
+    if not await _can_access_project(project_id, current_user):
+        return error_response("PROJECT_NOT_FOUND", "Project not found or access denied", http_status=404)
+    restored = await _copy_version(project_id, version, current_user, "ROLLBACK_VERSION")
+    if not restored:
+        return error_response("VERSION_NOT_FOUND", f"Version {version} not found", http_status=404)
+    return success_response(data=restored.model_dump())

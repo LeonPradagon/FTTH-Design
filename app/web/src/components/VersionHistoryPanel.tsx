@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Copy, Trash2, X, AlertCircle, Play } from 'lucide-react';
+import { Clock, Copy, RotateCcw, Trash2, X, AlertCircle, Play } from 'lucide-react';
 import type { GenerationConfig } from './GenerationConfigModal';
 import type { DesignStats, ValidationResult } from './ValidationStatsPanel';
 
@@ -10,6 +10,7 @@ export interface DesignVersion {
   config: GenerationConfig;
   stats: DesignStats;
   validation?: ValidationResult;
+  artifacts?: Partial<Record<'kmz' | 'csv', string>>;
   status: string;
   createdAt: string;
 }
@@ -19,6 +20,7 @@ interface VersionHistoryPanelProps {
   onClose: () => void;
   onLoadVersion: (version: DesignVersion) => void;
   onCompareVersions: (v1: DesignVersion, v2: DesignVersion) => void;
+  canMutate?: boolean;
 }
 
 async function getVersions(projectId: string): Promise<DesignVersion[]> {
@@ -28,7 +30,7 @@ async function getVersions(projectId: string): Promise<DesignVersion[]> {
   return payload.data || [];
 }
 
-export default function VersionHistoryPanel({ projectId, onClose, onLoadVersion, onCompareVersions }: VersionHistoryPanelProps) {
+export default function VersionHistoryPanel({ projectId, onClose, onLoadVersion, onCompareVersions, canMutate = true }: VersionHistoryPanelProps) {
   const [versions, setVersions] = useState<DesignVersion[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedVersions, setSelectedVersions] = useState<string[]>([]);
@@ -75,6 +77,18 @@ export default function VersionHistoryPanel({ projectId, onClose, onLoadVersion,
       if (res.ok) void refreshVersions();
     } catch (err) {
       console.error("Failed to duplicate version", err);
+    }
+  };
+
+  const handleRollback = async (versionNumber: number) => {
+    if (!confirm(`Restore version ${versionNumber} as the latest version?`)) return;
+    try {
+      const res = await fetch(`/api/proxy/api/projects/${projectId}/versions/${versionNumber}/rollback`, {
+        method: 'POST'
+      });
+      if (res.ok) void refreshVersions();
+    } catch (err) {
+      console.error("Failed to roll back version", err);
     }
   };
 
@@ -142,20 +156,31 @@ export default function VersionHistoryPanel({ projectId, onClose, onLoadVersion,
                   >
                     <Play className="w-3 h-3" /> Load Config
                   </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleDuplicate(v.version); }}
-                    className="p-1 text-gray-400 hover:text-blue-600 rounded hover:bg-gray-100 transition-colors"
-                    title="Duplicate"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleDelete(v.version); }}
-                    className="p-1 text-gray-400 hover:text-red-600 rounded hover:bg-gray-100 transition-colors"
-                    title="Delete"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {canMutate && (
+                    <>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDuplicate(v.version); }}
+                        className="p-1 text-gray-400 hover:text-blue-600 rounded hover:bg-gray-100 transition-colors"
+                        title="Duplicate"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleRollback(v.version); }}
+                        className="p-1 text-gray-400 hover:text-blue-600 rounded hover:bg-gray-100 transition-colors"
+                        title="Rollback"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(v.version); }}
+                        className="p-1 text-gray-400 hover:text-red-600 rounded hover:bg-gray-100 transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}

@@ -89,6 +89,7 @@ export default function Home() {
   }, [session, isPending, router]);
 
   const canEditColors = (session?.user as { role?: string } | undefined)?.role === "admin";
+  const canChangeProjects = (session?.user as { role?: string } | undefined)?.role !== "viewer";
   const [layers, setLayers] = useState<LayerConfig[]>(initialLayers);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<{ stage: string, message: string, percent: number } | null>(null);
@@ -1185,9 +1186,10 @@ export default function Home() {
         <VersionHistoryPanel
           projectId={currentProjectId}
           onClose={() => setShowVersionHistory(false)}
+          canMutate={canChangeProjects}
           onLoadVersion={(v) => {
             // Re-apply config
-            setGenerationConfig(v.config);
+            setGenerationConfig({ ...DEFAULT_CONFIG, ...v.config });
             addToast(`Config untuk versi ${v.version} berhasil dimuat. Silakan Generate ulang.`, 'success');
             // We can't automatically fetch the old KML since we don't have object storage yet,
             // but we can set the stats
@@ -1197,6 +1199,8 @@ export default function Home() {
             if (v.validation) {
               setValidationResult(v.validation);
             }
+            if (v.artifacts?.kmz) setKmzUrl(toProxyApiUrl(v.artifacts.kmz));
+            if (v.artifacts?.csv) setCsvUrl(toProxyApiUrl(v.artifacts.csv));
             setShowVersionHistory(false);
           }}
           onCompareVersions={(v1, v2) => {
@@ -1360,8 +1364,8 @@ export default function Home() {
           onChangeLayerColor={canEditColors ? handleLayerColorChange : undefined}
           savedProjects={savedProjects}
           onLoadProject={loadProject}
-          onDeleteProject={deleteProject}
-          onRenameProject={handleRenameProject}
+          onDeleteProject={canChangeProjects ? deleteProject : undefined}
+          onRenameProject={canChangeProjects ? handleRenameProject : undefined}
           currentProjectId={currentProjectId}
           onBackToProjects={unloadProject}
           stats={designStats}

@@ -9,7 +9,7 @@ from server.core.config import settings
 from server.core.logging import logger
 from server.services.generator.routing import snap_to_road
 
-def capacitated_clustering(points, capacity):
+def capacitated_clustering(points, capacity, min_size=1):
     """Kelompokkan daftar titik (lat, lon) menjadi cluster berukuran maksimum
     `capacity`. Dipakai dua kali: rumah->ODP dan ODP->ODC.
 
@@ -26,8 +26,21 @@ def capacitated_clustering(points, capacity):
     n = len(points)
     if n == 0:
         return []
+    if n < min_size:
+        raise ValueError(f"Cannot form a cluster of at least {min_size} from {n} points")
     if n <= capacity:
         return [list(range(n))]
+
+    cluster_count = math.ceil(n / capacity)
+    base_size, extra = divmod(n, cluster_count)
+    if base_size < min_size:
+        raise ValueError(
+            f"Cannot split {n} points into clusters between {min_size} and {capacity}"
+        )
+    target_sizes = [
+        base_size + (index < extra)
+        for index in range(cluster_count)
+    ] if min_size > 1 else [capacity] * cluster_count
 
     coords = np.array(points, dtype=float)
     remaining = np.arange(n, dtype=int)
@@ -46,7 +59,7 @@ def capacitated_clustering(points, capacity):
         seed = rem_coords[seed_pos]
 
         dists = np.linalg.norm(rem_coords - seed, axis=1)
-        order = np.argsort(dists)[:capacity]
+        order = np.argsort(dists)[:target_sizes[len(clusters)]]
         cluster = remaining[order].tolist()
         clusters.append(cluster)
         last_centroid = coords[cluster].mean(axis=0)
@@ -103,7 +116,11 @@ def build_design(houses, odp_capacity=None, odc_capacity=None, road_graph=None, 
     )
 
     # -- Tahap 1: rumah -> ODP (tiap ODP dapat splitter 1:odp_capacity) --
-    house_clusters = capacitated_clustering(houses, config.odp_capacity)
+    house_clusters = capacitated_clustering(
+        houses,
+        config.odp_capacity,
+        config.min_odp_cluster_size,
+    )
     
     def process_odp(i, idxs):
         cluster_houses = [houses[j] for j in idxs]
@@ -133,7 +150,11 @@ def build_design(houses, odp_capacity=None, odc_capacity=None, road_graph=None, 
 
     # -- Tahap 2: ODP -> ODC (tiap ODC melayani odc_capacity ODP, splitter 1:odc_capacity) --
     odp_coords = [(o.lat, o.lon) for o in odps]
-    odp_clusters = capacitated_clustering(odp_coords, config.odc_capacity)
+    odp_clusters = capacitated_clustering(
+        odp_coords,
+        config.odc_capacity,
+        config.min_odc_cluster_size,
+    )
     
     def process_odc(i, idxs):
         cluster_odps = [odps[j] for j in idxs]

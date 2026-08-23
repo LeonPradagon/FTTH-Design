@@ -75,7 +75,7 @@ async function proxy(req: NextRequest) {
         const sessionData = await auth.api.getSession({ headers: req.headers });
         if (sessionData?.user) {
           const userId = String(sessionData.user.id);
-          const role = String(sessionData.user.role || 'user');
+          const role = String(sessionData.user.role || 'engineer');
           const email = String(sessionData.user.email || '');
           headers.set('X-User-Id', userId);
           headers.set('X-User-Role', role);
