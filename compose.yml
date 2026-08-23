@@ -61,7 +61,7 @@ services:
       retries: 10
 
   graphhopper:
-    image: graphhopper/graphhopper:latest
+    image: israelhikingmap/graphhopper:11.0
     restart: unless-stopped
     ports:
       - "8989:8989"
@@ -69,7 +69,11 @@ services:
       JAVA_OPTS: -Xmx2g -Xms2g
     volumes:
       - graphhopper_data:/data
-    command: "--url https://download.geofabrik.de/asia/indonesia-latest.osm.pbf --host 0.0.0.0"
+    command:
+      - --url
+      - ${GRAPHHOPPER_PBF_URL:-https://download.geofabrik.de/asia/indonesia-latest.osm.pbf}
+      - --host
+      - 0.0.0.0
 
   server:
     build:
