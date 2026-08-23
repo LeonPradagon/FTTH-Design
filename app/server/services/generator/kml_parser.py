@@ -1,3 +1,4 @@
+import os
 import xml.etree.ElementTree as ET
 import zipfile
 from shapely.geometry import Polygon, Point
@@ -7,6 +8,9 @@ KML_NS = {"kml": "http://www.opengis.net/kml/2.2"}
 def _extract_kml_bytes(path):
     """Ambil isi file .kml mentah, baik dari file .kml langsung maupun dari
     dalam arsip .kmz (kmz = kml yang di-zip)."""
+    # API penyimpanan per akun menggunakan pathlib.Path, sedangkan pemanggil
+    # lama masih menggunakan string. Normalisasi keduanya di satu tempat.
+    path = os.fspath(path)
     if path.lower().endswith(".kmz"):
         with zipfile.ZipFile(path, "r") as z:
             kml_name = next((n for n in z.namelist() if n.lower().endswith(".kml")), None)
@@ -46,6 +50,58 @@ def read_points(path):
     if not points:
         raise ValueError(f"Tidak ditemukan Placemark berupa Point di {path}.")
     return points
+
+
+def _point_from_placemark(placemark):
+    point_el = placemark.find(".//kml:Point/kml:coordinates", KML_NS)
+    if point_el is None or not point_el.text:
+        return None
+    lon, lat, *_ = point_el.text.strip().split(",")
+    name_el = placemark.find("kml:name", KML_NS)
+    name = name_el.text.strip() if name_el is not None and name_el.text else "POP"
+    return {"name": name, "lon": float(lon), "lat": float(lat)}
+
+
+def read_pop_point(path):
+    """Return POP/OLT from a combined KML/KMZ, or ``None`` when absent.
+
+    Folder context is checked first because exported POP placemarks often use
+    a location name (for example ``Waru``) rather than the literal word POP.
+    """
+    root = ET.fromstring(_extract_kml_bytes(path))
+
+    for folder in root.findall(".//kml:Folder", KML_NS):
+        folder_name_el = folder.find("kml:name", KML_NS)
+        folder_name = (
+            folder_name_el.text.strip().lower()
+            if folder_name_el is not None and folder_name_el.text
+            else ""
+        )
+        if "pop" not in folder_name and "olt" not in folder_name:
+            continue
+        for placemark in folder.findall(".//kml:Placemark", KML_NS):
+            point = _point_from_placemark(placemark)
+            if point:
+                return point
+
+    for placemark in root.findall(".//kml:Placemark", KML_NS):
+        name_el = placemark.find("kml:name", KML_NS)
+        description_el = placemark.find("kml:description", KML_NS)
+        searchable_text = " ".join(
+            text.strip().lower()
+            for text in (
+                name_el.text if name_el is not None else None,
+                description_el.text if description_el is not None else None,
+            )
+            if text
+        )
+        if "pop" not in searchable_text and "olt" not in searchable_text:
+            continue
+        point = _point_from_placemark(placemark)
+        if point:
+            return point
+
+    return None
 
 
 def read_houses_from_file(path, boundary=None):

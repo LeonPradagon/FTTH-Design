@@ -25,15 +25,18 @@ from shapely.geometry import Point, box
 from shapely.ops import unary_union
 
 from server.core.logging import logger
-from server.core.paths import CACHE_DIR
+from server.services.generator.routing import prepare_road_graph
 
 # ========== Config ==========
+CACHE_DIR = os.path.abspath("cache")
 REGION_CACHE_DIR = os.path.join(CACHE_DIR, "regions")
 os.makedirs(REGION_CACHE_DIR, exist_ok=True)
 
 # Grid size for region caching (in degrees)
 # 0.05° ≈ 5.5 km — cukup besar untuk mencakup boundary + buffer
 GRID_SIZE = 0.05
+ROAD_CACHE_VERSION = "v3"
+OSM_CACHE_MAX_AGE_SECONDS = int(os.getenv("OSM_CACHE_MAX_AGE_SECONDS", str(24 * 60 * 60)))
 
 # Overpass API endpoints for fallback
 OVERPASS_ENDPOINTS = [
@@ -45,7 +48,7 @@ OVERPASS_ENDPOINTS = [
 
 ox.settings.timeout = 15
 ox.settings.use_cache = True
-ox.settings.cache_folder = str(CACHE_DIR)
+ox.settings.cache_folder = CACHE_DIR
 
 
 # ========== Internal Helpers ==========
@@ -71,6 +74,38 @@ def _region_bbox(polygon):
     """Bounding box (Shapely box) untuk region tile."""
     gx1, gy1, gx2, gy2 = _region_key(polygon)
     return box(gx1, gy1, gx2, gy2)
+
+
+def _cache_is_fresh(path: str, force_refresh: bool = False) -> bool:
+    if force_refresh or not os.path.exists(path):
+        return False
+    metadata_path = f"{path}.meta.json"
+    try:
+        if os.path.exists(metadata_path):
+            import json
+            with open(metadata_path) as metadata_file:
+                metadata = json.load(metadata_file)
+            return float(metadata.get("expires_at", 0)) >= time.time()
+    except Exception:
+        logger.warning("Metadata cache OSM rusak, memakai mtime: %s", metadata_path)
+    return (time.time() - os.path.getmtime(path)) <= OSM_CACHE_MAX_AGE_SECONDS
+
+
+def _write_cache_metadata(path: str, polygon, feature_count: int, source: str):
+    import json
+    now = time.time()
+    metadata = {
+        "created_at": now,
+        "expires_at": now + OSM_CACHE_MAX_AGE_SECONDS,
+        "bbox": list(polygon.bounds),
+        "feature_count": feature_count,
+        "source": source,
+        "cache_version": ROAD_CACHE_VERSION,
+    }
+    temporary = f"{path}.meta.json.tmp"
+    with open(temporary, "w") as metadata_file:
+        json.dump(metadata, metadata_file)
+    os.replace(temporary, f"{path}.meta.json")
 
 
 def _safe_native_features(polygon, tags):
@@ -154,12 +189,12 @@ def _safe_native_graph(polygon, network_type="all"):
 
 # ========== Cache Layer: Buildings ==========
 
-def _get_buildings_cached(polygon):
+def _get_buildings_cached(polygon, force_refresh=False):
     """Ambil bangunan dari cache lokal. Return GeoDataFrame atau None."""
     rhash = _region_hash(polygon)
     cache_path = os.path.join(REGION_CACHE_DIR, f"buildings_{rhash}.gpkg")
     
-    if os.path.exists(cache_path):
+    if os.path.exists(cache_path) and _cache_is_fresh(cache_path, force_refresh):
         logger.info(f"Loading buildings from local cache: {cache_path}")
         try:
             gdf = gpd.read_file(cache_path)
@@ -182,6 +217,7 @@ def _save_buildings_cache(polygon, gdf):
         if not cols:
             cols = ['geometry']
         gdf[cols].to_file(cache_path, driver='GPKG')
+        _write_cache_metadata(cache_path, polygon, len(gdf), "overpass")
         logger.info(f"Cached {len(gdf)} buildings to {cache_path}")
     except Exception as e:
         logger.warning(f"Failed to save buildings cache: {e}")
@@ -189,28 +225,38 @@ def _save_buildings_cache(polygon, gdf):
 
 # ========== Cache Layer: Road Graph ==========
 
-def _get_road_graph_cached(polygon):
+def _get_road_graph_cached(polygon, force_refresh=False):
     """Ambil road graph dari cache GraphML lokal. Return nx.Graph atau None."""
     rhash = _region_hash(polygon)
-    cache_path = os.path.join(REGION_CACHE_DIR, f"roads_{rhash}.graphml")
-    
-    if os.path.exists(cache_path):
+    cache_paths = [
+        os.path.join(REGION_CACHE_DIR, f"roads_{ROAD_CACHE_VERSION}_{rhash}.graphml"),
+        os.path.join(REGION_CACHE_DIR, f"roads_v2_{rhash}.graphml"),
+        os.path.join(REGION_CACHE_DIR, f"roads_{rhash}.graphml"),
+    ]
+
+    for cache_path in cache_paths:
+        if not os.path.exists(cache_path) or not _cache_is_fresh(cache_path, force_refresh):
+            continue
         logger.info(f"Loading road graph from local cache: {cache_path}")
         try:
             G = ox.load_graphml(cache_path)
+            G = prepare_road_graph(G)
+            if f"roads_{ROAD_CACHE_VERSION}_" not in os.path.basename(cache_path):
+                _save_road_graph_cache(polygon, G)
             return G
         except Exception as e:
             logger.warning(f"Failed to read road graph cache: {e}")
-    
+
     return None
 
 
 def _save_road_graph_cache(polygon, G):
     """Simpan road graph ke cache GraphML lokal."""
     rhash = _region_hash(polygon)
-    cache_path = os.path.join(REGION_CACHE_DIR, f"roads_{rhash}.graphml")
+    cache_path = os.path.join(REGION_CACHE_DIR, f"roads_{ROAD_CACHE_VERSION}_{rhash}.graphml")
     try:
         ox.save_graphml(G, cache_path)
+        _write_cache_metadata(cache_path, polygon, len(G.nodes), "osm")
         logger.info(f"Cached road graph ({len(G.nodes)} nodes) to {cache_path}")
     except Exception as e:
         logger.warning(f"Failed to save road graph cache: {e}")
@@ -253,7 +299,7 @@ def _save_pois_cache(polygon, gdf, tag_key, tag_value):
 # PUBLIC API — Pengganti fungsi-fungsi di osm_client.py
 # =============================================================
 
-def fetch_houses_in_boundary(polygon):
+def fetch_houses_in_boundary(polygon, force_refresh=False):
     """Ambil titik centroid tiap bangunan di dalam boundary.
     Cache-first: baca dari disk jika tersedia, lalu Overpass API."""
     
@@ -262,7 +308,7 @@ def fetch_houses_in_boundary(polygon):
     
     # 1. Cek cache lokal
     region = _region_bbox(polygon)
-    cached = _get_buildings_cached(region)
+    cached = _get_buildings_cached(region, force_refresh=force_refresh)
     
     if cached is not None and not cached.empty:
         # Filter ke polygon aktual
@@ -307,36 +353,64 @@ def fetch_houses_in_boundary(polygon):
 
 def find_strategic_pop(boundary, buffer_deg=0.01):
     """Cari lokasi POP strategis.
-    Prioritas: 1. Gedung Stasiun Kereta, 2. Jalan Raya Utama, 3. Sembarang Jalan."""
+    Prioritas bisnis: 1. Stasiun, 2. Kantor, 3. Jalan Raya Utama,
+    4. Sembarang Jalan.
+    """
     
     search_area = boundary.buffer(buffer_deg)
     region = _region_bbox(search_area)
-    
-    # 1. Cari Gedung Stasiun Kereta Api
+
+    def feature_point_and_name(features, fallback_name):
+        if features is None or features.empty:
+            return None
+        for _, row in features.iterrows():
+            geom = row.geometry
+            if geom is None:
+                continue
+            pt = geom if geom.geom_type == "Point" else geom.centroid
+            name = row.get('name', fallback_name) if hasattr(row, 'get') else fallback_name
+            if not isinstance(name, str) or not name.strip():
+                name = fallback_name
+            return {"name": name, "lon": pt.x, "lat": pt.y}
+        return None
+
+    # 1. Cari stasiun kereta sesuai lokasi bisnis POP.
     try:
-        cached = _get_pois_cached(region, 'building', 'train_station')
-        if cached is not None and not cached.empty:
-            stations = cached[cached.geometry.intersects(search_area)]
+        stations = _get_pois_cached(region, 'building', 'train_station')
+        if stations is None or stations.empty:
+            stations = _safe_native_features(
+                search_area,
+                tags={'building': 'train_station', 'railway': 'station'},
+            )
+            if not stations.empty:
+                _save_pois_cache(region, stations, 'building', 'train_station')
         else:
-            stations_gdf = _safe_native_features(search_area, tags={'building': 'train_station'})
-            if not stations_gdf.empty:
-                _save_pois_cache(region, stations_gdf, 'building', 'train_station')
-            stations = stations_gdf
-        
-        if not stations.empty:
-            for _, row in stations.iterrows():
-                geom = row.geometry
-                if geom is None:
-                    continue
-                pt = geom if geom.geom_type == "Point" else geom.centroid
-                name = row.get('name', 'Gedung Stasiun Kereta')
-                if not isinstance(name, str) or (isinstance(name, float) and math.isnan(name)):
-                    name = 'Gedung Stasiun Kereta'
-                return {"name": name, "lon": pt.x, "lat": pt.y}
+            stations = stations[stations.geometry.intersects(search_area)]
+        result = feature_point_and_name(stations, 'Stasiun Kereta')
+        if result:
+            return result
     except Exception as e:
         logger.info(f"Station search skipped: {e}")
+
+    # 2. Jika tidak ada stasiun, cari gedung/peruntukan kantor.
+    try:
+        offices = _get_pois_cached(region, 'office', 'any')
+        if offices is None or offices.empty:
+            offices = _safe_native_features(
+                search_area,
+                tags={'office': True, 'building': 'office'},
+            )
+            if not offices.empty:
+                _save_pois_cache(region, offices, 'office', 'any')
+        else:
+            offices = offices[offices.geometry.intersects(search_area)]
+        result = feature_point_and_name(offices, 'Kantor POP')
+        if result:
+            return result
+    except Exception as e:
+        logger.info(f"Office search skipped: {e}")
     
-    # 2. Cari Jalan Raya Utama
+    # 3. Cari Jalan Raya Utama
     try:
         cached = _get_pois_cached(region, 'highway', 'main')
         if cached is not None and not cached.empty:
@@ -359,7 +433,7 @@ def find_strategic_pop(boundary, buffer_deg=0.01):
     except Exception as e:
         logger.info(f"Main road search skipped: {e}")
     
-    # 3. Cari Sembarang Jalan
+    # 4. Cari Sembarang Jalan
     try:
         any_roads = _safe_native_features(search_area, tags={'highway': True})
         if not any_roads.empty:
@@ -379,21 +453,24 @@ def find_strategic_pop(boundary, buffer_deg=0.01):
     return {"name": "Auto POP (Titik Tengah)", "lon": boundary.centroid.x, "lat": boundary.centroid.y}
 
 
-def fetch_road_graph(boundary, pop, buffer_deg=0.002):
+def fetch_road_graph(boundary, pop=None, buffer_deg=0.002, force_refresh=False, include_pop=True):
     """Ambil graf jaringan jalan.
     Cache-first: baca dari GraphML lokal jika tersedia."""
     
     print("Mengambil data jaringan jalan...")
     start = time.time()
     
-    combined = unary_union([boundary, Point(pop["lon"], pop["lat"])])
+    geometries = [boundary]
+    if include_pop and pop is not None:
+        geometries.append(Point(pop["lon"], pop["lat"]))
+    combined = unary_union(geometries)
     query_area = combined.convex_hull.buffer(buffer_deg)
     region = _region_bbox(query_area)
     
     # 1. Cek cache lokal (GraphML)
-    cached_graph = _get_road_graph_cached(region)
+    cached_graph = _get_road_graph_cached(region, force_refresh=force_refresh)
     if cached_graph is not None:
-        G = cached_graph
+        G = prepare_road_graph(cached_graph)
         G = ox.truncate.largest_component(G, strongly=False)
         G = ox.convert.to_undirected(G)
         elapsed = time.time() - start
@@ -403,7 +480,8 @@ def fetch_road_graph(boundary, pop, buffer_deg=0.002):
     # 2. Fallback ke Overpass API
     print("  Cache lokal tidak tersedia, mengambil dari OpenStreetMap...")
     try:
-        G = _safe_native_graph(query_area, network_type="all")
+        G = _safe_native_graph(query_area, network_type="drive")
+        G = prepare_road_graph(G)
         G = ox.truncate.largest_component(G, strongly=False)
         G_undirected = ox.convert.to_undirected(G)
         

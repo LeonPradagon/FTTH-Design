@@ -7,7 +7,9 @@ import { WebMercatorViewport } from "@deck.gl/core";
 import { TileLayer } from "@deck.gl/geo-layers";
 import { BitmapLayer, GeoJsonLayer } from "@deck.gl/layers";
 import { kml } from "@tmcw/togeojson";
+import JSZip from "jszip";
 import { LayerConfig, KmlNode } from "../app/page";
+import { DEFAULT_FEATURE_COLORS } from "@/lib/feature-colors";
 
 import { Plus, Minus, Compass, ArrowUp, PersonStanding, X } from "lucide-react";
 
@@ -47,8 +49,13 @@ const getPinDataUri = (color: string) => {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 };
 
-const getPoleDataUri = (color: string, bg: string) => {
-  const svg = `<svg width="96" height="96" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="11" fill="${bg}" stroke="${color}" stroke-width="2"/><g transform="translate(5, 5) scale(0.583)"><line x1="12" y1="2" x2="12" y2="22" stroke="${color}" stroke-width="2" stroke-linecap="round"/><line x1="6" y1="6" x2="18" y2="6" stroke="${color}" stroke-width="2" stroke-linecap="round"/><line x1="8" y1="10" x2="16" y2="10" stroke="${color}" stroke-width="2" stroke-linecap="round"/></g></svg>`;
+const getTriangleDataUri = (color: string) => {
+  const svg = `<svg width="96" height="96" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2 22 21H2L12 2Z" fill="${color}" stroke="white" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14" r="2.25" fill="white"/></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+};
+
+const getServerRackDataUri = (color: string) => {
+  const svg = `<svg width="96" height="96" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="2" width="18" height="20" rx="2.5" fill="${color}" stroke="white" stroke-width="1.5"/><rect x="6" y="5" width="12" height="4" rx="1" fill="#422006" fill-opacity=".9"/><rect x="6" y="10" width="12" height="4" rx="1" fill="#422006" fill-opacity=".9"/><rect x="6" y="15" width="12" height="4" rx="1" fill="#422006" fill-opacity=".9"/><circle cx="8" cy="7" r=".8" fill="#fde68a"/><circle cx="8" cy="12" r=".8" fill="#fde68a"/><circle cx="8" cy="17" r=".8" fill="#fde68a"/><path d="M11 7h5M11 12h5M11 17h5" stroke="#fde68a" stroke-width="1" stroke-linecap="round"/></svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 };
 
@@ -57,7 +64,85 @@ const getHouseDataUri = (color: string, bg: string) => {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 };
 
-const parseKmlTree = (parentEl: Element, doc: Document): KmlNode[] => {
+type FeatureClassification = {
+  isPop: boolean;
+  isOdc: boolean;
+  isClosure: boolean;
+  isOdp: boolean;
+  isHouse: boolean;
+  isFeeder: boolean;
+  isDistribution: boolean;
+  isHouseCable: boolean;
+};
+
+const classifyFeature = (feature: any, layer: LayerConfig): FeatureClassification => {
+  const name = String(feature.properties?.name || "");
+  const description = String(feature.properties?.description || "");
+  const folderPath = String(feature.properties?.kmlFolderPath || "");
+  const nameUpper = name.toUpperCase();
+  const descriptionUpper = description.toUpperCase();
+  const folderPathUpper = folderPath.toUpperCase();
+  const layerNameUpper = layer.name.toUpperCase();
+  const geometryType = feature.geometry?.type;
+  const isLine = geometryType === "LineString" || geometryType === "MultiLineString";
+  const isPoint = geometryType === "Point" || geometryType === "MultiPoint";
+  const isFtthDesignLayer = layer.id.includes("design") || layerNameUpper.includes("FTTH");
+  const hasPopContext = folderPathUpper
+    .split("/")
+    .some((part) => /(^|\s)(POP|OLT)(\s|$)/.test(part.trim()));
+
+  const isPop = isPoint && (
+    layer.id === "pop"
+    || layerNameUpper.includes("POP")
+    || layerNameUpper.includes("OLT")
+    || hasPopContext
+    || descriptionUpper.includes("SERVER OLT")
+    || nameUpper.includes("POP")
+    || nameUpper.includes("OLT")
+  );
+  const isOdc = isPoint && (
+    nameUpper.startsWith("ODC") || descriptionUpper.includes("JUMLAH ODP:")
+  );
+  const isClosure = isPoint && (
+    nameUpper.includes("JOIN CLOSURE") || nameUpper.includes("CLOSURE")
+  );
+  const isOdp = isPoint && (
+    /^\d{1,2}\/\d{1,2}$/.test(name)
+    || descriptionUpper.includes("INDUK: ODC")
+    || nameUpper.includes("ODP")
+  );
+  const isHouse = isPoint && (
+    /^\d{1,2}\/\d{1,2}-\d{1,2}$/.test(name)
+    || descriptionUpper.includes("INDUK ODP:")
+    || (isFtthDesignLayer && !isPop && !isOdc && !isClosure && !isOdp)
+  );
+
+  const isFeeder = isLine && (
+    nameUpper.includes("FEEDER")
+    || descriptionUpper.includes("FEEDER")
+    || feature.properties?.stroke === "#ff0000"
+  );
+  const isHouseCable = isLine && (
+    nameUpper.includes(" TO HC ")
+    || nameUpper.includes("KABEL DROP")
+    || nameUpper.includes("DROP CABLE")
+    || descriptionUpper.includes("KABEL DROP")
+  );
+  const isDistribution = isLine && !isFeeder && !isHouseCable;
+
+  return {
+    isPop,
+    isOdc,
+    isClosure,
+    isOdp,
+    isHouse,
+    isFeeder,
+    isDistribution,
+    isHouseCable,
+  };
+};
+
+const parseKmlTree = (parentEl: Element, doc: Document, folderPath: string[] = []): KmlNode[] => {
   const nodes: KmlNode[] = [];
   
   for (let i = 0; i < parentEl.children.length; i++) {
@@ -73,7 +158,8 @@ const parseKmlTree = (parentEl: Element, doc: Document): KmlNode[] => {
       
       const id = child.getAttribute('id') || `folder-${Math.random().toString(36).substr(2, 9)}`;
       
-      const childrenNodes = parseKmlTree(child, doc);
+      const childFolderPath = tagName === 'Folder' ? [...folderPath, name] : folderPath;
+      const childrenNodes = parseKmlTree(child, doc, childFolderPath);
       
       // Don't add kml or Document if they have no direct placemarks and only 1 folder, but keeping it is fine.
       // We'll just push them all. The UI can handle nested structure.
@@ -114,6 +200,15 @@ const parseKmlTree = (parentEl: Element, doc: Document): KmlNode[] => {
       dataEl.appendChild(valueEl);
       extendedData.appendChild(dataEl);
 
+      if (folderPath.length > 0) {
+        const folderDataEl = doc.createElement('Data');
+        folderDataEl.setAttribute('name', 'kmlFolderPath');
+        const folderValueEl = doc.createElement('value');
+        folderValueEl.textContent = folderPath.join('/');
+        folderDataEl.appendChild(folderValueEl);
+        extendedData.appendChild(folderDataEl);
+      }
+
       nodes.push({
         id,
         name,
@@ -126,16 +221,19 @@ const parseKmlTree = (parentEl: Element, doc: Document): KmlNode[] => {
   return nodes;
 };
 
-const findNodeVisible = (nodes: KmlNode[] | undefined, targetId: string): boolean | null => {
-  if (!nodes) return null;
-  for (const node of nodes) {
-    if (node.id === targetId) return node.visible;
-    if (node.children) {
-      const res = findNodeVisible(node.children, targetId);
-      if (res !== null) return res;
-    }
-  }
-  return null;
+const buildTreeVisibilityIndex = (trees: Record<string, KmlNode[]> | undefined) => {
+  const index = new Map<string, Map<string, boolean>>();
+  if (!trees) return index;
+  Object.entries(trees).forEach(([layerId, nodes]) => {
+    const layerIndex = new Map<string, boolean>();
+    const visit = (items: KmlNode[]) => items.forEach((node) => {
+      layerIndex.set(node.id, node.visible);
+      if (node.children) visit(node.children);
+    });
+    visit(nodes);
+    index.set(layerId, layerIndex);
+  });
+  return index;
 };
 
 interface MapProps {
@@ -162,6 +260,15 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
   const [selectedFeature, setSelectedFeature] = useState<any>(null);
   const coordsRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Prevent duplicate requests while React re-renders during a layer update.
+  // This is especially important for generated KML files, which can contain
+  // thousands of features and take a noticeable amount of time to parse.
+  const loadingKeysRef = useRef<Set<string>>(new Set());
+  const messageHandlerRef = useRef(onShowMessage);
+  useEffect(() => {
+    messageHandlerRef.current = onShowMessage;
+  }, [onShowMessage]);
+  const treeVisibility = useMemo(() => buildTreeVisibilityIndex(kmlTrees), [kmlTrees]);
 
   // Controlled viewState for map navigation controls
   const [viewState, setViewState] = useState({
@@ -185,25 +292,63 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
     }
   };
 
+  // Project records created before the proxy was introduced contain raw
+  // /api/files URLs. Normalize them at the map boundary so every protected
+  // file request carries the browser session through Next.js.
+  const resolveLayerUrl = (url: string) => {
+    if (url.startsWith('/api/') && !url.startsWith('/api/proxy/')) {
+      return `/api/proxy${url}`;
+    }
+    return url;
+  };
+
   // Default altitude based on initial zoom 4
   const currentZoomRef = useRef(4);
 
   useEffect(() => {
     layers.forEach(async (layer) => {
-      if (layer.visible && !geoDataMap[`${layer.id}-${layer.url}`]) {
-        try {
-          const res = await fetch(layer.url);
-          const kmlText = await res.text();
+      const layerUrl = resolveLayerUrl(layer.url);
+      const cacheKey = `${layer.id}-${layerUrl}`;
+      if (!layer.visible || geoDataMap[cacheKey] || loadingKeysRef.current.has(cacheKey)) return;
+
+      loadingKeysRef.current.add(cacheKey);
+      try {
+          const res = await fetch(layerUrl, {
+            cache: "no-store",
+            credentials: "include",
+          });
+          if (!res.ok) {
+            throw new Error(`Gagal memuat ${layer.name} (${res.status})`);
+          }
+          let body: string;
+          const isKmz = layerUrl.toLowerCase().split("?")[0].endsWith(".kmz");
+          if (isKmz) {
+            const archive = await JSZip.loadAsync(await res.arrayBuffer());
+            const kmlEntry = Object.keys(archive.files).find(name => name.toLowerCase().endsWith(".kml"));
+            if (!kmlEntry) throw new Error(`KMZ ${layer.name} tidak berisi file KML`);
+            body = await archive.files[kmlEntry].async("text");
+          } else {
+            body = await res.text();
+          }
+          // A proxy/auth error is JSON.  Do not pass it to the XML parser and
+          // silently render an empty layer.
+          if (!body.trim().startsWith("<")) {
+            throw new Error(`Respons ${layer.name} bukan KML yang valid`);
+          }
           const parser = new DOMParser();
-          const doc = parser.parseFromString(kmlText, "text/xml");
-          
-          const tree = parseKmlTree(doc.documentElement, doc);
-          if (onTreeLoaded) {
-            onTreeLoaded(layer.id, tree);
+          const doc = parser.parseFromString(body, "text/xml");
+          if (doc.getElementsByTagName("parsererror").length > 0 || !doc.documentElement) {
+            throw new Error(`KML ${layer.name} tidak dapat diparse`);
           }
 
+          const tree = parseKmlTree(doc.documentElement, doc);
+          if (onTreeLoaded) onTreeLoaded(layer.id, tree);
+
           const geoJson = kml(doc);
-          setGeoDataMap(prev => ({ ...prev, [`${layer.id}-${layer.url}`]: geoJson }));
+          if (!geoJson || !Array.isArray(geoJson.features)) {
+            throw new Error(`KML ${layer.name} tidak berisi feature`);
+          }
+          setGeoDataMap(prev => ({ ...prev, [cacheKey]: geoJson }));
 
           // Auto-fit bounds
           if (containerRef.current && geoJson.type === 'FeatureCollection' && geoJson.features.length > 0) {
@@ -253,89 +398,70 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
           }
         } catch (err) {
           console.error(`Error loading KML ${layer.name}:`, err);
+          messageHandlerRef.current?.(err instanceof Error ? err.message : `Gagal memuat ${layer.name}`, "error");
+        } finally {
+          loadingKeysRef.current.delete(cacheKey);
         }
-      }
     });
   }, [layers, geoDataMap, onTreeLoaded]);
 
   const deckLayers = useMemo(() => {
     return layers
-      .filter((layer) => layer.visible && geoDataMap[`${layer.id}-${layer.url}`])
+      .filter((layer) => layer.visible && geoDataMap[`${layer.id}-${resolveLayerUrl(layer.url)}`])
       .map((layer) => {
-        const geoJson = geoDataMap[`${layer.id}-${layer.url}`];
+        const geoJson = geoDataMap[`${layer.id}-${resolveLayerUrl(layer.url)}`];
         if (!geoJson || !Array.isArray(geoJson.features)) return null;
         
         const filteredFeatures = geoJson.features.filter((f: any) => {
            if (!f || !f.geometry || !f.geometry.type) return false;
-           const name = String(f.properties?.name || "");
-           const desc = String(f.properties?.description || "");
-           const nameUpper = name.toUpperCase();
-           
-            const geomType = f.geometry?.type;
-            const isLine = geomType === "LineString" || geomType === "MultiLineString";
-            const isPoint = geomType === "Point" || geomType === "MultiPoint";
-
-            const isPop = isPoint && (layer.id === 'pop' || desc.includes("SERVER OLT") || nameUpper.includes("POP") || nameUpper.includes("OLT"));
-            const isOdc = isPoint && (nameUpper.startsWith("ODC") || desc.includes("Jumlah ODP:"));
-            const isClosure = isPoint && (nameUpper.includes("JOIN CLOSURE") || nameUpper.includes("CLOSURE"));
-            const isOdp = isPoint && ((/^\d{1,2}\/\d{1,2}$/.test(name)) || desc.includes("Induk: ODC") || nameUpper.includes("ODP"));
-            const isHouse = isPoint && ((/^\d{1,2}\/\d{1,2}-\d{1,2}$/.test(name)) || desc.includes("Induk ODP:") || (!isPop && !isOdc && !isClosure && !isOdp));
-            
-            const isFeeder = isLine && (nameUpper.includes("FEEDER") || desc.includes("FEEDER") || f.properties?.stroke === "#ff0000");
-            const isDistribution = isLine && !isFeeder;
+           const classification = classifyFeature(f, layer);
 
            if (filters && layer.id !== "boundary") {
-             if (isPop && !filters.showPop) return false;
-             if ((isOdc || isClosure) && !filters.showOdc) return false;
-             if (isOdp && !filters.showOdp) return false;
-             if (isHouse && !filters.showHouse) return false;
+             if (classification.isPop && !filters.showPop) return false;
+             if ((classification.isOdc || classification.isClosure) && !filters.showOdc) return false;
+             if (classification.isOdp && !filters.showOdp) return false;
+             if (classification.isHouse && !filters.showHouse) return false;
+             if (classification.isHouseCable && !filters.showHouse) return false;
              
-             if (isFeeder && !filters.showFeeder) return false;
-             if (isDistribution && !filters.showDistribution) return false;
+             if (classification.isFeeder && !filters.showFeeder) return false;
+             if (classification.isDistribution && !filters.showDistribution) return false;
            }
 
-           if (kmlTrees && kmlTrees[layer.id]) {
+           const layerTreeVisibility = treeVisibility.get(layer.id);
+           if (layerTreeVisibility) {
              const treeId = f.properties?.treeId;
-             if (treeId) {
-               const isVisible = findNodeVisible(kmlTrees[layer.id], treeId);
-               if (isVisible === false) return false;
-             }
+             if (treeId && layerTreeVisibility.get(treeId) === false) return false;
            }
 
            return true;
         });
 
-        const data = {
+        const validFeatures: GeoJSON.Feature[] = filteredFeatures.map((f: any) => ({
+            type: "Feature",
+            geometry: f.geometry,
+            properties: f.properties || {}
+        }));
+
+        const data: GeoJSON.FeatureCollection = {
            type: "FeatureCollection",
-           features: filteredFeatures
+           features: validFeatures
         };
 
         return new GeoJsonLayer({
           id: `geojson-${layer.id}-${layer.url}`,
-          data: data as any,
+          data: data,
           pickable: true,
           stroked: true,
           filled: true,
           lineWidthUnits: 'pixels',
           pointRadiusUnits: 'pixels',
           getFillColor: (f: any) => {
-            const name = String(f.properties?.name || "");
-            const desc = String(f.properties?.description || "");
-            const nameUpper = name.toUpperCase();
+            const classification = classifyFeature(f, layer);
 
-            const geomType = f.geometry?.type;
-            const isPoint = geomType === "Point" || geomType === "MultiPoint";
-
-            const isPop = isPoint && (layer.id === 'pop' || desc.includes("SERVER OLT") || nameUpper.includes("POP") || nameUpper.includes("OLT"));
-            const isOdc = isPoint && (nameUpper.startsWith("ODC") || desc.includes("Jumlah ODP:"));
-            const isClosure = isPoint && (nameUpper.includes("JOIN CLOSURE"));
-            const isOdp = isPoint && ((/^\d{2}\/\d{2}$/.test(name)) || desc.includes("Induk: ODC"));
-            const isHouse = isPoint && ((/^\d{2}\/\d{2}-\d{2}$/.test(name)) || desc.includes("Induk ODP:"));
-
-            if (isPop) return getPinColorArray(featureColors?.pop || '#ef4444');
-            if (isOdc || isClosure) return getPinColorArray(featureColors?.odc || '#3b82f6');
-            if (isOdp) return getPinColorArray(featureColors?.odp || '#10b981');
-            if (isHouse) return getPinColorArray(featureColors?.house || '#6b7280');
+            if (classification.isPop) return getPinColorArray(featureColors?.pop || DEFAULT_FEATURE_COLORS.pop);
+            if (classification.isOdc || classification.isClosure) return getPinColorArray(featureColors?.odc || DEFAULT_FEATURE_COLORS.odc);
+            if (classification.isOdp) return getPinColorArray(featureColors?.odp || DEFAULT_FEATURE_COLORS.odp);
+            if (classification.isHouse) return getPinColorArray(featureColors?.house || DEFAULT_FEATURE_COLORS.house);
             let baseColor: [number, number, number, number] = getPinColorArray(layer.color);
             if (f.properties?.fill) {
                baseColor = getPinColorArray(f.properties.fill);
@@ -349,16 +475,14 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
             if (f.geometry?.type === "Point") {
                 return [255, 255, 255, 255]; // White border for points
             }
-            const name = String(f.properties?.name || "");
-            const desc = String(f.properties?.description || "");
-            const nameUpper = name.toUpperCase();
-            
-            const isFeeder = nameUpper.includes("FEEDER") || desc.includes("FEEDER") || f.properties?.stroke === "#ff0000";
+            const classification = classifyFeature(f, layer);
             const isFtthLayer = layer.id.includes("design") || layer.name.toUpperCase().includes("FTTH");
-            const isDistribution = isFtthLayer && !isFeeder;
 
-            if (isFeeder) return getPinColorArray(featureColors?.feeder || '#ef4444');
-            if (isDistribution) return getPinColorArray(featureColors?.distribution || '#3b82f6');
+            if (classification.isFeeder) return getPinColorArray(featureColors?.feeder || DEFAULT_FEATURE_COLORS.feeder);
+            if (classification.isHouseCable) return getPinColorArray(featureColors?.house || DEFAULT_FEATURE_COLORS.house);
+            if (isFtthLayer && classification.isDistribution) {
+              return getPinColorArray(featureColors?.distribution || DEFAULT_FEATURE_COLORS.distribution);
+            }
 
             return getPinColorArray(f.properties?.stroke || layer.color);
           },
@@ -368,50 +492,31 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
           },
           pointType: 'icon',
           getIcon: (f: any) => {
-            const name = String(f.properties?.name || "");
-            const desc = String(f.properties?.description || "");
-            const nameUpper = name.toUpperCase();
+            const classification = classifyFeature(f, layer);
 
-            const geomType = f.geometry?.type;
-            const isPoint = geomType === "Point" || geomType === "MultiPoint";
-
-            const isPop = isPoint && (layer.id === 'pop' || desc.includes("SERVER OLT") || nameUpper.includes("POP") || nameUpper.includes("OLT"));
-            const isOdc = isPoint && (nameUpper.startsWith("ODC") || desc.includes("Jumlah ODP:"));
-            const isClosure = isPoint && (nameUpper.includes("JOIN CLOSURE") || nameUpper.includes("CLOSURE"));
-            const isOdp = isPoint && ((/^\d{1,2}\/\d{1,2}$/.test(name)) || desc.includes("Induk: ODC") || nameUpper.includes("ODP"));
-            const isHouse = isPoint && ((/^\d{1,2}\/\d{1,2}-\d{1,2}$/.test(name)) || desc.includes("Induk ODP:") || (!isPop && !isOdc && !isClosure && !isOdp));
-
-            if (isPop) {
-              return { url: getPinDataUri(featureColors?.pop || '#ef4444'), width: 96, height: 136, anchorY: 136 };
+            if (classification.isPop) {
+              return { url: getServerRackDataUri(featureColors?.pop || DEFAULT_FEATURE_COLORS.pop), width: 96, height: 96, anchorY: 48 };
             }
-            if (isOdc || isClosure) {
-              return { url: getPinDataUri(featureColors?.odc || '#3b82f6'), width: 96, height: 136, anchorY: 136 };
+            if (classification.isOdc || classification.isClosure) {
+              return { url: getTriangleDataUri(featureColors?.odc || DEFAULT_FEATURE_COLORS.odc), width: 96, height: 96, anchorY: 48 };
             }
-            if (isOdp) {
-              return { url: getPoleDataUri(featureColors?.odp || '#10b981', '#ffffff'), width: 96, height: 96, anchorY: 48 };
+            if (classification.isOdp) {
+              return { url: getTriangleDataUri(featureColors?.odp || DEFAULT_FEATURE_COLORS.odp), width: 96, height: 96, anchorY: 48 };
             }
-            if (isHouse) {
-              return { url: getHouseDataUri(featureColors?.house || '#6b7280', '#f9fafb'), width: 96, height: 96, anchorY: 48 };
+            if (classification.isHouse) {
+              return { url: getHouseDataUri(featureColors?.house || DEFAULT_FEATURE_COLORS.house, '#f9fafb'), width: 96, height: 96, anchorY: 48 };
             }
 
             const colorHex = f.properties?.fill ? getHexColor(f.properties.fill) : getHexColor(layer.color);
             return { url: getPinDataUri(colorHex), width: 96, height: 136, anchorY: 136 };
           },
           getIconSize: (f: any) => {
-            const name = String(f.properties?.name || "");
-            const desc = String(f.properties?.description || "");
-            const nameUpper = name.toUpperCase();
-            
-            const geomType = f.geometry?.type;
-            const isPoint = geomType === "Point" || geomType === "MultiPoint";
-
-            const isPop = isPoint && (layer.id === 'pop' || desc.includes("SERVER OLT") || nameUpper.includes("POP") || nameUpper.includes("OLT"));
-            const isOdc = isPoint && (nameUpper.startsWith("ODC") || desc.includes("Jumlah ODP:"));
-            const isClosure = isPoint && (nameUpper.includes("JOIN CLOSURE") || nameUpper.includes("CLOSURE"));
-            const isOdp = isPoint && ((/^\d{1,2}\/\d{1,2}$/.test(name)) || desc.includes("Induk: ODC") || nameUpper.includes("ODP"));
-            const isHouse = isPoint && ((/^\d{1,2}\/\d{1,2}-\d{1,2}$/.test(name)) || desc.includes("Induk ODP:") || (!isPop && !isOdc && !isClosure && !isOdp));
-            
-            return isHouse ? 20 : (isPop ? 40 : 32);
+            const classification = classifyFeature(f, layer);
+            if (classification.isHouse) return 20;
+            if (classification.isPop) return 38;
+            if (classification.isOdc || classification.isClosure) return 34;
+            if (classification.isOdp) return 28;
+            return 32;
           },
           autoHighlight: true,
           highlightColor: [255, 255, 0, 150],
@@ -426,7 +531,7 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
         });
       })
       .filter(Boolean);
-  }, [layers, geoDataMap, filters, kmlTrees, featureColors]);
+  }, [layers, geoDataMap, filters, treeVisibility, featureColors]);
 
   const baseTileLayer = new TileLayer({
     id: 'osm-tile-layer',
@@ -436,12 +541,18 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
     tileSize: 256,
     renderSubLayers: props => {
       const bbox = props.tile.bbox as any;
+      // TileLayer stores the loaded image in `props.data`. BitmapLayer uses
+      // `image` for that value and intentionally does not accept a data
+      // container. Passing the image through as `data` makes deck.gl call
+      // count() on ImageBitmap, which causes "count(): argument not a
+      // container" and prevents the base map tiles from rendering.
+      const { data: tileImage, ...bitmapProps } = props;
 
-      return new BitmapLayer(props, {
-        data: undefined,
-        image: props.data,
+      return new BitmapLayer({
+        ...bitmapProps,
+        image: tileImage,
         bounds: [bbox.west, bbox.south, bbox.east, bbox.north]
-      });
+      } as any);
     }
   });
 

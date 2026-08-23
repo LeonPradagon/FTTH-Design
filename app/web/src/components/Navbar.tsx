@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react';
-import { Upload, X, MapPin, Home, Info, Cable, User } from 'lucide-react';
+import { Upload, X, Home, Info, Cable, User, Server, Triangle, Settings, Clock } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { AccountCenterModal } from './AccountCenterModal';
 import { useSession } from '@/lib/auth-client';
+import { DEFAULT_FEATURE_COLORS } from '@/lib/feature-colors';
 
 interface NavbarProps {
   onImportLayer: (files: File[]) => void;
@@ -11,32 +12,43 @@ interface NavbarProps {
   onRegenerateCables?: () => void;
   isRegeneratingCables?: boolean;
   hasDesign?: boolean;
+  onGenerateHomepass?: () => void;
+  isGeneratingHomepass?: boolean;
+  hasNetworkCore?: boolean;
   featureColors?: Record<string, string>;
-  projectName?: string | null;
+  onConfigClick?: () => void;
+  onVersionHistoryClick?: () => void;
 }
 
-export function Navbar({ 
-  onImportLayer, 
+export function Navbar({
+  onImportLayer,
   onSmartGenerate,
-  isGenerating, 
-  onRegenerateCables, 
-  isRegeneratingCables, 
+  isGenerating,
+  onRegenerateCables,
+  isRegeneratingCables,
   hasDesign,
+  onGenerateHomepass,
+  isGeneratingHomepass,
+  hasNetworkCore,
   featureColors,
-  projectName
+  onConfigClick,
+  onVersionHistoryClick,
 }: NavbarProps) {
   const [showInfo, setShowInfo] = useState(false);
   const [showAccountCenter, setShowAccountCenter] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: session } = useSession();
+  const userRole = (session?.user as { role?: string } | undefined)?.role || 'engineer';
+  const canGenerate = ['admin', 'engineer', 'user'].includes(userRole);
 
   const legendItems = [
-    { label: "Server OLT (POP)", desc: "Titik pusat / sentral", color: featureColors?.pop || "#ef4444", shape: "pin" },
-    { label: "ODC (Cabinet)", desc: "Titik distribusi utama", color: featureColors?.odc || "#3b82f6", shape: "pin" },
-    { label: "ODP (Tiang)", desc: "Titik distribusi ke rumah", color: featureColors?.odp || "#10b981", shape: "pole" },
-    { label: "Rumah (HC)", desc: "Titik pelanggan / homepass", color: featureColors?.house || "#6b7280", shape: "house" },
-    { label: "Kabel Feeder", desc: "Jalur utama (POP ke ODC)", color: featureColors?.feeder || "#ef4444", shape: "line" },
-    { label: "Kabel Distribusi", desc: "Jalur cabang (ODC ke ODP)", color: featureColors?.distribution || "#3b82f6", shape: "line" },
+    { label: "Server OLT (POP)", desc: "Titik pusat / sentral", color: featureColors?.pop || DEFAULT_FEATURE_COLORS.pop, shape: "server" },
+    { label: "ODC (Cabinet)", desc: "Titik distribusi utama", color: featureColors?.odc || DEFAULT_FEATURE_COLORS.odc, shape: "triangle" },
+    { label: "ODP (Tiang)", desc: "Titik distribusi ke rumah", color: featureColors?.odp || DEFAULT_FEATURE_COLORS.odp, shape: "triangle" },
+    { label: "Rumah (HC)", desc: "Titik pelanggan / homepass", color: featureColors?.house || DEFAULT_FEATURE_COLORS.house, shape: "house" },
+    { label: "Kabel Feeder", desc: "Jalur utama (POP ke ODC)", color: featureColors?.feeder || DEFAULT_FEATURE_COLORS.feeder, shape: "line" },
+    { label: "Kabel Distribusi", desc: "Jalur cabang (ODC ke ODP)", color: featureColors?.distribution || DEFAULT_FEATURE_COLORS.distribution, shape: "line" },
+    { label: "Kabel Drop", desc: "ODP ke rumah; mengikuti filter HC", color: featureColors?.house || DEFAULT_FEATURE_COLORS.house, shape: "line" },
   ];
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -56,15 +68,11 @@ export function Navbar({
           <h1 className="navbar-title">FTTH Design</h1>
         </div>
 
-        {/* Center: Project Name */}
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
-        </div>
-
         {/* Right: Actions */}
         <div className="navbar-group">
           {session?.user && (
-            <div style={{ display: 'flex', alignItems: 'center', marginRight: '16px', borderRight: '1px solid #e5e7eb', paddingRight: '16px' }}>
-              <button 
+            <div style={{ display: 'flex', alignItems: 'center', marginRight: '16px', borderRight: '1px solid #e5e7eb', paddingRight: '16px', position: 'relative' }}>
+              <button
                 onClick={() => setShowAccountCenter(true)}
                 style={{
                   display: 'flex',
@@ -92,26 +100,26 @@ export function Navbar({
               </button>
 
               {showAccountCenter && (
-                <AccountCenterModal 
+                <AccountCenterModal
                   userEmail={session.user.email}
-                  userRole={(session.user as { role?: string }).role || 'user'}
-                  onClose={() => setShowAccountCenter(false)} 
+                  userRole={(session.user as { role?: string }).role || 'engineer'}
+                  onClose={() => setShowAccountCenter(false)}
                 />
               )}
             </div>
           )}
 
-          <input 
-            type="file" 
+          <input
+            type="file"
             accept=".kml,.kmz"
             multiple
-            ref={fileInputRef} 
-            style={{ display: 'none' }} 
-            onChange={handleFileChange} 
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
           />
-          {onRegenerateCables && (
-            <button 
-              onClick={onRegenerateCables} 
+          {canGenerate && onRegenerateCables && (
+            <button
+              onClick={onRegenerateCables}
               disabled={isRegeneratingCables || !hasDesign}
               className={`regenerate-cable-btn ${isRegeneratingCables ? 'loading' : ''}`}
               title={!hasDesign ? "Generate design terlebih dahulu" : "Regenerate jalur kabel tanpa mengubah posisi tiang"}
@@ -122,26 +130,56 @@ export function Navbar({
             </button>
           )}
 
-          {onSmartGenerate && (
-            <button 
-              onClick={onSmartGenerate} 
-              disabled={isGenerating}
-              className={`generate-btn-small ${isGenerating ? 'loading' : ''}`}
-              style={{ marginLeft: '8px', cursor: isGenerating ? 'not-allowed' : 'pointer' }}
+          {canGenerate && onSmartGenerate && (
+            <div className="flex items-center">
+              <button
+                onClick={onSmartGenerate}
+                disabled={isGenerating}
+                className={`generate-btn-small ${isGenerating ? 'loading' : ''}`}
+                style={{ marginLeft: '4px', cursor: isGenerating ? 'not-allowed' : 'pointer' }}
+              >
+                {isGenerating ? "Menganalisis..." : "Generate Design"}
+              </button>
+            </div>
+          )}
+
+          {canGenerate && onGenerateHomepass && hasNetworkCore && (
+            <button
+              onClick={onGenerateHomepass}
+              disabled={isGeneratingHomepass || isGenerating}
+              className={`regenerate-cable-btn ${isGeneratingHomepass ? 'loading' : ''}`}
+              title="Tambahkan titik rumah dan kabel ODP ke rumah"
+              style={{ marginLeft: '8px', cursor: (isGeneratingHomepass || isGenerating) ? 'not-allowed' : 'pointer' }}
             >
-              {isGenerating ? "Menganalisis..." : "Generate Design"}
+              <Home size={14} style={{ marginRight: '6px' }} />
+              {isGeneratingHomepass ? "..." : "Generate Homepass"}
             </button>
           )}
 
-          <button 
-            onClick={() => fileInputRef.current?.click()} 
-            className="regenerate-cable-btn"
-            style={{ marginLeft: '8px', cursor: 'pointer' }}
-          >
-            <Upload size={14} style={{ marginRight: '6px' }} />
-            Import KML
-          </button>
+          {canGenerate && onConfigClick && (
+            <button onClick={onConfigClick} className="regenerate-cable-btn" title="Generation configuration">
+              <Settings size={14} style={{ marginRight: '6px' }} />
+              Config
+            </button>
+          )}
 
+          {onVersionHistoryClick && (
+            <button onClick={onVersionHistoryClick} className="regenerate-cable-btn" title="Version history">
+              <Clock size={14} style={{ marginRight: '6px' }} />
+              Versions
+            </button>
+          )}
+
+          {canGenerate && (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="regenerate-cable-btn"
+              style={{ marginLeft: '8px', cursor: 'pointer' }}
+            >
+              <Upload size={14} style={{ marginRight: '6px' }} />
+              Import KML
+            </button>
+          )}
           <div style={{ marginLeft: '8px', paddingLeft: '16px', borderLeft: '1px solid rgba(128,128,128,0.2)' }}>
             <ThemeToggle />
           </div>
@@ -164,13 +202,9 @@ export function Navbar({
                   <div className="legend-shape">
                     {item.shape === "circle" && <div style={{ width: 12, height: 12, borderRadius: "50%", background: item.color }} />}
                     {item.shape === "square" && <div style={{ width: 12, height: 12, background: item.color }} />}
-                    {item.shape === "pin" && <MapPin size={16} color={item.color} fill={item.color} strokeWidth={1} />}
+                    {item.shape === "server" && <Server size={16} color={item.color} fill={item.color} strokeWidth={2} />}
+                    {item.shape === "triangle" && <Triangle size={16} color={item.color} fill={item.color} strokeWidth={2} />}
                     {item.shape === "house" && <Home size={16} color={item.color} />}
-                    {item.shape === "pole" && (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="12" y1="2" x2="12" y2="22"></line><line x1="6" y1="6" x2="18" y2="6"></line><line x1="8" y1="10" x2="16" y2="10"></line>
-                      </svg>
-                    )}
                     {item.shape === "line" && <div style={{ width: 16, height: 3, background: item.color }} />}
                   </div>
                   <div className="legend-text-group">
@@ -182,7 +216,7 @@ export function Navbar({
             </div>
           </div>
         )}
-        <button 
+        <button
           className={`info-fab ${showInfo ? 'active' : ''}`}
           onClick={() => setShowInfo(!showInfo)}
         >
@@ -192,4 +226,3 @@ export function Navbar({
     </>
   );
 }
-

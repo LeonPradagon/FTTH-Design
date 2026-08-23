@@ -1,7 +1,20 @@
 import simplekml
+from shapely.geometry import shape
 from server.services.generator.routing import route_along_road
 
-def export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=False, road_graph=None, road_feeder=False):
+def export_kmz(
+    pop,
+    odcs,
+    feeder_segments,
+    output_path,
+    include_homepass=False,
+    road_graph=None,
+    road_feeder=False,
+    road_drop=False,
+    distribution_segments=None,
+    progress_callback=None,
+    boundary=None,
+):
     """Export desain ke KMZ dengan struktur folder & penamaan mengikuti
     konvensi industri (per-ODC), seperti contoh:
 
@@ -21,10 +34,36 @@ def export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=False, 
     """
     kml = simplekml.Kml()
 
+    # Keep the source boundary in the same KMZ as the generated network so
+    # the downloaded file is a complete, self-contained design artifact.
+    if boundary is not None:
+        boundary_geometry = shape(boundary) if isinstance(boundary, dict) else boundary
+        boundary_folder = kml.newfolder(name="BOUNDARY")
+        geometries = (
+            list(boundary_geometry.geoms)
+            if boundary_geometry.geom_type == "MultiPolygon"
+            else [boundary_geometry]
+        )
+        for index, polygon in enumerate(geometries, start=1):
+            boundary_polygon = boundary_folder.newpolygon(
+                name="Boundary" if len(geometries) == 1 else f"Boundary {index:02d}",
+                outerboundaryis=[(x, y) for x, y in polygon.exterior.coords],
+                innerboundaryis=[
+                    [(x, y) for x, y in ring.coords]
+                    for ring in polygon.interiors
+                ],
+            )
+            boundary_polygon.style.polystyle.color = simplekml.Color.changealphaint(
+                70, simplekml.Color.blue
+            )
+            boundary_polygon.style.linestyle.color = simplekml.Color.blue
+            boundary_polygon.style.linestyle.width = 2
+
     # -- OLT --
     fol_olt = kml.newfolder(name="OLT")
     p = fol_olt.newpoint(name=pop["name"], description="SERVER OLT", coords=[(pop["lon"], pop["lat"])])
-    p.style.iconstyle.color = simplekml.Color.red
+    p.style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/shapes/electronics.png"
+    p.style.iconstyle.color = simplekml.Color.yellow
     p.style.iconstyle.scale = 1.3
 
     # -- LINE FD (feeder): rantai POP -> ODC1 -> ODC2 -> ... mengikuti jalan --
@@ -42,6 +81,24 @@ def export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=False, 
         feeder.style.linestyle.width = 3
 
     total_houses = 0
+    total_items = sum(
+        1 + (len(odp.houses) if include_homepass else 0)
+        for odc in odcs
+        for odp in odc.odps
+    )
+    processed_items = 0
+    odp_labels = {
+        odp.id: f"{i:02d}/{j:02d}"
+        for i, odc in enumerate(odcs, start=1)
+        for j, odp in enumerate(odc.odps, start=1)
+    }
+    odc_labels = {odc.id: f"ODC {i:02d}" for i, odc in enumerate(odcs, start=1)}
+
+    def report_progress(message):
+        if progress_callback:
+            progress_callback(processed_items, total_items, message)
+
+    report_progress("Menyiapkan folder perangkat...")
     for i, odc in enumerate(odcs, start=1):
         odc_label = f"ODC {i:02d}"          # label titik, mis. "ODC 01"
         fol_odc_top = kml.newfolder(name=f"ODC {i}")  # folder utama, mis. "ODC 1"
@@ -74,6 +131,11 @@ def export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=False, 
 
         for j, odp in enumerate(odc.odps, start=1):
             odp_label = f"{i:02d}/{j:02d}"   # mis. "01/01"
+            # Keep the Dijkstra distance trees only for this ODP. All drop
+            # cables below start at the same ODP, so they can reuse the
+            # expensive graph traversal without retaining every ODP's tree
+            # in memory.
+            odp_route_cache = {"distances": {}, "targeted": True}
 
             opt = fol_odp.newpoint(
                 name=odp_label,
@@ -87,20 +149,59 @@ def export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=False, 
             opt.style.iconstyle.scale = 0.9
 
             coords = [(odc.lon, odc.lat), (odp.lon, odp.lat)]
-            if road_graph and road_feeder:
-                path = route_along_road(road_graph, (odc.lat, odc.lon), (odp.lat, odp.lon))
-                if path:
-                    coords = [(lon, lat) for lat, lon in path]
-            
-            if len(coords) == 1:
-                coords.append((coords[0][0] + 0.00001, coords[0][1] + 0.00001))
-
-            dist = fol_dist.newlinestring(
-                name=f"ODC {i:02d} TO ODP {odp_label}",
-                coords=coords,
+            distribution_connected = True
+            distribution_source_label = odc_label
+            cached_distribution = (
+                distribution_segments.get(odp.id)
+                if distribution_segments is not None else None
             )
-            dist.style.linestyle.color = simplekml.Color.blue
-            dist.style.linestyle.width = 2
+            if isinstance(cached_distribution, dict):
+                distribution_connected = bool(cached_distribution.get("connected"))
+                path = cached_distribution.get("coords") or []
+                source_id = cached_distribution.get("source_id")
+                distribution_source_label = (
+                    odc_labels.get(source_id)
+                    or odp_labels.get(source_id)
+                    or source_id
+                    or odc_label
+                )
+                if distribution_connected and path:
+                    coords = [(lon, lat) for lat, lon in path]
+            elif cached_distribution is not None:
+                # Backward-compatible v2 cache format: target_id -> coords.
+                coords = [(lon, lat) for lat, lon in cached_distribution]
+            elif road_graph and road_feeder:
+                path = route_along_road(
+                    road_graph, (odc.lat, odc.lon), (odp.lat, odp.lon),
+                    use_external_routing=False,
+                    route_cache=odp_route_cache,
+                )
+                if not path:
+                    raise RuntimeError(f"Tidak ada koneksi jalan untuk kabel distribusi {odc_label} -> {odp_label}.")
+                coords = [(lon, lat) for lat, lon in path]
+                if distribution_segments is not None:
+                    distribution_segments[odp.id] = {
+                        "source_id": odc.id,
+                        "target_id": odp.id,
+                        "source_label": odc.id,
+                        "target_label": odp.id,
+                        "coords": list(path),
+                        "connected": True,
+                    }
+
+            if distribution_connected:
+                if len(coords) == 1:
+                    coords.append((coords[0][0] + 0.00001, coords[0][1] + 0.00001))
+
+                dist = fol_dist.newlinestring(
+                    name=f"{distribution_source_label} TO ODP {odp_label}",
+                    coords=coords,
+                )
+                dist.style.linestyle.color = simplekml.Color.rgb(139, 92, 246)
+                dist.style.linestyle.width = 2
+                processed_items += 1
+                if processed_items == total_items or processed_items % max(1, total_items // 100) == 0:
+                    report_progress(f"Membuat kabel distribusi dan HC ({processed_items}/{total_items})...")
 
             if not include_homepass:
                 total_houses += len(odp.houses)
@@ -120,10 +221,18 @@ def export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=False, 
                 hc.style.iconstyle.scale = 0.6
 
                 drop_coords = [(odp.lon, odp.lat), (h_lon, h_lat)]
-                if road_graph and road_feeder:
-                    path = route_along_road(road_graph, (odp.lat, odp.lon), (h_lat, h_lon))
-                    if path:
-                        drop_coords = [(lon, lat) for lat, lon in path]
+                # Drop cable is intentionally a direct visual connection from
+                # the ODP/pole to the house. It must not follow the road graph;
+                # otherwise one ODP serving up to 10 houses is hard to see.
+                if road_graph and road_feeder and road_drop:
+                    path = route_along_road(
+                        road_graph, (odp.lat, odp.lon), (h_lat, h_lon),
+                        use_external_routing=False,
+                        route_cache=odp_route_cache,
+                    )
+                    if not path:
+                        raise RuntimeError(f"Tidak ada koneksi jalan untuk kabel drop {odp_label} -> {hc_label}.")
+                    drop_coords = [(lon, lat) for lat, lon in path]
                 
                 if len(drop_coords) == 1:
                     drop_coords.append((drop_coords[0][0] + 0.00001, drop_coords[0][1] + 0.00001))
@@ -134,6 +243,9 @@ def export_kmz(pop, odcs, feeder_segments, output_path, include_homepass=False, 
                 )
                 drop.style.linestyle.color = simplekml.Color.white
                 drop.style.linestyle.width = 1
+                processed_items += 1
+                if processed_items == total_items or processed_items % max(1, total_items // 100) == 0:
+                    report_progress(f"Membuat kabel distribusi dan HC ({processed_items}/{total_items})...")
 
     kml.savekmz(output_path)
 

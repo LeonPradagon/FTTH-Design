@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { admin } from "better-auth/plugins";
+import { adminAc, userAc } from "better-auth/plugins/admin/access";
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
@@ -27,5 +28,15 @@ export const auth = betterAuth({
       enabled: true,
     },
   },
-  plugins: [admin()],
+  plugins: [
+    admin({
+      defaultRole: "engineer",
+      adminRoles: ["admin"],
+      roles: {
+        admin: adminAc,
+        engineer: userAc,
+        viewer: userAc,
+      },
+    }),
+  ],
 });

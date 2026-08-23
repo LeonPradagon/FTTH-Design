@@ -1,6 +1,9 @@
+name: ftth
+
 services:
   db:
-    image: postgres:16-alpine
+    image: postgis/postgis:16-3.5-alpine
+    platform: linux/amd64
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-ftth}
@@ -8,19 +11,19 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ftth-dev-password}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 10s
 
   migrate:
     build:
       context: .
       dockerfile: app/web/Dockerfile
       target: migrate
-    restart: "no"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-ftth}:${POSTGRES_PASSWORD:-ftth-dev-password}@db:5432/${POSTGRES_DB:-ftth}?schema=public
     depends_on:
@@ -46,16 +49,42 @@ services:
       retries: 10
       start_period: 15s
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  graphhopper:
+    image: graphhopper/graphhopper:latest
+    restart: unless-stopped
+    ports:
+      - "8989:8989"
+    environment:
+      JAVA_OPTS: -Xmx2g -Xms2g
+    volumes:
+      - graphhopper_data:/data
+    command: "--url https://download.geofabrik.de/asia/indonesia-latest.osm.pbf --host 0.0.0.0"
+
   server:
     build:
       context: .
       dockerfile: app/server/Dockerfile
-    container_name: ftth-server
     ports:
       - "8000:8000"
-    environment:
+    environment: &server_environment
       DATABASE_URL: postgresql://${POSTGRES_USER:-ftth}:${POSTGRES_PASSWORD:-ftth-dev-password}@db:5432/${POSTGRES_DB:-ftth}?schema=public
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-only-secret-that-is-at-least-32-characters}
+      BACKEND_PROXY_SECRET: ${BACKEND_PROXY_SECRET:-dev-only-secret-that-is-at-least-32-characters}
+      REDIS_URL: redis://redis:6379/0
+      GRAPHHOPPER_URL: http://graphhopper:8989
+      USER_CACHE_ROOT: /workspace/app/server/cache/users
+      RUN_EMBEDDED_WORKER: "false"
       STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL:-http://seaweedfs:8333}
       STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:-${SEAWEEDFS_ACCESS_KEY_ID:-ftth-local}}
       STORAGE_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY:-${SEAWEEDFS_SECRET_ACCESS_KEY:-ftth-local-secret}}
@@ -69,20 +98,33 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
       seaweedfs:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/docs', timeout=3)"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
+
+  worker:
+    build:
+      context: .
+      dockerfile: app/server/Dockerfile
+    command: ["arq", "server.worker.WorkerSettings"]
+    environment: *server_environment
+    restart: unless-stopped
+    volumes:
+      - ./app/server/cache:/workspace/app/server/cache
+      - ./app/server/data:/workspace/app/server/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
 
   web:
     build:
       context: .
       dockerfile: app/web/Dockerfile
-    container_name: ftth-web
     ports:
       - "3000:3000"
     environment:
@@ -90,12 +132,14 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-ftth}:${POSTGRES_PASSWORD:-ftth-dev-password}@db:5432/${POSTGRES_DB:-ftth}?schema=public
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-only-secret-that-is-at-least-32-characters}
       BETTER_AUTH_URL: ${APP_URL:-http://localhost:3000}
-      FTTH_SERVER_URL: http://server:8000
+      BACKEND_URL: http://server:8000
+      BACKEND_PROXY_SECRET: ${BACKEND_PROXY_SECRET:-dev-only-secret-that-is-at-least-32-characters}
     depends_on:
       server:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
 
 volumes:
   postgres_data:
   seaweed_data:
+  graphhopper_data:

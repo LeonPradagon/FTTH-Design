@@ -1,5 +1,3 @@
-import { auth } from "./src/lib/auth";
-
 async function testEndToEnd() {
   try {
     // 1. Simulate frontend calling login (this returns the Set-Cookie header)

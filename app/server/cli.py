@@ -17,8 +17,8 @@ def main():
     parser.add_argument("--boundary", help="File boundary area (KML/KMZ) -- dipakai jika tidak pakai --input")
     parser.add_argument("--pop", help="File titik POP/OLT (KML/KMZ) -- dipakai jika tidak pakai --input")
     parser.add_argument("--output", default="design_ftth.kmz", help="Path output KMZ")
-    parser.add_argument("--odp-capacity", type=int, default=8,
-                         help="Kapasitas splitter di ODP / max rumah per ODP (default: 8)")
+    parser.add_argument("--odp-capacity", type=int, default=10,
+                         help="Kapasitas splitter di ODP / max rumah per ODP (default: 10)")
     parser.add_argument("--odc-capacity", type=int, default=4,
                          help="Jumlah ODP maksimum per ODC (default: 4)")
     parser.add_argument("--target-homepass", type=int, default=None,
