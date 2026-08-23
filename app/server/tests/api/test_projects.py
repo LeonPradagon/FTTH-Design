@@ -66,3 +66,11 @@ def test_project_update_audits_old_and_new_values() -> None:
     assert audit_data["action"] == "UPDATE_PROJECT"
     assert audit_data["details"].data["old"]["name"] == "Old name"
     assert audit_data["details"].data["new"]["name"] == "New name"
+
+
+def test_engineer_cannot_delete_project() -> None:
+    response = _client({"id": "engineer-1", "role": "engineer"}).delete(
+        "/api/projects/project-1"
+    )
+
+    assert response.status_code == 403

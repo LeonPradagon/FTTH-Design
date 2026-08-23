@@ -319,6 +319,7 @@ async def generate_batch(
         if destination.stat().st_size > max_file_bytes:
             destination.unlink(missing_ok=True)
             raise HTTPException(status_code=413, detail=f"Ukuran file maksimal {max_file_bytes // (1024 * 1024)} MB.")
+        upload_file(current_user["id"], destination.name, destination)
         saved_files.append((filename, destination))
 
     boundary_files = [(name, path) for name, path in saved_files if _is_boundary_file(name)]

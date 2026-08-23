@@ -62,3 +62,10 @@ async def get_generation_user(user: dict = Depends(get_optional_user)):
     if user.get("role") not in {"admin", "engineer", "user"}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Generation access is not allowed")
     return user
+
+
+async def get_admin_user(user: dict = Depends(get_current_user)):
+    """Require the administrator role for destructive or privileged actions."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access is required")
+    return user

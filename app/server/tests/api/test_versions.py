@@ -40,6 +40,14 @@ def test_viewer_cannot_mutate_versions(method: str, path: str) -> None:
     assert response.status_code == 403
 
 
+def test_engineer_cannot_delete_version() -> None:
+    response = _client({"id": "engineer-1", "role": "engineer"}, versions_router).delete(
+        "/api/projects/project-1/versions/1"
+    )
+
+    assert response.status_code == 403
+
+
 def test_admin_can_list_another_users_versions_with_validation() -> None:
     version = MagicMock(version=1)
     version.model_dump.return_value = {

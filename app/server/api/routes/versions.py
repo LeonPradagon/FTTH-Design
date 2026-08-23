@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from prisma import Json
 
-from server.api.deps import get_current_user, get_generation_user
+from server.api.deps import get_admin_user, get_current_user, get_generation_user
 from server.api.routes.files import _download_object
 from server.core.response import error_response, success_response
 from server.database import db
@@ -138,7 +138,7 @@ async def get_version(
 async def delete_version(
     project_id: str,
     version: int,
-    current_user: dict = Depends(get_generation_user),
+    current_user: dict = Depends(get_admin_user),
 ):
     """Delete a specific design version."""
     if not await _can_access_project(project_id, current_user):

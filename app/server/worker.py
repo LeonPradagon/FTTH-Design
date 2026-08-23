@@ -244,7 +244,10 @@ async def generate_task(
                         "projectId": project_id,
                         "versionId": new_version.id,
                         "details": Json({
-                            "old": None,
+                            "old": ({
+                                "version": last_version.version,
+                                "config": last_version.config,
+                            } if last_version else None),
                             "new": {
                                 "version": next_version,
                                 "config": used_config.model_dump(),

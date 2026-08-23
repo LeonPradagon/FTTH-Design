@@ -1,9 +1,11 @@
+import asyncio
 import pytest
 from fastapi.testclient import TestClient
 from types import SimpleNamespace
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, MagicMock
 from server.main import app
 from server.api.deps import get_current_user, get_generation_user
+from server.services.generator.generation_config import GenerationConfig
 
 # Override dependency
 def override_get_current_user():
@@ -148,6 +150,7 @@ def test_generate_batch_pairs_boundary_and_pop(tmp_path, mock_redis_pool, mock_p
     assert data["total"] == 1
     assert data["jobs"][0]["status"] == "QUEUED"
     assert mock_redis_pool.enqueue_job.call_args.args[0] == "generate_task"
+    assert mock_storage_upload.call_count == 2
     mock_progress_manager.create_job.assert_any_call(
         mock_redis_pool.enqueue_job.call_args.kwargs["job_id"],
         user_id="test_user_id",
@@ -197,3 +200,67 @@ def test_worker_allows_running_jobs_to_be_aborted():
     from server.worker import WorkerSettings
 
     assert WorkerSettings.allow_abort_jobs is True
+
+
+def test_generation_audit_includes_previous_config(tmp_path):
+    from server.worker import generate_task
+
+    output_kmz = tmp_path / "design.kmz"
+    output_kmz.write_bytes(b"generated")
+    output_csv = tmp_path / "design.csv"
+    used_config = GenerationConfig(odp_capacity=8)
+    previous = SimpleNamespace(version=1, config={"odp_capacity": 10})
+    new_version = SimpleNamespace(id="version-2")
+    transaction = SimpleNamespace(
+        designversion=SimpleNamespace(
+            find_first=AsyncMock(return_value=previous),
+            create=AsyncMock(return_value=new_version),
+        ),
+        auditlog=SimpleNamespace(create=AsyncMock()),
+    )
+    transaction_manager = SimpleNamespace(
+        start=AsyncMock(return_value=transaction),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
+    fake_db = SimpleNamespace(
+        generationjob=SimpleNamespace(update=AsyncMock()),
+        tx=MagicMock(return_value=transaction_manager),
+    )
+    validation = MagicMock()
+    validation.to_dict.return_value = {"status": "PASS"}
+
+    with (
+        patch("server.worker.db", fake_db),
+        patch(
+            "server.worker._run_generator_logic",
+            return_value=(None, [], [], {}, used_config, None),
+        ),
+        patch("server.worker.validate_design", return_value=validation),
+        patch("server.worker.compute_design_stats", return_value={}),
+        patch("server.worker._compute_input_hash", return_value="input-hash"),
+        patch("server.worker.upload_file"),
+        patch("server.worker.progress_manager"),
+    ):
+        asyncio.run(
+            generate_task(
+                {},
+                boundary_path=str(tmp_path / "boundary.kml"),
+                pop_path=None,
+                output_kmz_path=str(output_kmz),
+                output_csv_path=str(output_csv),
+                has_custom_pop=False,
+                cache_dir=str(tmp_path),
+                gen_config_dict=used_config.model_dump(),
+                job_id="job-2",
+                project_id="project-1",
+                user_id="engineer-1",
+                output_kml_name="design.kml",
+                output_kmz_name=output_kmz.name,
+                output_csv_name=output_csv.name,
+            )
+        )
+
+    details = transaction.auditlog.create.await_args.kwargs["data"]["details"].data
+    assert details["old"] == {"version": 1, "config": {"odp_capacity": 10}}
+    assert details["new"]["config"]["odp_capacity"] == 8

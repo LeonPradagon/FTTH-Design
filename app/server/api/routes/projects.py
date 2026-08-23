@@ -10,7 +10,7 @@ from typing import Optional
 from prisma import Json
 
 from ...database import db
-from ..deps import get_current_user, get_generation_user
+from ..deps import get_admin_user, get_current_user, get_generation_user
 from server.core.response import success_response
 
 router = APIRouter(prefix="/api")
@@ -150,13 +150,10 @@ async def update_project(project_id: str, project_update: ProjectUpdate, current
     return success_response(data=_serialize_project(updated_project))
 
 @router.delete("/projects/{project_id}")
-async def delete_project(project_id: str, current_user: dict = Depends(get_generation_user)):
+async def delete_project(project_id: str, current_user: dict = Depends(get_admin_user)):
     project = await db.project.find_unique(where={"id": project_id})
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
-
-    if current_user.get("role") != "admin" and project.userId != current_user["id"]:
-        raise HTTPException(status_code=403, detail="Forbidden")
 
     async with db.tx() as transaction:
         await transaction.auditlog.create(
