@@ -29,7 +29,7 @@ COPY app/web/ ./
 RUN DATABASE_URL=postgresql://build:build@localhost:5432/build \
     BETTER_AUTH_SECRET=build-only-secret-that-is-at-least-32-characters \
     BETTER_AUTH_URL=http://localhost:3000 \
-    FTTH_SERVER_URL=http://server:8000 \
+    BACKEND_URL=http://server:8000 \
     pnpm exec next build --webpack
 
 FROM node:20-alpine AS runtime

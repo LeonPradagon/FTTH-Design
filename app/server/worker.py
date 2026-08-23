@@ -1,7 +1,6 @@
 import asyncio
 import os
-import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from arq.connections import RedisSettings
 from server.core.logging import logger
@@ -15,7 +14,26 @@ from server.services.generator.core_logic import (
 from server.services.generator.validation import validate_design, compute_design_stats
 from server.database import db
 from server.services.user_storage import upload_file, user_file_url
+from server.storage.dependencies import get_object_storage
 from prisma import Json
+
+
+async def _update_generation_job(job_id: str, **data) -> None:
+    await db.generationjob.update(where={"id": job_id}, data=data)
+
+
+async def _record_job_failure(job_id: str, error: Exception) -> None:
+    try:
+        await _update_generation_job(
+            job_id,
+            status="FAILED",
+            stage="ERROR",
+            progress=100,
+            error=str(error),
+        )
+    except Exception:
+        logger.exception("Failed to persist failure state for job %s", job_id)
+
 
 async def generate_task(
     ctx,
@@ -36,6 +54,9 @@ async def generate_task(
     batch_item_id: str | None = None,
 ):
     try:
+        await _update_generation_job(
+            job_id, status="RUNNING", stage="STARTING", progress=2, error=None
+        )
         if batch_id:
             progress_manager.update_batch_job(batch_id, job_id, status="RUNNING")
         config = GenerationConfig(**gen_config_dict)
@@ -74,7 +95,7 @@ async def generate_task(
         
         input_hash = await asyncio.to_thread(_compute_input_hash, boundary_path, pop_path)
         
-        # Upload generated files to MinIO
+        # Publish generated files through the configured S3-compatible storage.
         progress_manager.update(job_id, "EXPORTING", "Mengunggah file ke penyimpanan...", 92)
         await asyncio.to_thread(upload_file, user_id, output_kmz_name, Path(output_kmz_path))
         await asyncio.to_thread(upload_file, user_id, output_csv_name, Path(output_csv_path))
@@ -91,25 +112,16 @@ async def generate_task(
         }
         
         if project_id:
-            # Database persistence is secondary to the generated artifacts.
-            # A stale Prisma query-engine process must not turn a completed
-            # KMZ generation into a failed job after 15+ minutes of work.
+            transaction_manager = db.tx(timeout=timedelta(minutes=5))
+            transaction = await transaction_manager.start()
             try:
-                await db.connect()
-            except Exception as connect_error:
-                logger.error(
-                    "Database unavailable while saving job %s; keeping generated files: %s",
-                    job_id,
-                    connect_error,
-                )
-            try:
-                last_version = await db.designversion.find_first(
+                last_version = await transaction.designversion.find_first(
                     where={"projectId": project_id},
                     order={"version": "desc"}
                 )
                 next_version = (last_version.version + 1) if last_version else 1
                 
-                new_version = await db.designversion.create(
+                new_version = await transaction.designversion.create(
                     data={
                         "projectId": project_id,
                         "version": next_version,
@@ -129,7 +141,7 @@ async def generate_task(
                 odc_db_ids = {}
                 odp_rows = []
                 for odc in odcs:
-                    odc_row = await db.query_first(query_odc, new_version.id, odc.id, odc.lon, odc.lat)
+                    odc_row = await transaction.query_first(query_odc, new_version.id, odc.id, odc.lon, odc.lat)
                     if odc_row and 'id' in odc_row:
                         odc_id = odc_row['id']
                         odc_db_ids[odc.id] = odc_id
@@ -146,7 +158,7 @@ async def generate_task(
                             f"ST_SetSRID(ST_MakePoint(${base + 3}, ${base + 4}), 4326))"
                         )
                         odp_params.extend([new_version.id, odc_id, odp_id, lon, lat])
-                    await db.execute_raw(
+                    await transaction.execute_raw(
                         query_odp + ", ".join(odp_values),
                         *odp_params,
                     )
@@ -213,7 +225,7 @@ async def generate_task(
                             length,
                             geojson,
                         ])
-                    await db.execute_raw(
+                    await transaction.execute_raw(
                         query_cable.replace(
                             " VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, ST_GeomFromGeoJSON($6))",
                             " VALUES " + ", ".join(cable_values),
@@ -221,7 +233,7 @@ async def generate_task(
                         *cable_params,
                     )
 
-                await db.auditlog.create(
+                await transaction.auditlog.create(
                     data={
                         "userId": user_id,
                         "action": "GENERATE",
@@ -229,13 +241,12 @@ async def generate_task(
                         "details": Json({"version": next_version})
                     }
                 )
-            except Exception as e:
-                logger.error(f"Failed to save design version: {e}")
-            finally:
-                try:
-                    await db.disconnect()
-                except Exception as disconnect_error:
-                    logger.warning("Prisma disconnect failed after job %s: %s", job_id, disconnect_error)
+            except BaseException:
+                await transaction_manager.rollback()
+                logger.exception("Failed to save design version for job %s", job_id)
+                raise
+            else:
+                await transaction_manager.commit()
 
         result_dict = {
             # The dashboard can read doc.kml directly from the KMZ archive.
@@ -245,6 +256,13 @@ async def generate_task(
             "stats": stats,
             "validation": validation_result.to_dict()
         }
+        await _update_generation_job(
+            job_id,
+            status="COMPLETED",
+            stage="COMPLETED",
+            progress=100,
+            result=Json(result_dict),
+        )
         progress_manager.complete(job_id, result=result_dict)
         if batch_id:
             progress_manager.update_batch_job(
@@ -257,6 +275,7 @@ async def generate_task(
     except Exception as e:
         logger.exception("Job %s failed", job_id)
         progress_manager.error(job_id, str(e))
+        await _record_job_failure(job_id, e)
         if batch_id:
             progress_manager.update_batch_job(batch_id, job_id, status="FAILED", error=str(e))
         raise
@@ -264,6 +283,9 @@ async def generate_task(
 async def regenerate_cables_task(ctx, output_path: str, include_homepass: bool, output_csv: str, cache_dir: str, job_id: str, user_id: str):
     from server.services.generator.core_logic import regenerate_cables_only
     try:
+        await _update_generation_job(
+            job_id, status="RUNNING", stage="STARTING", progress=2, error=None
+        )
         await asyncio.to_thread(regenerate_cables_only, output_path, include_homepass, output_csv, cache_dir, job_id)
         
         output_kmz_name = Path(output_path).name
@@ -276,15 +298,26 @@ async def regenerate_cables_task(ctx, output_path: str, include_homepass: bool, 
             "kmz_url": user_file_url(output_kmz_name),
             "csv_url": user_file_url(output_csv_name)
         }
+        await _update_generation_job(
+            job_id,
+            status="COMPLETED",
+            stage="COMPLETED",
+            progress=100,
+            result=Json(result_dict),
+        )
         progress_manager.complete(job_id, result=result_dict)
     except Exception as e:
         logger.exception("Job %s failed", job_id)
         progress_manager.error(job_id, str(e))
+        await _record_job_failure(job_id, e)
         raise
         
 async def generate_custom_task(ctx, custom_path: str, output_kmz_path: str, include_homepass: bool, output_csv: str, cache_dir: str, job_id: str, user_id: str):
     from server.services.generator.core_logic import generate_cables_from_custom_points
     try:
+        await _update_generation_job(
+            job_id, status="RUNNING", stage="STARTING", progress=2, error=None
+        )
         await asyncio.to_thread(generate_cables_from_custom_points, custom_path, output_kmz_path, include_homepass, output_csv, cache_dir, job_id)
         
         output_kmz_name = Path(output_kmz_path).name
@@ -297,16 +330,27 @@ async def generate_custom_task(ctx, custom_path: str, output_kmz_path: str, incl
             "kmz_url": user_file_url(output_kmz_name),
             "csv_url": user_file_url(output_csv_name)
         }
+        await _update_generation_job(
+            job_id,
+            status="COMPLETED",
+            stage="COMPLETED",
+            progress=100,
+            result=Json(result_dict),
+        )
         progress_manager.complete(job_id, result=result_dict)
     except Exception as e:
         logger.exception("Job %s failed", job_id)
         progress_manager.error(job_id, str(e))
+        await _record_job_failure(job_id, e)
         raise
 
 
 async def generate_homepass_task(ctx, output_kmz_path: str, output_csv_path: str, cache_dir: str, job_id: str, user_id: str):
     """Create the optional HC/drop layer from the immutable core cache."""
     try:
+        await _update_generation_job(
+            job_id, status="RUNNING", stage="STARTING", progress=2, error=None
+        )
         progress_manager.update(job_id, "STARTING", "Worker Homepass mulai memproses...", 2)
         await asyncio.to_thread(
             generate_homepass_from_state,
@@ -320,20 +364,32 @@ async def generate_homepass_task(ctx, output_kmz_path: str, output_csv_path: str
         await asyncio.to_thread(upload_file, user_id, output_kmz_name, Path(output_kmz_path))
         await asyncio.to_thread(upload_file, user_id, output_csv_name, Path(output_csv_path))
 
-        progress_manager.complete(job_id, result={
+        result_dict = {
             "url": user_file_url(output_kmz_name),
             "kmz_url": user_file_url(output_kmz_name),
             "csv_url": user_file_url(output_csv_name),
-        })
+        }
+        await _update_generation_job(
+            job_id,
+            status="COMPLETED",
+            stage="COMPLETED",
+            progress=100,
+            result=Json(result_dict),
+        )
+        progress_manager.complete(job_id, result=result_dict)
     except Exception as e:
         logger.exception("Homepass job %s failed", job_id)
         progress_manager.error(job_id, str(e))
+        await _record_job_failure(job_id, e)
         raise
 
 async def startup(ctx):
+    await asyncio.to_thread(get_object_storage().ensure_bucket)
+    await db.connect()
     logger.info("Worker starting up...")
 
 async def shutdown(ctx):
+    await db.disconnect()
     logger.info("Worker shutting down...")
 
 class WorkerSettings:

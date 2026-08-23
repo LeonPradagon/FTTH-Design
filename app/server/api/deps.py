@@ -14,14 +14,9 @@ async def get_optional_user(request: Request):
     # a development fallback because the local dashboard environment already
     # contains the shared Better Auth secret while older installations did not
     # yet define BACKEND_PROXY_SECRET on the frontend.
-    proxy_secrets = [
-        secret
-        for secret in (
-            os.getenv("BACKEND_PROXY_SECRET"),
-            os.getenv("BETTER_AUTH_SECRET"),
-        )
-        if secret
-    ]
+    dedicated_secret = os.getenv("BACKEND_PROXY_SECRET")
+    fallback_secret = os.getenv("BETTER_AUTH_SECRET")
+    proxy_secrets = [dedicated_secret or fallback_secret] if dedicated_secret or fallback_secret else []
     proxy_auth = request.headers.get("x-proxy-auth")
     if proxy_secrets:
         if not proxy_auth:
@@ -61,7 +56,9 @@ async def get_current_user(user: dict = Depends(get_optional_user)):
 
 
 async def get_generation_user(user: dict = Depends(get_optional_user)):
-    """Require authenticated identity for generation in production."""
-    if os.getenv("REQUIRE_AUTH", "false").lower() == "true" and user["id"] == "anonymous":
+    """Require an authenticated role that may change generation data."""
+    if user["id"] == "anonymous":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+    if user.get("role") not in {"admin", "engineer", "user"}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Generation access is not allowed")
     return user

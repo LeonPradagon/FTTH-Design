@@ -1,5 +1,4 @@
 import { auth } from "./src/lib/auth";
-import { headers } from "next/headers";
 
 async function test() {
   try {

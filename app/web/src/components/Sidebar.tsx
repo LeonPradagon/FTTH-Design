@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronDown, ChevronRight, Filter, Server, Triangle, Home, Route, Cable, Layers, Trash2, Folder, ArrowLeft, Plus, Edit2 } from 'lucide-react';
+import { ChevronLeft, ChevronDown, ChevronRight, Filter, Server, Triangle, Home, Route, Cable, Layers, Trash2, Folder, ArrowLeft, Edit2 } from 'lucide-react';
 import { LayerConfig, KmlNode } from '../app/page';
 import { KmlTreeViewer } from './KmlTreeViewer';
 import ValidationStatsPanel, { DesignStats, ValidationResult } from './ValidationStatsPanel';
@@ -29,8 +29,6 @@ interface SidebarProps {
   onChangeLayerColor?: (id: string, color: string) => void;
   savedProjects?: { id: string; name: string; updated_at?: string; created_at?: string }[];
   onLoadProject?: (id: string) => void;
-  onUnloadProject?: () => void;
-  onNewProject?: () => void;
   onDeleteProject?: (id: string) => void;
   currentProjectId?: string | null;
   onBackToProjects?: () => void;
@@ -39,7 +37,7 @@ interface SidebarProps {
   isGenerationLocked?: boolean;
 }
 
-export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTrees, onToggleTreeNode, isCollapsed, onToggle, featureColors, canEditColors = false, onColorChange, onChangeLayerColor, savedProjects = [], onLoadProject, onUnloadProject, onNewProject, onDeleteProject, onRenameProject, currentProjectId, onBackToProjects, stats, validation, isGenerationLocked = false }: SidebarProps & { onRenameProject?: (id: string, name: string) => void }) {
+export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTrees, onToggleTreeNode, isCollapsed, onToggle, featureColors, canEditColors = false, onColorChange, onChangeLayerColor, savedProjects = [], onLoadProject, onDeleteProject, onRenameProject, currentProjectId, onBackToProjects, stats, validation, isGenerationLocked = false }: SidebarProps & { onRenameProject?: (id: string, name: string) => void }) {
   const [projectToDelete, setProjectToDelete] = useState<{ id: string, name: string } | null>(null);
   const [projectToRename, setProjectToRename] = useState<{ id: string, name: string } | null>(null);
   const [renameInput, setRenameInput] = useState("");
@@ -407,25 +405,6 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: '#4b5563' }}>Proyek Tersimpan</h3>
-              {/* <button
-                onClick={() => { if (!isGenerationLocked && onNewProject) onNewProject(); }}
-                disabled={isGenerationLocked}
-                style={{
-                  border: 'none',
-                  borderRadius: '6px',
-                  padding: '6px 10px',
-                  background: isGenerationLocked ? '#e5e7eb' : '#3b82f6',
-                  color: isGenerationLocked ? '#9ca3af' : 'white',
-                  cursor: isGenerationLocked ? 'not-allowed' : 'pointer',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                <Plus size={14} /> Baru
-              </button> */}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto', flex: 1 }}>
@@ -612,6 +591,8 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
                 </div>
               </div>
             ))}
+
+            <ValidationStatsPanel stats={stats || null} validation={validation || null} inline />
 
             <div style={{ height: '1px', backgroundColor: '#e5e7eb', margin: '8px 0' }} />
 

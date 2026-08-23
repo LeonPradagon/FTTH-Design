@@ -2,12 +2,12 @@
 
 import pytest
 
-from backend.services.generator.clustering import (
+from server.services.generator.clustering import (
     capacitated_clustering,
     centroid_of,
     build_design,
 )
-from backend.services.generator.generation_config import GenerationConfig
+from server.services.generator.generation_config import GenerationConfig
 
 
 class TestCapacitatedClustering:

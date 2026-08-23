@@ -3,7 +3,7 @@
 import pytest
 from fastapi.responses import JSONResponse
 
-from backend.core.errors import (
+from server.core.errors import (
     FTTHError,
     InvalidFileError,
     InvalidGeometryError,
@@ -18,7 +18,7 @@ from backend.core.errors import (
     PopTooFarError,
     ERROR_CODE_MAP,
 )
-from backend.core.response import success_response, error_response
+from server.core.response import success_response, error_response
 
 
 class TestFTTHErrorHierarchy:

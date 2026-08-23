@@ -241,6 +241,40 @@ def _validate_connectivity(
         )
 
 
+def _validate_feeder_lengths(
+    feeder_segments: list | None,
+    config: GenerationConfig,
+    result: ValidationResult,
+) -> None:
+    for segment in feeder_segments or []:
+        is_mapping = isinstance(segment, dict)
+        coords = segment.get("coords", []) if is_mapping else segment
+        from_label = segment.get("from_label") if is_mapping else None
+        to_label = segment.get("to_label") if is_mapping else None
+        length_m = sum(
+            haversine_m(*coords[index], *coords[index + 1])
+            for index in range(max(0, len(coords) - 1))
+        )
+        if length_m <= config.max_feeder_length_m:
+            continue
+        result.add(
+            ValidationIssue(
+                severity="ERROR",
+                code="FEEDER_LENGTH_EXCEEDED",
+                message=(
+                    f"Feeder {from_label or '?'} -> {to_label or '?'} is {length_m:.0f}m "
+                    f"(limit: {config.max_feeder_length_m:.0f}m)."
+                ),
+                details={
+                    "from_label": from_label,
+                    "to_label": to_label,
+                    "length_m": round(length_m, 1),
+                    "limit_m": config.max_feeder_length_m,
+                },
+            )
+        )
+
+
 def _validate_distribution_tree(
     odcs: list[ODC],
     distribution_segments: dict | None,
@@ -336,6 +370,7 @@ def validate_design(
     _validate_radius(odcs, config, result)
     _validate_duplicate_assignments(odcs, result)
     _validate_connectivity(pop, odcs, feeder_segments, result)
+    _validate_feeder_lengths(feeder_segments, config, result)
     _validate_distribution_tree(odcs, distribution_segments, config, result)
 
     return result

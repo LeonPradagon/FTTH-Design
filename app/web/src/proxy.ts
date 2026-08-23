@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   // Better-Auth sets a session cookie (better-auth.session_token) when using JWT plugin
   const sessionCookie =
     request.cookies.get("better-auth.session_token")

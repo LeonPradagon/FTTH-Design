@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, Copy, Trash2, X, AlertCircle, Play } from 'lucide-react';
-import { useSession } from '@/lib/auth-client';
+import type { GenerationConfig } from './GenerationConfigModal';
+import type { DesignStats, ValidationResult } from './ValidationStatsPanel';
 
 export interface DesignVersion {
   id: string;
   projectId: string;
   version: number;
-  config: any;
-  stats: any;
-  validation?: any;
+  config: GenerationConfig;
+  stats: DesignStats;
+  validation?: ValidationResult;
   status: string;
   createdAt: string;
 }
@@ -20,28 +21,37 @@ interface VersionHistoryPanelProps {
   onCompareVersions: (v1: DesignVersion, v2: DesignVersion) => void;
 }
 
+async function getVersions(projectId: string): Promise<DesignVersion[]> {
+  const response = await fetch(`/api/proxy/api/projects/${projectId}/versions`);
+  if (!response.ok) throw new Error(`Failed to fetch versions: ${response.status}`);
+  const payload = await response.json();
+  return payload.data || [];
+}
+
 export default function VersionHistoryPanel({ projectId, onClose, onLoadVersion, onCompareVersions }: VersionHistoryPanelProps) {
   const [versions, setVersions] = useState<DesignVersion[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedVersions, setSelectedVersions] = useState<string[]>([]);
-  const { data: session } = useSession();
-
   useEffect(() => {
-    fetchVersions();
+    let active = true;
+    getVersions(projectId)
+      .then(data => {
+        if (active) setVersions(data);
+      })
+      .catch(error => console.error("Failed to fetch versions:", error))
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [projectId]);
 
-  const fetchVersions = async () => {
+  const refreshVersions = async () => {
     try {
-      setLoading(true);
-      const res = await fetch(`/api/proxy/api/projects/${projectId}/versions`);
-      if (res.ok) {
-        const data = await res.json();
-        setVersions(data.data || []);
-      }
+      setVersions(await getVersions(projectId));
     } catch (err) {
       console.error("Failed to fetch versions:", err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -51,7 +61,7 @@ export default function VersionHistoryPanel({ projectId, onClose, onLoadVersion,
       const res = await fetch(`/api/proxy/api/projects/${projectId}/versions/${versionNumber}`, {
         method: 'DELETE'
       });
-      if (res.ok) fetchVersions();
+      if (res.ok) void refreshVersions();
     } catch (err) {
       console.error("Failed to delete version", err);
     }
@@ -62,7 +72,7 @@ export default function VersionHistoryPanel({ projectId, onClose, onLoadVersion,
       const res = await fetch(`/api/proxy/api/projects/${projectId}/versions/${versionNumber}/duplicate`, {
         method: 'POST'
       });
-      if (res.ok) fetchVersions();
+      if (res.ok) void refreshVersions();
     } catch (err) {
       console.error("Failed to duplicate version", err);
     }

@@ -1,31 +1,14 @@
 import hashlib
+import mimetypes
 import os
 import re
+import shutil
 import time
 import uuid
 from pathlib import Path
-from minio import Minio
-from datetime import timedelta
+from urllib.parse import quote
 
-MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "localhost:9000")
-MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "admin")
-MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "password123")
-MINIO_SECURE = os.getenv("MINIO_SECURE", "false").lower() == "true"
-BUCKET_NAME = "ftth-storage"
-
-minio_client = Minio(
-    MINIO_ENDPOINT,
-    access_key=MINIO_ACCESS_KEY,
-    secret_key=MINIO_SECRET_KEY,
-    secure=MINIO_SECURE,
-)
-
-# Ensure bucket exists
-try:
-    if not minio_client.bucket_exists(BUCKET_NAME):
-        minio_client.make_bucket(BUCKET_NAME)
-except Exception as e:
-    print(f"Warning: MinIO bucket check failed: {e}")
+from server.storage.dependencies import get_object_storage
 
 USER_CACHE_ROOT = Path(os.getenv("USER_CACHE_ROOT", "/tmp/ftth_cache")).resolve()
 
@@ -60,27 +43,37 @@ def create_user_filename(prefix: str, extension: str) -> str:
     safe_extension = extension.lower().lstrip(".")
     return f"{safe_prefix}_{int(time.time())}_{uuid.uuid4().hex[:10]}.{safe_extension}"
 
-def upload_file(user_id: str, filename: str, local_path: Path):
-    """Upload a local file to MinIO under the user's namespace."""
-    object_name = f"{user_id}/{filename}"
-    minio_client.fput_object(BUCKET_NAME, object_name, str(local_path))
 
-def download_file(user_id: str, filename: str, local_path: Path):
-    """Download a file from MinIO to local path."""
-    object_name = f"{user_id}/{filename}"
-    minio_client.fget_object(BUCKET_NAME, object_name, str(local_path))
+def user_object_key(user_id: str, filename: str) -> str:
+    if not filename or Path(filename).name != filename:
+        raise ValueError("Invalid filename")
+    return f"users/{_safe_scope(user_id)}/{filename}"
 
-def get_presigned_url(user_id: str, filename: str, expires_minutes: int = 60) -> str:
-    """Generate a presigned URL to download a file from MinIO."""
-    object_name = f"{user_id}/{filename}"
-    url = minio_client.presigned_get_object(
-        BUCKET_NAME, object_name, expires=timedelta(minutes=expires_minutes)
-    )
-    return url
+
+def upload_file(user_id: str, filename: str, local_path: Path) -> None:
+    """Upload a local file through the configured S3-compatible storage."""
+    content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    with local_path.open("rb") as source:
+        get_object_storage().upload(
+            user_object_key(user_id, filename),
+            source,
+            content_type=content_type,
+            content_disposition=f'inline; filename="{filename}"',
+        )
+
+
+def download_file(user_id: str, filename: str, local_path: Path) -> None:
+    stored = get_object_storage().download(user_object_key(user_id, filename))
+    try:
+        with local_path.open("wb") as destination:
+            shutil.copyfileobj(stored.body, destination)
+    finally:
+        stored.body.close()
 
 def user_file_url(filename: str) -> str:
-    """Still returns the local proxy URL, which will redirect to MinIO."""
-    return f"/api/files/{filename}"
+    if not filename or Path(filename).name != filename:
+        raise ValueError("Invalid filename")
+    return f"/api/files/{quote(filename)}"
 
 def resolve_user_file(user_id: str, filename: str) -> Path:
     """Deprecated: used by legacy local file download endpoint."""

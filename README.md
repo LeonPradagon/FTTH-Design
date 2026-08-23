@@ -13,7 +13,7 @@ Aplikasi web untuk membuat rancangan jaringan Fiber To The Home (FTTH) dari data
 - Progress generation berada di dalam map dan dapat dipulihkan setelah refresh.
 - Banyak design dalam satu project dikelompokkan berdasarkan batch tanpa menimpa design lama.
 - Export KMZ dan CSV. KML di dalam KMZ dibaca langsung oleh dashboard untuk menampilkan layer map.
-- PostgreSQL + PostGIS untuk metadata project/design dan MinIO untuk file.
+- PostgreSQL + PostGIS untuk metadata project/design dan SeaweedFS untuk file.
 - Better Auth, ownership project, signed proxy header, dan audit log.
 
 ### Status data lokal saat ini
@@ -48,18 +48,18 @@ Next.js Dashboard :3000
 FastAPI Backend :8000 ─── PostgreSQL/PostGIS
   │                         └── project, version, audit, spatial data
   ├── Redis ─────────────── job queue + progress state
-  ├── MinIO ─────────────── input/output KML, KMZ, CSV
+  ├── SeaweedFS ─────────────── input/output KML, KMZ, CSV
   └── ARQ Worker ────────── proses generation maksimal 2 job paralel
 ```
 
 | Komponen | Lokasi | Fungsi |
 |---|---|---|
-| Dashboard | `dashboard/` | Next.js, React, Deck.gl, import file, map, layer/group, progress UI |
-| API | `backend/api/` | Endpoint generation, project, version, audit, file |
-| Generator | `backend/services/generator/` | Parsing KML, OSM, clustering, routing, export |
-| Worker | `backend/worker.py` | Menjalankan job panjang melalui ARQ/Redis |
-| Database | `backend/schema.prisma` | Schema PostgreSQL/PostGIS dan metadata design |
-| Storage | `backend/services/user_storage.py` | Cache lokal dan object storage MinIO |
+| Dashboard | `app/web/` | Next.js, React, Deck.gl, import file, map, layer/group, progress UI |
+| API | `app/server/api/` | Endpoint generation, project, version, audit, file |
+| Generator | `app/server/services/generator/` | Parsing KML, OSM, clustering, routing, export |
+| Worker | `app/server/worker.py` | Menjalankan job panjang melalui ARQ/Redis |
+| Database | `app/server/schema.prisma` | Schema PostgreSQL/PostGIS dan metadata design |
+| Storage | `app/server/storage/` | Object storage S3-compatible yang memakai SeaweedFS secara default |
 
 PostGIS belum menjadi sumber data OSM pada pipeline saat ini. Data jalan yang
 sudah diambil diproses menjadi graph NetworkX lokal karena engine routing utama
@@ -248,7 +248,7 @@ atau item agar dua boundary bernama sama tidak saling menimpa.
 - Node.js 20+;
 - PostgreSQL dengan PostGIS atau Docker;
 - Redis;
-- MinIO;
+- SeaweedFS;
 - akses internet ke OpenStreetMap/Overpass.
 
 Install dependency backend:
@@ -256,30 +256,31 @@ Install dependency backend:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r app/server/requirements-dev.txt
 ```
 
 Install dependency dashboard:
 
 ```bash
-cd dashboard
-npm install
-cd ..
+cd app/web
+pnpm install
+cd ../..
 ```
 
-Jalankan dashboard development dari folder `dashboard/`:
+Jalankan dashboard development dari folder `app/web/`:
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 Script development memakai port `3001`. Jalankan backend dari root project:
 
 ```bash
-uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+cd app
+uvicorn server.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-`backend.main` menjalankan ARQ worker lokal saat startup. Jika menjalankan worker terpisah secara manual, pastikan tidak menjalankan worker duplikat yang tidak diperlukan.
+`server.main` menjalankan ARQ worker lokal saat startup. Jika menjalankan worker terpisah secara manual, pastikan tidak menjalankan worker duplikat yang tidak diperlukan.
 
 Pada Docker Compose, worker embedded backend otomatis dimatikan karena service
 `worker` berjalan terpisah.
@@ -287,7 +288,8 @@ Pada Docker Compose, worker embedded backend otomatis dimatikan karena service
 Worker manual:
 
 ```bash
-arq backend.worker.WorkerSettings
+cd app
+arq server.worker.WorkerSettings
 ```
 
 ## Deployment Docker Compose
@@ -298,16 +300,16 @@ arq backend.worker.WorkerSettings
 - domain atau IP server;
 - secret Better Auth;
 - secret proxy backend;
-- resource server yang cukup untuk PostgreSQL, Redis, MinIO, dan worker.
+- resource server yang cukup untuk PostgreSQL, Redis, SeaweedFS, dan worker.
 
 Service Compose:
 
-- `frontend`: dashboard Next.js;
-- `backend`: FastAPI;
+- `web`: dashboard Next.js;
+- `server`: FastAPI;
 - `worker`: ARQ generation worker;
 - `redis`: queue dan progress;
 - `db`: PostgreSQL + PostGIS;
-- `minio`: object storage;
+- `seaweedfs`: object storage;
 - `graphhopper`: service routing opsional; generator utama tetap menggunakan NetworkX dan routing lokal secara default.
 
 ### Environment backend
@@ -318,14 +320,16 @@ Buat `.env.prod` di root. Jangan commit file ini.
 DATABASE_URL=postgresql://postgres:password123@db:5432/ftth_db
 REDIS_URL=redis://redis:6379/0
 
-MINIO_ENDPOINT=minio:9000
-MINIO_ACCESS_KEY=admin
-MINIO_SECRET_KEY=ganti-password-minio
-MINIO_SECURE=false
+SEAWEEDFS_ACCESS_KEY_ID=ftth-local
+SEAWEEDFS_SECRET_ACCESS_KEY=ganti-secret-seaweedfs
+SEAWEEDFS_BUCKET=ftth-designs
+STORAGE_ENDPOINT_URL=http://seaweedfs:8333
+STORAGE_ACCESS_KEY_ID=ftth-local
+STORAGE_SECRET_ACCESS_KEY=ganti-secret-seaweedfs
+STORAGE_BUCKET=ftth-designs
 
 BETTER_AUTH_SECRET=secret-auth-yang-panjang
 BACKEND_PROXY_SECRET=secret-proxy-acak-minimal-32-byte
-REQUIRE_AUTH=true
 CORS_ORIGINS=http://localhost:3000
 
 OSM_CACHE_MAX_AGE_SECONDS=86400
@@ -348,13 +352,13 @@ berubah, cache turunan otomatis ditolak dan dibuat ulang.
 
 ### Environment frontend
 
-Buat `dashboard/.env.prod`:
+Buat `app/web/.env.prod`:
 
 ```env
 BETTER_AUTH_SECRET=secret-auth-yang-panjang
 JWT_SECRET=secret-jwt-yang-panjang
 BETTER_AUTH_URL=https://ftth.example.com
-BACKEND_URL=http://backend:8000
+BACKEND_URL=http://server:8000
 BACKEND_PROXY_SECRET=secret-proxy-acak-yang-sama-dengan-backend
 ```
 
@@ -370,15 +374,15 @@ Endpoint:
 
 - Dashboard: `http://localhost:3000`;
 - API docs: `http://localhost:8000/docs`;
-- MinIO console: `http://localhost:9001`.
+- SeaweedFS tersedia di jaringan internal Docker melalui endpoint S3 port `8333`.
 
 Periksa status dan log:
 
 ```bash
 docker compose ps
-docker compose logs -f backend
+docker compose logs -f server
 docker compose logs -f worker
-docker compose logs -f frontend
+docker compose logs -f web
 ```
 
 Hentikan service:
@@ -387,21 +391,21 @@ Hentikan service:
 docker compose down
 ```
 
-Database dan MinIO berada di named volume. Jangan memakai `docker compose down -v` kecuali memang ingin menghapus seluruh data development.
+Database dan SeaweedFS berada di named volume. Jangan memakai `docker compose down -v` kecuali memang ingin menghapus seluruh data development.
 
 ## Keamanan production
 
-- Set `REQUIRE_AUTH=true`.
+- Generation mewajibkan session terautentikasi; hanya role `admin`, `engineer`, dan legacy `user` yang dapat menjalankan job.
 - Gunakan `BACKEND_PROXY_SECRET` acak dan berbeda dari password database.
-- Jangan expose Redis, PostgreSQL, dan MinIO ke internet publik tanpa firewall/auth tambahan.
-- Ganti password default PostgreSQL dan MinIO pada `docker-compose.yml` sebelum deployment.
+- Jangan expose Redis, PostgreSQL, dan SeaweedFS ke internet publik tanpa firewall/auth tambahan.
+- Ganti password default PostgreSQL dan SeaweedFS pada `compose.yml` sebelum deployment.
 - Batasi `CORS_ORIGINS` hanya ke domain dashboard.
 - Validasi ownership project dilakukan pada endpoint generation dan batch.
 - Job, cache, dan file dibatasi berdasarkan user/project scope.
 - Upload batch dibatasi jumlah file dan ukuran file.
 - Path filename divalidasi untuk mencegah path traversal.
 - Gunakan reverse proxy HTTPS seperti Nginx, Caddy, atau cloud load balancer.
-- Backup PostgreSQL dan bucket MinIO secara berkala.
+- Backup PostgreSQL dan bucket SeaweedFS secara berkala.
 
 ## Monitoring dan troubleshooting
 
@@ -439,22 +443,22 @@ Pastikan boundary/POP tidak diganti ketika generation berjalan. Dashboard mengun
 Backend test:
 
 ```bash
-python3 -m pytest -q tests --disable-warnings
+PYTHONPATH=app python3 -m pytest -q app/server/tests tests --disable-warnings
 ```
 
 Compile check:
 
 ```bash
-python3 -m compileall -q backend
+python3 -m compileall -q app/server
 ```
 
 Dashboard TypeScript, build, dan lint:
 
 ```bash
-cd dashboard
-npx tsc --noEmit
-npm run build
-npm run lint
+cd app/web
+pnpm exec tsc --noEmit
+pnpm build
+pnpm lint
 ```
 
 Sebelum merge atau deploy, jalankan test backend, TypeScript check, build dashboard, dan `git diff --check`.
@@ -500,4 +504,4 @@ ODC 01
 - Data OSM bersifat cache-aware dan tidak realtime. Default freshness adalah 24 jam.
 - Waktu generation bergantung pada luas boundary, jumlah bangunan, ukuran road graph, Overpass, dan resource worker.
 - Homepass tetap dapat memakan waktu untuk boundary dengan ribuan rumah karena export KMZ membuat feature titik dan garis dalam jumlah besar.
-- Untuk banyak user, jalankan Redis, PostgreSQL, MinIO, backend, dan worker sebagai service terpisah dengan monitoring dan backup.
+- Untuk banyak user, jalankan Redis, PostgreSQL, SeaweedFS, backend, dan worker sebagai service terpisah dengan monitoring dan backup.

@@ -30,12 +30,16 @@ class ProgressManager:
         self.redis.setex(f"job_progress:{job_id}", 3600, json.dumps(state))
         
     def update(self, job_id: str, stage: str, message: str, percent: int, done: bool = False, result: Optional[Dict[str, Any]] = None):
+        existing = self.get_status(job_id) or {}
         state = {
             "stage": stage,
             "message": message,
             "percent": percent,
             "done": done,
         }
+        for field in ("user_id", "batch_id"):
+            if existing.get(field):
+                state[field] = existing[field]
         if result is not None:
             state["result"] = result
         self.redis.setex(f"job_progress:{job_id}", 3600, json.dumps(state))
@@ -51,6 +55,9 @@ class ProgressManager:
         
     def error(self, job_id: str, error_msg: str):
         self.update(job_id, "ERROR", error_msg, 100, done=True)
+
+    def cancel(self, job_id: str):
+        self.update(job_id, "CANCELED", "Generation canceled.", 100, done=True)
         
     def cleanup(self, job_id: str):
         self.redis.delete(f"job_progress:{job_id}")
@@ -88,7 +95,7 @@ class ProgressManager:
                 break
         jobs = state.get("jobs", [])
         state["completed"] = sum(j.get("status") == "COMPLETED" for j in jobs)
-        state["failed"] = sum(j.get("status") in {"FAILED", "SKIPPED"} for j in jobs)
+        state["failed"] = sum(j.get("status") in {"FAILED", "SKIPPED", "CANCELED"} for j in jobs)
         active = sum(j.get("status") in {"QUEUED", "RUNNING"} for j in jobs)
         state["status"] = "COMPLETED" if active == 0 else ("RUNNING" if state["completed"] or state["failed"] else "QUEUED")
         self.redis.setex(f"batch_progress:{batch_id}", 86400, json.dumps(state))

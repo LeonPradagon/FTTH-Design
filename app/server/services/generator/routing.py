@@ -9,7 +9,7 @@ from server.core.logging import logger
 
 # Bump this whenever the allowed edge set or cost model changes.  Existing
 # GraphML caches are re-sanitised instead of silently reusing an old profile.
-ROAD_PROFILE_VERSION = "road-priority-v4"
+ROAD_PROFILE_VERSION = "vehicle-roads-v5"
 ALLOWED_HIGHWAY_TYPES = {
     "motorway", "motorway_link", "trunk", "trunk_link",
     "primary", "primary_link", "secondary", "secondary_link",
@@ -53,7 +53,7 @@ def _highway_values(value):
     return set()
 
 
-def prepare_road_graph(road_graph):
+def prepare_road_graph(road_graph, routing_strategy="priority_road"):
     """Keep actual vehicle roads only and add a road-class routing cost.
 
     Native OSM XML also contains railways and other ways without a ``highway``
@@ -67,7 +67,11 @@ def prepare_road_graph(road_graph):
             invalid_edges.append((u, v, key))
             continue
 
-        factor = min(ROAD_PRIORITY_FACTORS.get(kind, 1.5) for kind in allowed_types)
+        factor = (
+            1.0
+            if routing_strategy == "shortest"
+            else min(ROAD_PRIORITY_FACTORS.get(kind, 1.5) for kind in allowed_types)
+        )
         length = float(data.get("length") or 0.0)
         data["routing_cost"] = max(length, 0.01) * factor
 
@@ -76,7 +80,7 @@ def prepare_road_graph(road_graph):
     if road_graph.number_of_edges() == 0:
         raise ValueError("Road graph tidak memiliki jalan kendaraan yang valid.")
 
-    road_graph.graph["ftth_road_profile"] = ROAD_PROFILE_VERSION
+    road_graph.graph["ftth_road_profile"] = f"{ROAD_PROFILE_VERSION}:{routing_strategy}"
     logger.info(
         "Road graph sanitized: removed %s non-road edges; %s road edges remain",
         len(invalid_edges),
@@ -169,7 +173,7 @@ def route_along_road(
 
     # Preparing the graph removes invalid edges and computes routing costs.
     # It is invariant for the lifetime of this graph, so do it only once.
-    if G.graph.get("ftth_road_profile") != ROAD_PROFILE_VERSION:
+    if not str(G.graph.get("ftth_road_profile", "")).startswith(ROAD_PROFILE_VERSION):
         G = prepare_road_graph(G)
 
     # 1. Snap start and end. Reuse nearest-edge lookups for repeated endpoints.
@@ -382,7 +386,7 @@ def locate_on_road(road_graph, lat, lon):
     # The graph profile is immutable during routing. Re-sanitising every
     # time a house is snapped makes large exports effectively O(houses *
     # road_edges), because this function is called for every cable endpoint.
-    if road_graph.graph.get("ftth_road_profile") != ROAD_PROFILE_VERSION:
+    if not str(road_graph.graph.get("ftth_road_profile", "")).startswith(ROAD_PROFILE_VERSION):
         road_graph = prepare_road_graph(road_graph)
     u, v, key = ox.distance.nearest_edges(road_graph, X=lon, Y=lat)
     line, len_m = _edge_geometry_and_length(road_graph, u, v, key)
@@ -391,12 +395,17 @@ def locate_on_road(road_graph, lat, lon):
     return {"edge": (u, v, key), "line": line, "len_deg": len_deg, "len_m": len_m, "t_deg": t_deg}
 
 
-def snap_to_road(road_graph, lat, lon):
+def snap_to_road(road_graph, lat, lon, max_distance_m=None):
     """Geser satu titik (lat, lon) ke posisi terdekat DI SEPANJANG jalan
     (diproyeksikan ke garis jalan itu sendiri, bukan cuma ke node/
     persimpangan terdekat). Return (lat, lon) baru."""
     info = locate_on_road(road_graph, lat, lon)
     p = info["line"].interpolate(info["t_deg"])
+    distance_m = haversine_m(lat, lon, p.y, p.x)
+    if max_distance_m is not None and distance_m > max_distance_m:
+        raise ValueError(
+            f"Nearest road is {distance_m:.0f}m away, beyond the {max_distance_m:.0f}m snapping limit."
+        )
     return p.y, p.x
 
 

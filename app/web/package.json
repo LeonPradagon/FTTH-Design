@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev -p 3001",
     "build": "pnpm run prisma:generate && next build",
-    "prisma:generate": "PRISMA_GENERATE_SKIP_AUTOINSTALL=true prisma generate --generator js_client --schema ../server/schema.prisma",
+    "prisma:generate": "trap 'rm -f .schema.prisma' EXIT; ln -s ../server/schema.prisma .schema.prisma; PRISMA_GENERATE_SKIP_AUTOINSTALL=true prisma generate --generator js_client --schema .schema.prisma",
     "start": "next start",
     "lint": "eslint"
   },
@@ -16,7 +16,7 @@
     "@deck.gl/geo-layers": "^9.3.10",
     "@deck.gl/layers": "^9.3.10",
     "@deck.gl/react": "^9.3.10",
-    "@prisma/client": "^5.17.0",
+    "@prisma/client": "^6.19.3",
     "@tmcw/togeojson": "^7.1.2",
     "@types/jszip": "^3.4.0",
     "@types/mapbox-gl": "^3.4.1",

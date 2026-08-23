@@ -1,8 +1,8 @@
 import pytest
 import os
 import csv
-from backend.services.generator.models import ODC, ODP, Splitter
-from backend.services.generator.csv_exporter import export_csv
+from server.services.generator.models import ODC, ODP, Splitter
+from server.services.generator.csv_exporter import export_csv
 
 @pytest.fixture
 def sample_data():

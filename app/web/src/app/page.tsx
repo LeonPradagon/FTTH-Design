@@ -8,7 +8,7 @@ import { Navbar } from "../components/Navbar";
 import { CheckCircle, AlertCircle, Info, X } from "lucide-react";
 import GenerationProgressModal from "@/components/GenerationProgressModal";
 import GenerationConfigModal, { GenerationConfig, DEFAULT_CONFIG } from "@/components/GenerationConfigModal";
-import ValidationStatsPanel, { DesignStats, ValidationResult } from "@/components/ValidationStatsPanel";
+import type { DesignStats, ValidationResult } from "@/components/ValidationStatsPanel";
 import VersionHistoryPanel, { DesignVersion } from "@/components/VersionHistoryPanel";
 
 import { Sidebar, FeatureFilters } from "../components/Sidebar";
@@ -416,7 +416,7 @@ export default function Home() {
       if (!res.ok) throw new Error('Gagal mengubah nama');
       await fetchProjects();
       addToast('Nama proyek berhasil diubah', 'success');
-    } catch (err) {
+    } catch {
       addToast('Gagal mengubah nama proyek', 'error');
     }
   };
@@ -566,7 +566,8 @@ export default function Home() {
       const url = toProxyApiUrl(uploadData.url);
       const isBoundary = fileToUse.name.toLowerCase().includes('boundary');
       const isPop = fileToUse.name.toLowerCase().includes('pop') || fileToUse.name.toLowerCase().includes('olt');
-      const newLayerId = `import-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const importId = crypto.randomUUID();
+      const newLayerId = `import-${importId}`;
 
       // Get region string from KML via Reverse Geocoding
       let regionStr = "";
@@ -653,7 +654,7 @@ export default function Home() {
           
           if (!newGroupId) {
              const batchCount = groupsMap.size + 1;
-             newGroupId = `boundary:batch-${batchCount}-${Date.now()}`;
+             newGroupId = `boundary:batch-${batchCount}-${importId}`;
              if (regionStr) {
                boundaryGroupName = `Area ${regionStr}${batchCount > 1 ? ` (${batchCount})` : ''}`;
              } else {
@@ -710,7 +711,16 @@ export default function Home() {
         const statePayload = await result.json();
         const state = statePayload.data;
         if (!state) throw new Error("Status batch tidak ditemukan");
-        const jobs = state.jobs || [];
+        const jobs: {
+          status: string;
+          item_id: string;
+          design_name: string;
+          boundary_name: string;
+          result?: { url?: string };
+          percent?: number;
+          stage?: string;
+          message?: string;
+        }[] = state.jobs || [];
         const totalPercent = jobs.length
           ? Math.round(jobs.reduce((sum: number, job: { percent?: number }) => sum + (job.percent || 0), 0) / jobs.length)
           : 100;
@@ -722,16 +732,15 @@ export default function Home() {
         });
 
         if (state.status === "COMPLETED") {
-          const hasNewDesign = jobs.some((job: any) => job.status === "COMPLETED" && job.result?.url);
+          const hasNewDesign = jobs.some(job => job.status === "COMPLETED" && job.result?.url);
           setLayers(prev => {
-            const newLayers: LayerConfig[] = jobs
-              .filter((job: { status: string; result?: { url?: string }; item_id: string }) => job.status === "COMPLETED" && job.result?.url)
-              .map((job: { item_id: string; design_name: string; boundary_name: string; result: { url: string } }) => {
+            const newLayers: LayerConfig[] = jobs.flatMap(job => {
+                if (job.status !== "COMPLETED" || !job.result?.url) return [];
                 const matchedBoundary = prev.find(l => l.name === job.boundary_name && l.groupId);
                 const targetGroupId = matchedBoundary?.groupId || boundaryGroupKey(job.boundary_name);
                 const targetGroupName = matchedBoundary?.groupName || job.boundary_name;
                 
-                return {
+                return [{
                   id: `design:batch:${batchId}:${job.item_id}`,
                   name: job.design_name,
                   url: toProxyApiUrl(job.result.url),
@@ -741,7 +750,7 @@ export default function Home() {
                   groupName: targetGroupName,
                   designName: job.design_name,
                   boundaryName: job.boundary_name,
-                } as LayerConfig;
+                } as LayerConfig];
               });
             const merged = [...prev, ...newLayers.filter(layer => !prev.some(existing => existing.id === layer.id))];
             saveProject(projectName || "Untitled Project", merged).catch(console.error);
@@ -1325,7 +1334,6 @@ export default function Home() {
         onGenerateHomepass={handleGenerateHomepass}
         isGeneratingHomepass={isGeneratingHomepass}
         hasNetworkCore={canGenerateHomepass}
-        projectName={projectName}
         featureColors={featureColors}
         onConfigClick={() => setIsConfigModalOpen(true)}
         onVersionHistoryClick={() => {
@@ -1352,8 +1360,6 @@ export default function Home() {
           onChangeLayerColor={canEditColors ? handleLayerColorChange : undefined}
           savedProjects={savedProjects}
           onLoadProject={loadProject}
-          onUnloadProject={unloadProject}
-          onNewProject={unloadProject}
           onDeleteProject={deleteProject}
           onRenameProject={handleRenameProject}
           currentProjectId={currentProjectId}

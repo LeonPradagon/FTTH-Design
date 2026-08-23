@@ -1,5 +1,5 @@
 import pytest
-from backend.services.generator.generation_config import GenerationConfig
+from server.services.generator.generation_config import GenerationConfig
 from pydantic import ValidationError
 
 def test_default_config():

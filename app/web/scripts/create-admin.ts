@@ -9,7 +9,7 @@ async function main() {
     await prisma.user.deleteMany({
       where: { email: { in: ["admin@ftth.com", "admin@surge.com"] } }
     });
-  } catch(e) {}
+  } catch {}
 
   // Create the user
   try {
@@ -21,8 +21,11 @@ async function main() {
       }
     });
     console.log("Signup success:", res);
-  } catch(e: any) {
-    console.log("Signup error (might already exist):", e.message);
+  } catch (error) {
+    console.log(
+      "Signup error (might already exist):",
+      error instanceof Error ? error.message : error,
+    );
   }
 
   // Update role to admin

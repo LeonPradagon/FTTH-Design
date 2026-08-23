@@ -1,5 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Optional
+from fastapi import APIRouter, Depends
 
 from server.database import db
 from server.core.response import success_response, error_response
@@ -11,7 +10,9 @@ router = APIRouter(prefix="/api")
 async def get_project_audit(project_id: str, current_user: dict = Depends(get_current_user)):
     """Get audit logs for a specific project."""
     project = await db.project.find_unique(where={"id": project_id})
-    if not project or project.userId != current_user["id"]:
+    if not project or (
+        current_user.get("role") != "admin" and project.userId != current_user["id"]
+    ):
         return error_response("PROJECT_NOT_FOUND", "Project not found or access denied", http_status=404)
         
     logs = await db.auditlog.find_many(

@@ -1062,6 +1062,7 @@ def _run_generator_logic(
             raise NoCustomerFoundError(
                 message="Tidak ada rumah yang ditemukan di OpenStreetMap untuk area ini.",
             )
+        road_graph = prepare_road_graph(road_graph, config.routing_strategy)
     except NoCustomerFoundError:
         raise
     except Exception as e:

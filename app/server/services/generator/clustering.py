@@ -61,7 +61,7 @@ def centroid_of(points):
     return tuple(np.array(points, dtype=float).mean(axis=0))
 
 
-def snap_centroid_to_road(target_centroid, road_graph):
+def snap_centroid_to_road(target_centroid, road_graph, max_distance_m=None):
     """Snap a generated cabinet position to a valid vehicle road.
 
     Returning an unsnapped centroid here creates a straight connector in the
@@ -71,7 +71,12 @@ def snap_centroid_to_road(target_centroid, road_graph):
     """
     if road_graph is None:
         return target_centroid
-    return snap_to_road(road_graph, target_centroid[0], target_centroid[1])
+    return snap_to_road(
+        road_graph,
+        target_centroid[0],
+        target_centroid[1],
+        max_distance_m=max_distance_m,
+    )
 
 
 def build_design(houses, odp_capacity=None, odc_capacity=None, road_graph=None, config=None):
@@ -105,7 +110,8 @@ def build_design(houses, odp_capacity=None, odc_capacity=None, road_graph=None, 
         c_lat, c_lon = centroid_of(cluster_houses)
         lat, lon = snap_centroid_to_road(
             target_centroid=(c_lat, c_lon),
-            road_graph=road_graph
+            road_graph=road_graph,
+            max_distance_m=config.snapping_distance_m,
         )
         return ODP(
             id=f"ODP-{i:03d}",
@@ -134,7 +140,8 @@ def build_design(houses, odp_capacity=None, odc_capacity=None, road_graph=None, 
         c_lat, c_lon = centroid_of([(o.lat, o.lon) for o in cluster_odps])
         lat, lon = snap_centroid_to_road(
             target_centroid=(c_lat, c_lon),
-            road_graph=road_graph
+            road_graph=road_graph,
+            max_distance_m=config.snapping_distance_m,
         )
         return ODC(
             id=f"ODC-{i:03d}",

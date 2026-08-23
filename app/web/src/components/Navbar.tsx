@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, X, Home, Info, Cable, User, Server, Triangle, Settings } from 'lucide-react';
+import { Upload, X, Home, Info, Cable, User, Server, Triangle, Settings, Clock } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { AccountCenterModal } from './AccountCenterModal';
 import { useSession } from '@/lib/auth-client';
@@ -16,7 +16,6 @@ interface NavbarProps {
   isGeneratingHomepass?: boolean;
   hasNetworkCore?: boolean;
   featureColors?: Record<string, string>;
-  projectName?: string | null;
   onConfigClick?: () => void;
   onVersionHistoryClick?: () => void;
 }
@@ -152,6 +151,20 @@ export function Navbar({
             >
               <Home size={14} style={{ marginRight: '6px' }} />
               {isGeneratingHomepass ? "..." : "Generate Homepass"}
+            </button>
+          )}
+
+          {onConfigClick && (
+            <button onClick={onConfigClick} className="regenerate-cable-btn" title="Generation configuration">
+              <Settings size={14} style={{ marginRight: '6px' }} />
+              Config
+            </button>
+          )}
+
+          {onVersionHistoryClick && (
+            <button onClick={onVersionHistoryClick} className="regenerate-cable-btn" title="Version history">
+              <Clock size={14} style={{ marginRight: '6px' }} />
+              Versions
             </button>
           )}
 

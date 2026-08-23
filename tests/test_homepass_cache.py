@@ -1,5 +1,5 @@
-from backend.api.routes import generation
-from backend.core.errors import DesignStateNotFoundError
+from server.api.routes import generation
+from server.core.errors import DesignStateNotFoundError
 
 
 def test_homepass_cache_falls_back_to_default_scope_when_project_is_created_late(

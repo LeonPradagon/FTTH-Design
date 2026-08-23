@@ -2,8 +2,8 @@ import pytest
 import os
 import zipfile
 from shapely.geometry import Point
-from backend.services.generator.models import ODC, ODP, Splitter
-from backend.services.generator.kml_builder import export_kmz
+from server.services.generator.models import ODC, ODP, Splitter
+from server.services.generator.kml_builder import export_kmz
 
 @pytest.fixture
 def sample_data():

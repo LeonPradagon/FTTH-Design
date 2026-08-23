@@ -4,18 +4,14 @@ All endpoints return the standard response envelope:
 ``{"success": true/false, "data": {...}, "error": {...}}``.
 """
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import List, Optional, Any
-import os
-import shutil
+from typing import Optional
 from prisma import Json
 
 from ...database import db
-from ..deps import get_current_user, get_optional_user
-from server.core.errors import InvalidFileError
+from ..deps import get_current_user, get_generation_user
 from server.core.response import success_response
-from server.services.user_storage import create_user_filename, get_user_storage_dir, user_file_url
 
 router = APIRouter(prefix="/api")
 
@@ -62,31 +58,8 @@ class ProjectUpdate(BaseModel):
     filters: Optional[dict] = None
     feature_colors: Optional[dict] = None
 
-from server.services.user_storage import create_user_filename, get_user_storage_dir, user_file_url, upload_file as minio_upload_file
-
-@router.post("/upload")
-async def upload_file(file: UploadFile = File(...), current_user: dict = Depends(get_optional_user)):
-    """Uploads a file (like a KML) and returns its permanent URL."""
-    try:
-        user_dir = get_user_storage_dir(current_user["id"])
-        extension = os.path.splitext(file.filename or "upload.kml")[1] or ".kml"
-        safe_filename = create_user_filename("import", extension)
-        file_location = user_dir / safe_filename
-        
-        with open(file_location, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-            
-        # Upload to MinIO so presigned URLs work later
-        minio_upload_file(current_user["id"], safe_filename, file_location)
-            
-        return success_response(data={"url": user_file_url(safe_filename)})
-    except Exception as e:
-        raise InvalidFileError(
-            message=f"Failed to upload file: {str(e)}",
-        )
-
 @router.post("/projects")
-async def create_project(project: ProjectCreate, current_user: dict = Depends(get_current_user)):
+async def create_project(project: ProjectCreate, current_user: dict = Depends(get_generation_user)):
     db_project = await db.project.create(
         data={
             "name": project.name,
@@ -100,8 +73,9 @@ async def create_project(project: ProjectCreate, current_user: dict = Depends(ge
 
 @router.get("/projects")
 async def read_projects(skip: int = 0, limit: int = 100, current_user: dict = Depends(get_current_user)):
+    where = {} if current_user.get("role") == "admin" else {"userId": current_user["id"]}
     projects = await db.project.find_many(
-        where={"userId": current_user["id"]},
+        where=where,
         skip=skip,
         take=limit,
         order={"updated_at": "desc"}
@@ -114,18 +88,18 @@ async def read_project(project_id: str, current_user: dict = Depends(get_current
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
         
-    if project.userId != current_user["id"]:
+    if current_user.get("role") != "admin" and project.userId != current_user["id"]:
         raise HTTPException(status_code=403, detail="Forbidden")
         
     return success_response(data=_serialize_project(project))
 
 @router.put("/projects/{project_id}")
-async def update_project(project_id: str, project_update: ProjectUpdate, current_user: dict = Depends(get_current_user)):
+async def update_project(project_id: str, project_update: ProjectUpdate, current_user: dict = Depends(get_generation_user)):
     project = await db.project.find_unique(where={"id": project_id})
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
         
-    if project.userId != current_user["id"]:
+    if current_user.get("role") != "admin" and project.userId != current_user["id"]:
         raise HTTPException(status_code=403, detail="Forbidden")
     
     update_data = project_update.dict(exclude_unset=True)
@@ -147,12 +121,12 @@ async def update_project(project_id: str, project_update: ProjectUpdate, current
     return success_response(data=_serialize_project(updated_project))
 
 @router.delete("/projects/{project_id}")
-async def delete_project(project_id: str, current_user: dict = Depends(get_current_user)):
+async def delete_project(project_id: str, current_user: dict = Depends(get_generation_user)):
     project = await db.project.find_unique(where={"id": project_id})
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
         
-    if project.userId != current_user["id"]:
+    if current_user.get("role") != "admin" and project.userId != current_user["id"]:
         raise HTTPException(status_code=403, detail="Forbidden")
         
     try:

@@ -5,12 +5,11 @@ All endpoints return the standard response envelope:
 """
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse
+from fastapi.responses import StreamingResponse
 import os
 import shutil
 import asyncio
 import json
-import mimetypes
 import re
 import uuid
 from typing import Optional
@@ -18,12 +17,11 @@ from pathlib import Path
 
 from arq import create_pool
 from arq.connections import RedisSettings
+from arq.jobs import Job
 
 from server.core.logging import logger
 from server.core.errors import (
-    FTTHError,
     InvalidFileError,
-    ExportFailedError,
     DesignStateNotFoundError,
 )
 from server.core.response import success_response
@@ -32,11 +30,8 @@ from server.database import db
 from server.services.user_storage import (
     create_user_filename,
     get_user_cache_dir,
-    get_user_storage_dir,
-    resolve_user_file,
     user_file_url,
     upload_file,
-    get_presigned_url,
     get_generation_cache_dir,
 )
 
@@ -53,6 +48,60 @@ from shapely.geometry import Point
 router = APIRouter()
 
 
+async def _require_project_access(project_id: str | None, current_user: dict) -> None:
+    if not project_id:
+        return
+    project = await db.project.find_unique(where={"id": project_id})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project tidak ditemukan.")
+    if current_user.get("role") != "admin" and project.userId != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Project tidak dapat diakses.")
+
+
+async def _enqueue_generation_job(
+    function: str,
+    *,
+    job_id: str,
+    user_id: str,
+    project_id: str | None = None,
+    batch_id: str | None = None,
+    item_id: str | None = None,
+    **arguments,
+) -> None:
+    await db.generationjob.create(
+        data={
+            "id": job_id,
+            "userId": user_id,
+            "projectId": project_id,
+            "batchId": batch_id,
+            "itemId": item_id,
+            "status": "QUEUED",
+            "stage": "QUEUED",
+            "progress": 1,
+        }
+    )
+    try:
+        if not progress_manager.get_status(job_id):
+            progress_manager.create_job(job_id, user_id=user_id, batch_id=batch_id)
+            progress_manager.update(job_id, "QUEUED", "Menunggu worker memproses job...", 1)
+        pool = await get_redis_pool()
+        arguments.update(job_id=job_id, user_id=user_id)
+        if function == "generate_task":
+            arguments.update(project_id=project_id, batch_id=batch_id)
+        await pool.enqueue_job(
+            function,
+            **arguments,
+            _job_id=job_id,
+        )
+    except Exception as exc:
+        progress_manager.error(job_id, str(exc))
+        await db.generationjob.update(
+            where={"id": job_id},
+            data={"status": "FAILED", "stage": "QUEUE_ERROR", "progress": 100, "error": str(exc)},
+        )
+        raise
+
+
 def _batch_slug(filename: str) -> str:
     stem = Path(filename).stem.lower()
     stem = re.sub(r"(boundary|pop|olt|polygon|point)", " ", stem)
@@ -67,6 +116,39 @@ def _is_boundary_file(filename: str) -> bool:
 
 def _is_pop_file(filename: str) -> bool:
     return any(token in filename.lower() for token in ("pop", "olt", "sentral"))
+
+
+def _can_access_job(state: dict, current_user: dict) -> bool:
+    return (
+        current_user.get("role") == "admin"
+        or state.get("user_id") == current_user["id"]
+    )
+
+
+async def _get_job_state(job_id: str) -> dict | None:
+    state = progress_manager.get_status(job_id)
+    if state and state.get("user_id"):
+        return state
+    job = await db.generationjob.find_unique(where={"id": job_id})
+    if not job:
+        return state
+    if state:
+        state["user_id"] = job.userId
+        if job.batchId:
+            state["batch_id"] = job.batchId
+        return state
+    state = {
+        "user_id": job.userId,
+        "stage": job.stage or job.status,
+        "message": job.error or job.status,
+        "percent": job.progress,
+        "done": job.status in {"COMPLETED", "FAILED", "CANCELED"},
+    }
+    if job.batchId:
+        state["batch_id"] = job.batchId
+    if job.result is not None:
+        state["result"] = job.result
+    return state
 
 
 def _resolve_homepass_cache_dir(
@@ -136,6 +218,7 @@ async def generate_design(
     progress_manager.create_job(job_id, user_id=current_user["id"])
         
     try:
+        await _require_project_access(project_id, current_user)
         user_dir = get_generation_cache_dir(current_user["id"], project_id)
         cleanup_old_files(user_dir)
     
@@ -155,14 +238,12 @@ async def generate_design(
     
         with open(boundary_path, "wb") as buffer:
             shutil.copyfileobj(boundaryFile.file, buffer)
-        # Upload input to MinIO
         upload_file(current_user["id"], boundary_path.name, boundary_path)
     
         if popFile and popFile.filename:
             pop_path = user_dir / create_user_filename("pop", "kml")
             with open(pop_path, "wb") as buffer:
                 shutil.copyfileobj(popFile.file, buffer)
-            # Upload input to MinIO
             upload_file(current_user["id"], pop_path.name, pop_path)
             has_custom_pop = True
     
@@ -175,23 +256,21 @@ async def generate_design(
     
         logger.info(f"Enqueuing generate_task for job {job_id}")
         progress_manager.update(job_id, "QUEUED", "Menunggu worker memproses job...", 1)
-        pool = await get_redis_pool()
-        await pool.enqueue_job(
+        await _enqueue_generation_job(
             "generate_task",
-            str(boundary_path),
-            str(pop_path) if pop_path else None,
-            str(output_kmz_path),
-            str(output_csv_path),
-            has_custom_pop,
-            str(user_dir),
-            gen_config.model_dump(),
-            job_id,
-            project_id,
-            current_user["id"],
-            output_kml_name,
-            output_kmz_name,
-            output_csv_name,
-            _job_id=job_id
+            job_id=job_id,
+            user_id=current_user["id"],
+            project_id=project_id,
+            boundary_path=str(boundary_path),
+            pop_path=str(pop_path) if pop_path else None,
+            output_kmz_path=str(output_kmz_path),
+            output_csv_path=str(output_csv_path),
+            has_custom_pop=has_custom_pop,
+            cache_dir=str(user_dir),
+            gen_config_dict=gen_config.model_dump(),
+            output_kml_name=output_kml_name,
+            output_kmz_name=output_kmz_name,
+            output_csv_name=output_csv_name,
         )
     
         return success_response(
@@ -220,10 +299,7 @@ async def generate_batch(
     max_file_bytes = int(os.getenv("MAX_BATCH_FILE_BYTES", str(50 * 1024 * 1024)))
     if len(files) > max_files:
         raise HTTPException(status_code=413, detail=f"Maksimal {max_files} file per batch.")
-    if project_id:
-        project = await db.project.find_unique(where={"id": project_id})
-        if not project or project.userId != current_user["id"]:
-            raise HTTPException(status_code=403, detail="Project tidak dapat diakses.")
+    await _require_project_access(project_id, current_user)
 
     parsed_config = _parse_config_from_form(config)
     gen_config = parsed_config.model_copy(update={
@@ -304,8 +380,7 @@ async def generate_batch(
         shutil.copy2(pop_match[1], pop_item)
         job_id = str(uuid.uuid4())
         timestamp = __import__("datetime").datetime.now().strftime("%Y%m%d_%H%M")
-        # The item suffix prevents two same-named boundaries in one batch from
-        # overwriting each other's object in MinIO.
+        # The item suffix prevents same-named boundaries from overwriting each other.
         prefix = f"FTTH_{slug}_{timestamp}_{item_id[:6]}"
         jobs.append({
             "job_id": job_id,
@@ -324,7 +399,6 @@ async def generate_batch(
     progress_manager.create_batch(batch_id, jobs, project_id=project_id, user_id=current_user["id"])
     with open(batch_root / "manifest.json", "w") as manifest_file:
         json.dump({"project_id": project_id, "jobs": jobs}, manifest_file, indent=2)
-    pool = await get_redis_pool()
     for job in jobs:
         if job["status"] == "SKIPPED":
             progress_manager.update_batch_job(batch_id, job["job_id"], status="SKIPPED")
@@ -333,12 +407,24 @@ async def generate_batch(
         output_dir.mkdir(parents=True, exist_ok=True)
         output_kmz = output_dir / job["output_kmz_name"]
         output_csv = output_dir / job["output_csv_name"]
-        await pool.enqueue_job(
+        await _enqueue_generation_job(
             "generate_task",
-            job["boundary_path"], job["pop_path"], str(output_kmz), str(output_csv), True,
-            job["cache_dir"], gen_config.model_dump(), job["job_id"], project_id,
-            current_user["id"], job["output_kml_name"], job["output_kmz_name"],
-            job["output_csv_name"], batch_id, job["item_id"], _job_id=job["job_id"],
+            job_id=job["job_id"],
+            user_id=current_user["id"],
+            project_id=project_id,
+            batch_id=batch_id,
+            item_id=job["item_id"],
+            boundary_path=job["boundary_path"],
+            pop_path=job["pop_path"],
+            output_kmz_path=str(output_kmz),
+            output_csv_path=str(output_csv),
+            has_custom_pop=True,
+            cache_dir=job["cache_dir"],
+            gen_config_dict=gen_config.model_dump(),
+            output_kml_name=job["output_kml_name"],
+            output_kmz_name=job["output_kmz_name"],
+            output_csv_name=job["output_csv_name"],
+            batch_item_id=job["item_id"],
         )
     batch_state = progress_manager.get_batch(batch_id)
     # Keeps the endpoint deterministic in degraded Redis/test environments;
@@ -361,7 +447,7 @@ async def get_batch(batch_id: str, current_user: dict = Depends(get_current_user
     state = progress_manager.get_batch(batch_id)
     if not state:
         raise HTTPException(status_code=404, detail="Batch tidak ditemukan.")
-    if state.get("user_id") and state["user_id"] != current_user["id"]:
+    if not _can_access_job(state, current_user):
         raise HTTPException(status_code=403, detail="Batch tidak dapat diakses.")
     # Hydrate aggregate state from the authoritative per-job progress keys.
     for job in state.get("jobs", []):
@@ -370,7 +456,11 @@ async def get_batch(batch_id: str, current_user: dict = Depends(get_current_user
             continue
         status = "RUNNING"
         if progress.get("done"):
-            status = "COMPLETED" if progress.get("stage") == "COMPLETED" else "FAILED"
+            status = (
+                "COMPLETED"
+                if progress.get("stage") == "COMPLETED"
+                else ("CANCELED" if progress.get("stage") == "CANCELED" else "FAILED")
+            )
         progress_manager.update_batch_job(
             batch_id,
             job["job_id"],
@@ -390,13 +480,14 @@ async def get_batch_progress(batch_id: str, current_user: dict = Depends(get_cur
 
 
 @router.post("/generate/batch/{batch_id}/retry/{item_id}")
-async def retry_batch_item(batch_id: str, item_id: str, current_user: dict = Depends(get_current_user)):
+async def retry_batch_item(batch_id: str, item_id: str, current_user: dict = Depends(get_generation_user)):
     state = progress_manager.get_batch(batch_id)
     if not state:
         raise HTTPException(status_code=404, detail="Batch tidak ditemukan.")
-    if state.get("user_id") and state["user_id"] != current_user["id"]:
+    if not _can_access_job(state, current_user):
         raise HTTPException(status_code=403, detail="Batch tidak dapat diakses.")
-    manifest_dir = get_generation_cache_dir(current_user["id"], state.get("project_id"), batch_id)
+    owner_id = state.get("user_id") or current_user["id"]
+    manifest_dir = get_generation_cache_dir(owner_id, state.get("project_id"), batch_id)
     manifest_path = manifest_dir / "manifest.json"
     if not manifest_path.exists():
         raise HTTPException(status_code=404, detail="Manifest batch tidak ditemukan.")
@@ -407,14 +498,24 @@ async def retry_batch_item(batch_id: str, item_id: str, current_user: dict = Dep
         raise HTTPException(status_code=404, detail="Item batch tidak dapat di-retry.")
     new_job_id = str(uuid.uuid4())
     output_dir = Path(job["cache_dir"]) / "core"
-    pool = await get_redis_pool()
-    await pool.enqueue_job(
-        "generate_task", job["boundary_path"], job["pop_path"],
-        str(output_dir / job["output_kmz_name"]), str(output_dir / job["output_csv_name"]), True,
-        job["cache_dir"], GenerationConfig(include_homepass=False).model_dump(), new_job_id,
-        state.get("project_id"), current_user["id"], job["output_kml_name"],
-        job["output_kmz_name"], job["output_csv_name"], batch_id, item_id,
-        _job_id=new_job_id,
+    await _enqueue_generation_job(
+        "generate_task",
+        job_id=new_job_id,
+        user_id=owner_id,
+        project_id=state.get("project_id"),
+        batch_id=batch_id,
+        item_id=item_id,
+        boundary_path=job["boundary_path"],
+        pop_path=job["pop_path"],
+        output_kmz_path=str(output_dir / job["output_kmz_name"]),
+        output_csv_path=str(output_dir / job["output_csv_name"]),
+        has_custom_pop=True,
+        cache_dir=job["cache_dir"],
+        gen_config_dict=GenerationConfig(include_homepass=False).model_dump(),
+        output_kml_name=job["output_kml_name"],
+        output_kmz_name=job["output_kmz_name"],
+        output_csv_name=job["output_csv_name"],
+        batch_item_id=item_id,
     )
     progress_manager.update_batch_job(batch_id, job.get("job_id", ""), job_id=new_job_id, status="QUEUED", error=None)
     return success_response(data={"batch_id": batch_id, "item_id": item_id, "job_id": new_job_id})
@@ -422,14 +523,14 @@ async def retry_batch_item(batch_id: str, item_id: str, current_user: dict = Dep
 @router.get("/generate/progress/{job_id}")
 async def generate_progress(job_id: str, current_user: dict = Depends(get_current_user)):
     """Server-Sent Events endpoint for generation progress."""
-    initial_state = progress_manager.get_status(job_id)
-    if initial_state and initial_state.get("user_id") and initial_state["user_id"] != current_user["id"]:
+    initial_state = await _get_job_state(job_id)
+    if initial_state and not _can_access_job(initial_state, current_user):
         raise HTTPException(status_code=403, detail="Job tidak dapat diakses.")
     async def event_stream():
         last_data = None
         missing_attempts = 0
         while True:
-            data = progress_manager.get_status(job_id)
+            data = await _get_job_state(job_id)
             if not data:
                 # A client can connect just before the POST handler has created
                 # the Redis state (for example after network/proxy reordering).
@@ -443,6 +544,9 @@ async def generate_progress(job_id: str, current_user: dict = Depends(get_curren
                 continue
 
             missing_attempts = 0
+            if not _can_access_job(data, current_user):
+                yield f"data: {json.dumps({'error': 'Forbidden'})}\n\n"
+                break
                 
             if data != last_data:
                 yield f"data: {json.dumps(data)}\n\n"
@@ -466,12 +570,41 @@ async def generate_progress(job_id: str, current_user: dict = Depends(get_curren
 @router.get("/generate/status/{job_id}")
 async def generate_status(job_id: str, current_user: dict = Depends(get_current_user)):
     """Return a refresh-safe snapshot without opening an SSE stream."""
-    state = progress_manager.get_status(job_id)
+    state = await _get_job_state(job_id)
     if not state:
         raise HTTPException(status_code=404, detail="Job tidak ditemukan.")
-    if state.get("user_id") and state["user_id"] != current_user["id"]:
+    if not _can_access_job(state, current_user):
         raise HTTPException(status_code=403, detail="Job tidak dapat diakses.")
     return success_response(data=state)
+
+
+@router.post("/api/jobs/{job_id}/cancel")
+async def cancel_job(job_id: str, current_user: dict = Depends(get_generation_user)):
+    state = await _get_job_state(job_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Job tidak ditemukan.")
+    if not _can_access_job(state, current_user):
+        raise HTTPException(status_code=403, detail="Job tidak dapat diakses.")
+    if state.get("done"):
+        raise HTTPException(status_code=409, detail="Job sudah selesai.")
+
+    pool = await get_redis_pool()
+    aborted = await Job(job_id, pool).abort(timeout=5)
+    if not aborted:
+        raise HTTPException(status_code=409, detail="Job tidak dapat dibatalkan.")
+
+    progress_manager.cancel(job_id)
+    await db.generationjob.update(
+        where={"id": job_id},
+        data={"status": "CANCELED", "stage": "CANCELED", "progress": 100},
+    )
+    if state.get("batch_id"):
+        progress_manager.update_batch_job(
+            state["batch_id"],
+            job_id,
+            status="CANCELED",
+        )
+    return success_response(data={"job_id": job_id, "status": "CANCELED"})
 
 
 @router.post("/generate-homepass")
@@ -501,15 +634,16 @@ async def generate_homepass(
         output_csv_path = user_dir / output_csv_name
 
         progress_manager.update(job_id, "QUEUED", "Menunggu worker memproses Homepass...", 1)
-        pool = await get_redis_pool()
-        await pool.enqueue_job(
+        await _enqueue_generation_job(
             "generate_homepass_task",
-            str(output_kmz_path),
-            str(output_csv_path),
-            str(user_dir),
-            job_id,
-            current_user["id"],
-            _job_id=job_id,
+            job_id=job_id,
+            user_id=current_user["id"],
+            project_id=project_id,
+            batch_id=batch_id,
+            item_id=item_id,
+            output_kmz_path=str(output_kmz_path),
+            output_csv_path=str(output_csv_path),
+            cache_dir=str(user_dir),
         )
         return success_response(data={
             "message": "Homepass generation job accepted.",
@@ -533,7 +667,7 @@ async def regenerate_cables(
     if not job_id:
         import uuid
         job_id = str(uuid.uuid4())
-    progress_manager.create_job(job_id)
+    progress_manager.create_job(job_id, user_id=current_user["id"], batch_id=batch_id)
 
     try:
         user_dir = _resolve_homepass_cache_dir(
@@ -545,16 +679,17 @@ async def regenerate_cables(
         output_kmz_path = user_dir / output_kmz_name
         output_csv_path = user_dir / output_csv_name
 
-        pool = await get_redis_pool()
-        await pool.enqueue_job(
+        await _enqueue_generation_job(
             "regenerate_cables_task",
-            str(output_kmz_path),
-            True,
-            str(output_csv_path),
-            str(user_dir),
-            job_id,
-            current_user["id"],
-            _job_id=job_id
+            job_id=job_id,
+            user_id=current_user["id"],
+            project_id=project_id,
+            batch_id=batch_id,
+            item_id=item_id,
+            output_path=str(output_kmz_path),
+            include_homepass=True,
+            output_csv=str(output_csv_path),
+            cache_dir=str(user_dir),
         )
 
         return success_response(
@@ -579,7 +714,7 @@ async def generate_custom(
     if not job_id:
         import uuid
         job_id = str(uuid.uuid4())
-    progress_manager.create_job(job_id)
+    progress_manager.create_job(job_id, user_id=current_user["id"])
 
     try:
         user_dir = get_user_cache_dir(current_user["id"])
@@ -592,20 +727,17 @@ async def generate_custom(
 
         with open(custom_path, "wb") as buffer:
             shutil.copyfileobj(customFile.file, buffer)
-        # Upload input to MinIO
         upload_file(current_user["id"], custom_path.name, custom_path)
 
-        pool = await get_redis_pool()
-        await pool.enqueue_job(
+        await _enqueue_generation_job(
             "generate_custom_task",
-            str(custom_path),
-            str(output_kmz_path),
-            True,
-            str(output_csv_path),
-            str(user_dir),
-            job_id,
-            current_user["id"],
-            _job_id=job_id
+            job_id=job_id,
+            user_id=current_user["id"],
+            custom_path=str(custom_path),
+            output_kmz_path=str(output_kmz_path),
+            include_homepass=True,
+            output_csv=str(output_csv_path),
+            cache_dir=str(user_dir),
         )
 
         return success_response(
@@ -619,15 +751,3 @@ async def generate_custom(
     except Exception as e:
         progress_manager.error(job_id, str(e))
         raise
-
-
-@router.get("/api/files/{filename}")
-async def get_user_file(
-    filename: str, current_user: dict = Depends(get_generation_user)
-):
-    """Serve presigned URL for MinIO object."""
-    try:
-        url = get_presigned_url(current_user["id"], filename)
-        return RedirectResponse(url=url)
-    except Exception as e:
-        raise InvalidFileError(message=f"File not found or storage error: {e}")

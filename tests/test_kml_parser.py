@@ -1,7 +1,7 @@
 """Tests for KML parsing."""
 
 import pytest
-from backend.services.generator.kml_parser import read_pop_point, read_boundary
+from server.services.generator.kml_parser import read_pop_point, read_boundary
 import tempfile
 import os
 

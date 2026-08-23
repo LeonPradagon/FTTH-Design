@@ -2,9 +2,9 @@
 
 import pytest
 
-from backend.services.generator.generation_config import GenerationConfig
-from backend.services.generator.models import Splitter, ODP, ODC
-from backend.services.generator.validation import (
+from server.services.generator.generation_config import GenerationConfig
+from server.services.generator.models import Splitter, ODP, ODC
+from server.services.generator.validation import (
     ValidationResult,
     ValidationIssue,
     validate_design,
@@ -174,6 +174,19 @@ class TestValidateDesign:
         result = validate_design(pop, [odc], config)
         codes = [i.code for i in result.issues]
         assert "ODP_RADIUS_EXCEEDED" in codes
+
+    def test_feeder_length_exceeded(self):
+        pop, odcs, config = self._make_design()
+        config.max_feeder_length_m = 100.0
+        feeder = [{
+            "from_label": "POP-001",
+            "to_label": "ODC-001",
+            "coords": [(-6.115, 106.148), (-6.125, 106.148)],
+        }]
+
+        result = validate_design(pop, odcs, config, feeder_segments=feeder)
+
+        assert "FEEDER_LENGTH_EXCEEDED" in [issue.code for issue in result.issues]
 
 
 class TestComputeDesignStats:

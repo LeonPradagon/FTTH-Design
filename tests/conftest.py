@@ -1,9 +1,13 @@
 """Shared pytest fixtures for FTTH Design Generator tests."""
 
+import os
+
 import pytest
 
-from backend.services.generator.generation_config import GenerationConfig
-from backend.services.generator.models import Splitter, ODP, ODC
+os.environ.setdefault("BETTER_AUTH_SECRET", "test-secret-that-is-at-least-32-characters")
+
+from server.services.generator.generation_config import GenerationConfig
+from server.services.generator.models import Splitter, ODP, ODC
 
 
 # ── Sample coordinates ──────────────────────────────────────────────
@@ -61,7 +65,7 @@ def sample_pop():
 @pytest.fixture
 def sample_odcs(sample_houses, default_config):
     """Build a small set of ODCs from sample houses (no road graph)."""
-    from backend.services.generator.clustering import build_design
+    from server.services.generator.clustering import build_design
 
     return build_design(
         houses=sample_houses,

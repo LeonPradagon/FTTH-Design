@@ -6,7 +6,7 @@ import json
 import tempfile
 import networkx as nx
 from shapely.geometry import box
-from backend.services.generator.core_logic import (
+from server.services.generator.core_logic import (
     save_design_state,
     load_design_state,
     load_network_state,
@@ -14,7 +14,7 @@ from backend.services.generator.core_logic import (
     _fetch_osm_tiled,
 )
 from unittest.mock import patch
-from backend.services.generator.models import ODC, ODP, Splitter
+from server.services.generator.models import ODC, ODP, Splitter
 
 def test_save_and_load_design_state(sample_odc):
     pop = {"name": "POP-001", "lat": -6.115, "lon": 106.148}
@@ -57,8 +57,8 @@ def test_network_cache_contains_routes_and_homepass_does_not_route(sample_odc, t
     assert cached_distribution["coords"] == [list(point) for point in distribution["ODP-001"]]
 
     output = tmp_path / "homepass.kmz"
-    with patch("backend.services.generator.core_logic.export_kmz") as export, patch(
-        "backend.services.generator.core_logic.export_csv"
+    with patch("server.services.generator.core_logic.export_kmz") as export, patch(
+        "server.services.generator.core_logic.export_csv"
     ):
         generate_homepass_from_state(output, tmp_path / "homepass.csv", cache_dir=tmp_path)
     export.assert_called_once()
@@ -82,9 +82,9 @@ def test_tiled_osm_normalizes_mixed_graph_types(tmp_path):
     undirected.add_edge(1, 2, highway="residential", length=10)
     directed = nx.DiGraph()
     directed.add_edge(2, 3, highway="residential", length=10)
-    with patch("backend.services.generator.core_logic._build_generation_tiles", return_value=[box(0, 0, 1, 1), box(1, 0, 2, 1)]), \
-         patch("backend.services.generator.core_logic.fetch_houses_in_boundary", side_effect=[[(0.1, 0.1)], [(1.2, 2.1)]]), \
-         patch("backend.services.generator.core_logic.fetch_road_graph", side_effect=[undirected, directed]):
+    with patch("server.services.generator.core_logic._build_generation_tiles", return_value=[box(0, 0, 1, 1), box(1, 0, 2, 1)]), \
+         patch("server.services.generator.core_logic.fetch_houses_in_boundary", side_effect=[[(0.1, 0.1)], [(1.2, 2.1)]]), \
+         patch("server.services.generator.core_logic.fetch_road_graph", side_effect=[undirected, directed]):
         houses, graph = _fetch_osm_tiled(box(0, 0, 2, 1), {"lat": 0.5, "lon": 0.5}, cache_dir=tmp_path)
 
     assert len(houses) == 1

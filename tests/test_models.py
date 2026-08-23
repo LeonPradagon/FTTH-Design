@@ -3,8 +3,8 @@
 import pytest
 from pydantic import ValidationError
 
-from backend.services.generator.generation_config import GenerationConfig
-from backend.services.generator.models import Splitter, ODP, ODC
+from server.services.generator.generation_config import GenerationConfig
+from server.services.generator.models import Splitter, ODP, ODC
 
 
 class TestGenerationConfig:

@@ -3,16 +3,46 @@
 import pytest
 import networkx as nx
 from shapely.geometry import LineString, Point
-from backend.services.generator.routing import (
+from server.services.generator.routing import (
     build_feeder_chain,
     build_distribution_tree,
     enforce_min_distance_between_odcs,
     order_odcs_chain,
+    prepare_road_graph,
     route_along_road,
+    snap_to_road,
 )
-from backend.services.generator.models import ODC, Splitter, ODP
-from backend.utils.geometry import haversine_m
+from server.services.generator.models import ODC, Splitter, ODP
+from server.utils.geometry import haversine_m
 from unittest.mock import patch
+
+
+def test_prepare_road_graph_applies_selected_routing_strategy():
+    graph = nx.MultiDiGraph()
+    graph.add_node(1, x=0.0, y=0.0)
+    graph.add_node(2, x=0.001, y=0.0)
+    graph.add_node(3, x=0.002, y=0.0)
+    graph.add_edge(1, 2, key=0, length=100.0, highway="primary")
+    graph.add_edge(2, 3, key=0, length=80.0, highway="residential")
+
+    prepare_road_graph(graph, "shortest")
+    assert graph.edges[1, 2, 0]["routing_cost"] == 100.0
+    assert graph.edges[2, 3, 0]["routing_cost"] == 80.0
+
+    prepare_road_graph(graph, "priority_road")
+    assert graph.edges[1, 2, 0]["routing_cost"] == 90.0
+    assert graph.edges[2, 3, 0]["routing_cost"] == 140.0
+
+
+def test_snap_to_road_enforces_configured_distance():
+    line = LineString([(0.0, 0.001), (0.01, 0.001)])
+    road_info = {
+        "line": line,
+        "t_deg": 0.0,
+    }
+    with patch("server.services.generator.routing.locate_on_road", return_value=road_info):
+        with pytest.raises(ValueError, match="snapping limit"):
+            snap_to_road(object(), 0.0, 0.0, max_distance_m=50.0)
 
 
 def test_route_along_road_default_returns_coordinate_list():
@@ -32,7 +62,7 @@ def test_route_along_road_default_returns_coordinate_list():
             "t_deg": line.project(Point(lon, lat)),
         }
 
-    with patch("backend.services.generator.routing.locate_on_road", side_effect=fake_locate):
+    with patch("server.services.generator.routing.locate_on_road", side_effect=fake_locate):
         path = route_along_road(
             graph,
             (0.0, 0.001),
@@ -117,7 +147,7 @@ def test_distribution_tree_uses_nearby_odp_as_upstream():
             cost, length = 50.0, 40.0
         return {"coords": [source, target], "length_m": length, "routing_cost": cost}
 
-    with patch("backend.services.generator.routing.route_along_road", side_effect=fake_route):
+    with patch("server.services.generator.routing.route_along_road", side_effect=fake_route):
         segments = build_distribution_tree(odc, object(), max_distance_m=500.0)
 
     assert segments["ODP-A"]["source_id"] == "ODC-001"
@@ -140,7 +170,7 @@ def test_distribution_tree_does_not_fabricate_unroutable_or_long_edges():
             return {"coords": [source, target], "length_m": 600.0, "routing_cost": 600.0}
         return {"coords": [source, target], "length_m": 100.0, "routing_cost": 100.0}
 
-    with patch("backend.services.generator.routing.route_along_road", side_effect=fake_route):
+    with patch("server.services.generator.routing.route_along_road", side_effect=fake_route):
         segments = build_distribution_tree(odc, object(), max_distance_m=500.0)
 
     assert segments["ODP-B"]["connected"] is False

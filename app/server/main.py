@@ -1,14 +1,15 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+import asyncio
 import os
 from contextlib import asynccontextmanager
 
-from server.api.routes import generation, projects, versions, audit
+from server.api.routes import audit, files, generation, projects, versions
 from server.core.logging import logger
 from server.core.errors import FTTHError
 from server.core.response import error_response
 from server.database import db
+from server.storage.dependencies import get_object_storage
 
 import subprocess
 import sys
@@ -18,6 +19,8 @@ worker_process = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global worker_process
+    await asyncio.to_thread(get_object_storage().ensure_bucket)
+    await db.connect()
     # Local development can use an embedded worker for convenience. In
     # production/Docker the worker is a separate service; starting another
     # one inside every API replica wastes CPU and competes for the same queue.
@@ -30,16 +33,15 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Embedded arq worker disabled; using separate worker service.")
     
-    await db.connect()
-    yield
-    await db.disconnect()
-    
-    if worker_process:
-        worker_process.terminate()
-        worker_process.wait()
-        logger.info("Local arq worker terminated.")
-
-os.makedirs("dashboard/public/data", exist_ok=True)
+    try:
+        yield
+    finally:
+        await db.disconnect()
+        if worker_process:
+            worker_process.terminate()
+            worker_process.wait()
+            worker_process = None
+            logger.info("Local arq worker terminated.")
 
 app = FastAPI(title="FTTH Design Generator API", lifespan=lifespan)
 
@@ -88,10 +90,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve static files for frontend to fetch immediately
-app.mount("/data", StaticFiles(directory="dashboard/public/data"), name="data")
-
 # Include routers
+app.include_router(files.router)
 app.include_router(projects.router)
 app.include_router(generation.router)
 app.include_router(versions.router)
