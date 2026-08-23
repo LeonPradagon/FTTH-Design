@@ -10,16 +10,35 @@ from backend.database import db
 from fastapi import Request
 
 async def get_optional_user(request: Request):
-    proxy_secret = os.getenv("BACKEND_PROXY_SECRET")
+    # The dedicated proxy secret is preferred.  BETTER_AUTH_SECRET is kept as
+    # a development fallback because the local dashboard environment already
+    # contains the shared Better Auth secret while older installations did not
+    # yet define BACKEND_PROXY_SECRET on the frontend.
+    proxy_secrets = [
+        secret
+        for secret in (
+            os.getenv("BACKEND_PROXY_SECRET"),
+            os.getenv("BETTER_AUTH_SECRET"),
+        )
+        if secret
+    ]
     proxy_auth = request.headers.get("x-proxy-auth")
-    if proxy_secret:
+    if proxy_secrets:
         if not proxy_auth:
             return {"id": "anonymous", "role": "guest", "email": ""}
         try:
             user_id, timestamp, role, email, signature = proxy_auth.split("|", 4)
             payload = "|".join((user_id, timestamp, role, email))
-            expected = hmac.new(proxy_secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
-            if abs(time.time() - int(timestamp)) > 60 or not hmac.compare_digest(signature, expected):
+            if abs(time.time() - int(timestamp)) > 60:
+                return {"id": "anonymous", "role": "guest", "email": ""}
+            valid_signature = any(
+                hmac.compare_digest(
+                    signature,
+                    hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest(),
+                )
+                for secret in proxy_secrets
+            )
+            if not valid_signature:
                 return {"id": "anonymous", "role": "guest", "email": ""}
             return {"id": user_id, "role": role or "user", "email": email}
         except (ValueError, TypeError):

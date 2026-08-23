@@ -453,14 +453,17 @@ def find_strategic_pop(boundary, buffer_deg=0.01):
     return {"name": "Auto POP (Titik Tengah)", "lon": boundary.centroid.x, "lat": boundary.centroid.y}
 
 
-def fetch_road_graph(boundary, pop, buffer_deg=0.002, force_refresh=False):
+def fetch_road_graph(boundary, pop=None, buffer_deg=0.002, force_refresh=False, include_pop=True):
     """Ambil graf jaringan jalan.
     Cache-first: baca dari GraphML lokal jika tersedia."""
     
     print("Mengambil data jaringan jalan...")
     start = time.time()
     
-    combined = unary_union([boundary, Point(pop["lon"], pop["lat"])])
+    geometries = [boundary]
+    if include_pop and pop is not None:
+        geometries.append(Point(pop["lon"], pop["lat"]))
+    combined = unary_union(geometries)
     query_area = combined.convex_hull.buffer(buffer_deg)
     region = _region_bbox(query_area)
     

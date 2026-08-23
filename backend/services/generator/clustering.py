@@ -30,11 +30,11 @@ def capacitated_clustering(points, capacity):
         return [list(range(n))]
 
     coords = np.array(points, dtype=float)
-    remaining = list(range(n))
+    remaining = np.arange(n, dtype=int)
     clusters = []
     last_centroid = None
 
-    while remaining:
+    while remaining.size:
         rem_coords = coords[remaining]
         if last_centroid is None:
             import random
@@ -47,11 +47,12 @@ def capacitated_clustering(points, capacity):
 
         dists = np.linalg.norm(rem_coords - seed, axis=1)
         order = np.argsort(dists)[:capacity]
-        cluster = [remaining[i] for i in order]
+        cluster = remaining[order].tolist()
         clusters.append(cluster)
         last_centroid = coords[cluster].mean(axis=0)
-        taken = set(cluster)
-        remaining = [i for i in remaining if i not in taken]
+        keep = np.ones(remaining.size, dtype=bool)
+        keep[order] = False
+        remaining = remaining[keep]
 
     return clusters
 
@@ -114,7 +115,8 @@ def build_design(houses, odp_capacity=None, odc_capacity=None, road_graph=None, 
         )
 
     odps = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
+    odp_workers = max(1, int(os.getenv("CLUSTERING_ODP_WORKERS", "15")))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=odp_workers) as executor:
         futures = {executor.submit(process_odp, i, idxs): i for i, idxs in enumerate(house_clusters, start=1)}
         results = {}
         for future in concurrent.futures.as_completed(futures):
@@ -143,7 +145,8 @@ def build_design(houses, odp_capacity=None, odc_capacity=None, road_graph=None, 
         )
         
     odcs = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    odc_workers = max(1, int(os.getenv("CLUSTERING_ODC_WORKERS", "10")))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=odc_workers) as executor:
         futures = {executor.submit(process_odc, i, idxs): i for i, idxs in enumerate(odp_clusters, start=1)}
         results = {}
         for future in concurrent.futures.as_completed(futures):

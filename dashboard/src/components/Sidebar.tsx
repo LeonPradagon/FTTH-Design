@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronDown, ChevronRight, Filter, Server, Triangle, Home, Route, Cable, Layers, Trash2, Folder, ArrowLeft, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronDown, ChevronRight, Filter, Server, Triangle, Home, Route, Cable, Layers, Trash2, Folder, ArrowLeft, Plus, Edit2 } from 'lucide-react';
 import { LayerConfig, KmlNode } from '../app/page';
 import { KmlTreeViewer } from './KmlTreeViewer';
 import ValidationStatsPanel, { DesignStats, ValidationResult } from './ValidationStatsPanel';
@@ -39,8 +39,10 @@ interface SidebarProps {
   isGenerationLocked?: boolean;
 }
 
-export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTrees, onToggleTreeNode, isCollapsed, onToggle, featureColors, canEditColors = false, onColorChange, onChangeLayerColor, savedProjects = [], onLoadProject, onUnloadProject, onNewProject, onDeleteProject, currentProjectId, onBackToProjects, stats, validation, isGenerationLocked = false }: SidebarProps) {
+export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTrees, onToggleTreeNode, isCollapsed, onToggle, featureColors, canEditColors = false, onColorChange, onChangeLayerColor, savedProjects = [], onLoadProject, onUnloadProject, onNewProject, onDeleteProject, onRenameProject, currentProjectId, onBackToProjects, stats, validation, isGenerationLocked = false }: SidebarProps & { onRenameProject?: (id: string, name: string) => void }) {
   const [projectToDelete, setProjectToDelete] = useState<{id: string, name: string} | null>(null);
+  const [projectToRename, setProjectToRename] = useState<{id: string, name: string} | null>(null);
+  const [renameInput, setRenameInput] = useState("");
   const [isMainFolderCollapsed, setIsMainFolderCollapsed] = useState(false);
   const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({
     pop: true,
@@ -332,6 +334,33 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
                 <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: '#1f2937', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }} title={savedProjects.find(p => p.id === currentProjectId)?.name || 'Proyek Baru'}>
                   {savedProjects.find(p => p.id === currentProjectId)?.name || 'Proyek Baru'}
                 </h3>
+                {onRenameProject && currentProjectId && (
+                  <button
+                    onClick={() => {
+                      const proj = savedProjects.find(p => p.id === currentProjectId);
+                      if (proj) {
+                        setProjectToRename({ id: proj.id, name: proj.name });
+                        setRenameInput(proj.name);
+                      }
+                    }}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      padding: '4px',
+                      cursor: 'pointer',
+                      color: '#6b7280',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: '4px'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    title="Ubah Nama Proyek"
+                  >
+                    <Edit2 size={16} />
+                  </button>
+                )}
               </>
             ) : (
               <>
@@ -460,6 +489,37 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
                       title="Hapus Proyek"
                     >
                       <Trash2 size={14} />
+                    </button>
+                  )}
+                  {onRenameProject && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setProjectToRename({ id: p.id, name: p.name });
+                        setRenameInput(p.name);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: onDeleteProject ? '38px' : '10px',
+                        top: '12px',
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#3b82f6',
+                        cursor: 'pointer',
+                        padding: '6px',
+                        borderRadius: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: 0,
+                        transition: 'opacity 0.2s, background-color 0.2s'
+                      }}
+                      className="delete-btn"
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#eff6ff'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                      title="Ubah Nama Proyek"
+                    >
+                      <Edit2 size={14} />
                     </button>
                   )}
                   <style dangerouslySetInnerHTML={{__html: `
@@ -658,6 +718,103 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
                 onMouseLeave={(e) => e.currentTarget.style.background = '#ef4444'}
               >
                 Hapus Proyek
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Rename Modal */}
+      {projectToRename && typeof document !== 'undefined' && createPortal(
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          backdropFilter: 'blur(4px)',
+          zIndex: 99999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '24px',
+            width: '340px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+            animation: 'slideUp 0.3s ease-out'
+          }}>
+            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#111827' }}>Ubah Nama Proyek</h3>
+            <input
+              type="text"
+              value={renameInput}
+              onChange={e => setRenameInput(e.target.value)}
+              placeholder="Masukkan nama proyek..."
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: '8px',
+                border: '1px solid #d1d5db',
+                fontSize: '14px',
+                outline: 'none',
+                boxSizing: 'border-box'
+              }}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && renameInput.trim()) {
+                  if (onRenameProject) onRenameProject(projectToRename.id, renameInput.trim());
+                  setProjectToRename(null);
+                } else if (e.key === 'Escape') {
+                  setProjectToRename(null);
+                }
+              }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+              <button 
+                onClick={() => setProjectToRename(null)}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #d1d5db',
+                  background: 'white',
+                  color: '#374151',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+              >
+                Batal
+              </button>
+              <button 
+                onClick={() => {
+                  if (renameInput.trim() && onRenameProject) {
+                    onRenameProject(projectToRename.id, renameInput.trim());
+                  }
+                  setProjectToRename(null);
+                }}
+                disabled={!renameInput.trim()}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: renameInput.trim() ? '#3b82f6' : '#9ca3af',
+                  color: 'white',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: renameInput.trim() ? 'pointer' : 'not-allowed',
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={(e) => { if (renameInput.trim()) e.currentTarget.style.background = '#2563eb'; }}
+                onMouseLeave={(e) => { if (renameInput.trim()) e.currentTarget.style.background = '#3b82f6'; }}
+              >
+                Simpan
               </button>
             </div>
           </div>

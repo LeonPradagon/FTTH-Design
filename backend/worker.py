@@ -40,7 +40,7 @@ async def generate_task(
             progress_manager.update_batch_job(batch_id, job_id, status="RUNNING")
         config = GenerationConfig(**gen_config_dict)
 
-        pop, odcs, feeder_segments, used_config, osm_ts = await asyncio.to_thread(
+        pop, odcs, feeder_segments, distribution_segments, used_config, osm_ts = await asyncio.to_thread(
             _run_generator_logic,
             boundary_path,
             pop_path,
@@ -57,10 +57,19 @@ async def generate_task(
             
         progress_manager.update(job_id, "EXPORTING", "Memvalidasi desain FTTH...", 89)
         validation_result = await asyncio.to_thread(
-            validate_design, pop, odcs, used_config, feeder_segments=feeder_segments
+            validate_design,
+            pop,
+            odcs,
+            used_config,
+            feeder_segments=feeder_segments,
+            distribution_segments=distribution_segments,
         )
         stats = await asyncio.to_thread(
-            compute_design_stats, pop, odcs, feeder_segments=feeder_segments
+            compute_design_stats,
+            pop,
+            odcs,
+            feeder_segments=feeder_segments,
+            distribution_segments=distribution_segments,
         )
         
         input_hash = await asyncio.to_thread(_compute_input_hash, boundary_path, pop_path)
@@ -114,18 +123,37 @@ async def generate_task(
                 
                 # Insert Spatial Features (ODC, ODP) using Raw SQL
                 query_odc = 'INSERT INTO "design_odc" ("id", "designVersionId", "label", "location") VALUES (gen_random_uuid(), $1, $2, ST_SetSRID(ST_MakePoint($3, $4), 4326)) RETURNING "id"'
-                query_odp = 'INSERT INTO "design_odp" ("id", "designVersionId", "odcId", "label", "location") VALUES (gen_random_uuid(), $1, $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326))'
+                query_odp = 'INSERT INTO "design_odp" ("id", "designVersionId", "odcId", "label", "location") VALUES '
                 query_cable = 'INSERT INTO "design_cable" ("id", "designVersionId", "type", "sourceLabel", "targetLabel", "length", "path") VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, ST_GeomFromGeoJSON($6))'
 
+                odc_db_ids = {}
+                odp_rows = []
                 for odc in odcs:
                     odc_row = await db.query_first(query_odc, new_version.id, odc.id, odc.lon, odc.lat)
                     if odc_row and 'id' in odc_row:
                         odc_id = odc_row['id']
+                        odc_db_ids[odc.id] = odc_id
                         for odp in odc.odps:
-                            await db.execute_raw(query_odp, new_version.id, odc_id, odp.id, odp.lon, odp.lat)
+                            odp_rows.append((odc_id, odp.id, odp.lon, odp.lat))
+
+                if odp_rows:
+                    odp_values = []
+                    odp_params = []
+                    for index, (odc_id, odp_id, lon, lat) in enumerate(odp_rows):
+                        base = index * 5 + 1
+                        odp_values.append(
+                            f"(gen_random_uuid(), ${base}, ${base + 1}, ${base + 2}, "
+                            f"ST_SetSRID(ST_MakePoint(${base + 3}, ${base + 4}), 4326))"
+                        )
+                        odp_params.extend([new_version.id, odc_id, odp_id, lon, lat])
+                    await db.execute_raw(
+                        query_odp + ", ".join(odp_values),
+                        *odp_params,
+                    )
                 
                 # Insert Feeder Cables
                 import json as json_lib
+                cable_rows = []
                 for seg in feeder_segments:
                     # seg['coords'] is list of (lat, lon)
                     # Convert to GeoJSON LineString (lon, lat)
@@ -141,14 +169,56 @@ async def generate_task(
                     for i in range(len(seg['coords']) - 1):
                         length += haversine_m(seg['coords'][i][0], seg['coords'][i][1], seg['coords'][i+1][0], seg['coords'][i+1][1])
                         
+                    cable_rows.append((
+                        "feeder",
+                        seg.get("from_label", ""),
+                        seg.get("to_label", ""),
+                        length,
+                        geojson,
+                    ))
+
+                # Distribution paths are persisted from the generated tree,
+                # including ODP -> ODP pass-through connections.
+                for seg in distribution_segments.values():
+                    if not seg.get("connected") or not seg.get("coords"):
+                        continue
+                    coords = seg["coords"]
+                    line_coords = [[coord[1], coord[0]] for coord in coords]
+                    geojson = json_lib.dumps({
+                        "type": "LineString",
+                        "coordinates": line_coords,
+                    })
+                    cable_rows.append((
+                        "distribution",
+                        seg.get("source_label", seg.get("source_id", "")),
+                        seg.get("target_label", seg.get("target_id", "")),
+                        seg.get("length_m") or 0.0,
+                        geojson,
+                    ))
+
+                if cable_rows:
+                    cable_values = []
+                    cable_params = []
+                    for index, (cable_type, source, target, length, geojson) in enumerate(cable_rows):
+                        base = index * 6 + 1
+                        cable_values.append(
+                            f"(gen_random_uuid(), ${base}, ${base + 1}, ${base + 2}, "
+                            f"${base + 3}, ${base + 4}, ST_GeomFromGeoJSON(${base + 5}))"
+                        )
+                        cable_params.extend([
+                            new_version.id,
+                            cable_type,
+                            source,
+                            target,
+                            length,
+                            geojson,
+                        ])
                     await db.execute_raw(
-                        query_cable, 
-                        new_version.id, 
-                        "feeder", 
-                        seg.get("from_label", ""), 
-                        seg.get("to_label", ""), 
-                        length, 
-                        geojson
+                        query_cable.replace(
+                            " VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, ST_GeomFromGeoJSON($6))",
+                            " VALUES " + ", ".join(cable_values),
+                        ),
+                        *cable_params,
                     )
 
                 await db.auditlog.create(
@@ -272,4 +342,6 @@ class WorkerSettings:
     on_shutdown = shutdown
     redis_settings = RedisSettings.from_dsn(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
     job_timeout = 3600  # 1 hour timeout for large generation tasks
-    max_jobs = 2
+    # Tune per worker container. Keep the default conservative because one
+    # generation already creates OSM/routing threads of its own.
+    max_jobs = max(1, int(os.getenv("ARQ_MAX_JOBS", "2")))

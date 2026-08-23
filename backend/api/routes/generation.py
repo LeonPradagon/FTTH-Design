@@ -46,7 +46,6 @@ from backend.services.generator.core_logic import (
     cleanup_old_files,
     _parse_config_from_form,
     load_network_state,
-    invalidate_design_state,
 )
 from backend.services.generator.kml_parser import read_boundary, read_points
 from shapely.geometry import Point
@@ -68,6 +67,47 @@ def _is_boundary_file(filename: str) -> bool:
 
 def _is_pop_file(filename: str) -> bool:
     return any(token in filename.lower() for token in ("pop", "olt", "sentral"))
+
+
+def _resolve_homepass_cache_dir(
+    user_id: str,
+    project_id: Optional[str],
+    batch_id: Optional[str],
+    item_id: Optional[str],
+) -> Path:
+    """Find the Network Core cache that belongs to this generation scope.
+
+    A single design can finish before the asynchronous project auto-save has
+    created a project ID. In that case the core is stored under the default
+    project scope, while Homepass may already send the newly-created project
+    ID. Try the exact project scope first, then the equivalent default scope
+    without crossing the user's cache namespace.
+    """
+    candidates = [
+        get_generation_cache_dir(user_id, project_id, batch_id, item_id),
+    ]
+    if project_id:
+        candidates.append(get_generation_cache_dir(user_id, None, batch_id, item_id))
+
+    last_error = None
+    for index, candidate in enumerate(candidates):
+        state_path = candidate / "design_state.json"
+        try:
+            load_network_state(cache_dir=candidate)
+            return candidate
+        except DesignStateNotFoundError as exc:
+            last_error = exc
+            # Do not hide a corrupt/incomplete project-specific cache by
+            # silently switching to an older unrelated design. Fallback is
+            # only for a scope whose state file does not exist.
+            if index == 0 and state_path.exists():
+                raise
+
+    if last_error:
+        raise last_error
+    raise DesignStateNotFoundError(
+        message="Cache Network Core belum tersedia. Jalankan Generate Design terlebih dahulu.",
+    )
 
 redis_pool = None
 
@@ -102,10 +142,6 @@ async def generate_design(
         if not boundaryFile or not boundaryFile.filename:
             raise InvalidFileError(message="Boundary KML/KMZ wajib diunggah.")
 
-        # Never allow Homepass to reuse the previous boundary/design while a
-        # new Network Core job is being generated.
-        invalidate_design_state(cache_dir=user_dir)
-    
         gen_config = _parse_config_from_form(config)
         # Existing API clients that omit mode keep the legacy full-export
         # behaviour. The dashboard explicitly sends CORE.
@@ -419,7 +455,10 @@ async def generate_progress(job_id: str, current_user: dict = Depends(get_curren
             # Keep the SSE connection active while a long export is running.
             # The browser ignores comment frames, but proxies see traffic.
             yield ": keep-alive\n\n"
-            await asyncio.sleep(0.5)
+            # One SSE connection is enough for live progress. Keep Redis
+            # polling modest so many concurrent jobs do not create a second
+            # source of request/Redis pressure.
+            await asyncio.sleep(1)
             
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -449,15 +488,13 @@ async def generate_homepass(
         job_id = str(uuid.uuid4())
     progress_manager.create_job(job_id, user_id=current_user["id"], batch_id=batch_id)
     try:
-        user_dir = get_generation_cache_dir(
+        user_dir = _resolve_homepass_cache_dir(
             current_user["id"], project_id, batch_id, item_id
         )
         cleanup_old_files(user_dir)
         # Validate/migrate synchronously so the UI gets a useful response for a
         # missing/legacy cache instead of waiting for a worker failure.
         progress_manager.update(job_id, "PARSING", "Memeriksa cache Network Core...", 5)
-        load_network_state(cache_dir=user_dir)
-
         output_kmz_name = create_user_filename("design_ftth_homepass", "kmz")
         output_csv_name = create_user_filename("design_ftth_homepass", "csv")
         output_kmz_path = user_dir / output_kmz_name
@@ -488,6 +525,9 @@ async def generate_homepass(
 @router.post("/regenerate-cables")
 async def regenerate_cables(
     job_id: Optional[str] = Form(None),
+    project_id: Optional[str] = Form(None),
+    batch_id: Optional[str] = Form(None),
+    item_id: Optional[str] = Form(None),
     current_user: dict = Depends(get_generation_user)
 ):
     if not job_id:
@@ -496,7 +536,9 @@ async def regenerate_cables(
     progress_manager.create_job(job_id)
 
     try:
-        user_dir = get_user_cache_dir(current_user["id"])
+        user_dir = _resolve_homepass_cache_dir(
+            current_user["id"], project_id, batch_id, item_id
+        )
         cleanup_old_files(user_dir)
         output_kmz_name = create_user_filename("design_ftth_regen", "kmz")
         output_csv_name = create_user_filename("design_ftth_regen", "csv")

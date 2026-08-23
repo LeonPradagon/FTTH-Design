@@ -18,12 +18,17 @@ worker_process = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global worker_process
-    # Jalankan worker di background (lokal) saat uvicorn start
-    worker_process = subprocess.Popen(
-        [sys.executable, "-m", "arq", "backend.worker.WorkerSettings"],
-        env=os.environ.copy()
-    )
-    logger.info("Local arq worker started.")
+    # Local development can use an embedded worker for convenience. In
+    # production/Docker the worker is a separate service; starting another
+    # one inside every API replica wastes CPU and competes for the same queue.
+    if os.getenv("RUN_EMBEDDED_WORKER", "true").lower() == "true":
+        worker_process = subprocess.Popen(
+            [sys.executable, "-m", "arq", "backend.worker.WorkerSettings"],
+            env=os.environ.copy()
+        )
+        logger.info("Local arq worker started.")
+    else:
+        logger.info("Embedded arq worker disabled; using separate worker service.")
     
     await db.connect()
     yield

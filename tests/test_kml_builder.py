@@ -35,3 +35,46 @@ def test_export_kmz(tmp_path, sample_data):
         assert "POP_1" in doc
         assert "ODC 01" in doc
         assert "01/01" in doc
+
+
+def test_export_kmz_uses_distribution_tree_labels(tmp_path):
+    pop = {"name": "POP_1", "lat": -6.2, "lon": 106.8}
+    odps = [
+        ODP(id="ODP-A", lat=-6.201, lon=106.801, houses=[], splitter=Splitter("1:10", "ODP")),
+        ODP(id="ODP-B", lat=-6.2015, lon=106.8015, houses=[], splitter=Splitter("1:10", "ODP")),
+    ]
+    odcs = [ODC(
+        id="ODC-1",
+        lat=-6.202,
+        lon=106.802,
+        odps=odps,
+        closure_id="CL-001",
+        splitter=Splitter("1:4", "ODC"),
+    )]
+    segments = {
+        "ODP-A": {
+            "source_id": "ODC-1",
+            "target_id": "ODP-A",
+            "coords": [[-6.202, 106.802], [-6.201, 106.801]],
+            "connected": True,
+        },
+        "ODP-B": {
+            "source_id": "ODP-A",
+            "target_id": "ODP-B",
+            "coords": [[-6.201, 106.801], [-6.2015, 106.8015]],
+            "connected": True,
+        },
+    }
+    output = tmp_path / "tree.kmz"
+    export_kmz(
+        pop,
+        odcs,
+        [{"coords": [(pop["lat"], pop["lon"]), (-6.202, 106.802)], "from_label": "POP_1", "to_label": "ODC-1"}],
+        str(output),
+        distribution_segments=segments,
+    )
+
+    with zipfile.ZipFile(str(output), "r") as archive:
+        document = archive.read("doc.kml").decode("utf-8")
+    assert "ODC 01 TO ODP 01/01" in document
+    assert "01/01 TO ODP 01/02" in document

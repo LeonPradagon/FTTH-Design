@@ -71,6 +71,13 @@ const boundaryGroupKey = (name: string) => {
   return `boundary:${stem || 'design'}`;
 };
 
+const toProxyApiUrl = (url: string) => {
+  if (url.startsWith('/api/') && !url.startsWith('/api/proxy/')) {
+    return `/api/proxy${url}`;
+  }
+  return url;
+};
+
 export default function Home() {
   const { data: session, isPending } = useSession();
   const router = useRouter();
@@ -175,6 +182,9 @@ export default function Home() {
   };
 
   useEffect(() => {
+    // Active jobs already have an SSE connection (or the batch poller).
+    // Polling them again here only duplicates traffic and Redis reads.
+    if (isGenerating || isGeneratingHomepass) return;
     let cancelled = false;
     const restore = async () => {
       if (typeof window === "undefined") return;
@@ -190,6 +200,13 @@ export default function Home() {
           const payload = await response.json();
           const state = payload.data;
           if (state?.done) continue;
+          // Cable regeneration has its own UI state. Older versions stored
+          // its job id in the generic active-job list, which restored it as a
+          // Generate Design job and left the button showing "Menganalisis...".
+          const isCableRegeneration =
+            state?.job_type === "regenerate_cables" ||
+            /regenerate|routing ulang kabel/i.test(String(state?.message || ""));
+          if (isCableRegeneration) continue;
           activeJobs.push(jobId);
           if (!cancelled && state) {
             setIsGenerating(true);
@@ -200,9 +217,9 @@ export default function Home() {
       if (!cancelled) window.localStorage.setItem("ftth_active_jobs", JSON.stringify(activeJobs));
     };
     void restore();
-    const timer = window.setInterval(() => { void restore(); }, 2000);
+    const timer = window.setInterval(() => { void restore(); }, 5000);
     return () => { cancelled = true; window.clearInterval(timer); };
-  }, []);
+  }, [isGenerating, isGeneratingHomepass]);
 
   const toggleLayer = (id: string) => {
     setLayers(prev => {
@@ -339,7 +356,8 @@ export default function Home() {
         layer.name.toLowerCase().includes('boundary') || layer.id === 'boundary'
       );
       const activeBoundary = boundaryLayers.find((layer: LayerConfig) => layer.visible) || boundaryLayers[boundaryLayers.length - 1];
-      const normalizedLayers = uniqueLayers.map((layer: LayerConfig) => {
+      const normalizedLayers = uniqueLayers.map((rawLayer: LayerConfig) => {
+        const layer: LayerConfig = { ...rawLayer, url: toProxyApiUrl(rawLayer.url) };
         const isBoundary = layer.name.toLowerCase().includes('boundary') || layer.id === 'boundary';
         if (isBoundary && !layer.groupId) {
           return {
@@ -383,6 +401,26 @@ export default function Home() {
       addToast(`Gagal memuat proyek: Akses ditolak`, 'error');
     }
   };
+
+  const handleRenameProject = async (id: string, newName: string) => {
+    try {
+      if (id === currentProjectId) {
+        setProjectName(newName);
+        projectNameRef.current = newName;
+      }
+      const res = await fetch(`/api/proxy/api/projects/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+      });
+      if (!res.ok) throw new Error('Gagal mengubah nama');
+      await fetchProjects();
+      addToast('Nama proyek berhasil diubah', 'success');
+    } catch (err) {
+      addToast('Gagal mengubah nama proyek', 'error');
+    }
+  };
+
 
   const unloadProject = () => {
     projectContextRef.current += 1;
@@ -525,15 +563,47 @@ export default function Home() {
 
       const resp = await res.json();
       const uploadData = resp.data || resp;
-      const url = `/api/proxy${uploadData.url}`;
+      const url = toProxyApiUrl(uploadData.url);
       const isBoundary = fileToUse.name.toLowerCase().includes('boundary');
       const isPop = fileToUse.name.toLowerCase().includes('pop') || fileToUse.name.toLowerCase().includes('olt');
       const newLayerId = `import-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
+      // Get region string from KML via Reverse Geocoding
+      let regionStr = "";
+      try {
+        const kmlText = await fileToUse.text();
+        const doc = new DOMParser().parseFromString(kmlText, "text/xml");
+        const coords = doc.getElementsByTagName("coordinates");
+        if (coords.length > 0 && coords[0].textContent) {
+          const firstCoordStr = coords[0].textContent.trim().split(/\s+/)[0];
+          const [lon, lat] = firstCoordStr.split(",");
+          if (lon && lat) {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`, {
+              headers: { 'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7' }
+            });
+            if (res.ok) {
+              const data = await res.json();
+              const address = data.address || {};
+              const district = address.city || address.town || address.county || address.municipality || address.village || "";
+              const province = address.state || address.province || address.region || "";
+              const parts = [];
+              if (district) parts.push(district);
+              if (province && province !== district) parts.push(province);
+              regionStr = parts.join(", ");
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Reverse geocoding failed", e);
+      }
+
       // An imported file belongs to the project currently open. Only the
       // first import after explicitly creating a new project gets a name.
-      const prjName = projectNameRef.current || fileToUse.name.replace(/\.[^/.]+$/, "");
+      let prjName = projectNameRef.current || fileToUse.name.replace(/\.[^/.]+$/, "");
       if (!projectNameRef.current) {
+        if (regionStr) {
+          prjName = `Area ${regionStr}`;
+        }
         projectNameRef.current = prjName;
         setProjectName(prjName);
       }
@@ -584,7 +654,11 @@ export default function Home() {
           if (!newGroupId) {
              const batchCount = groupsMap.size + 1;
              newGroupId = `boundary:batch-${batchCount}-${Date.now()}`;
-             boundaryGroupName = `Batch Design ${batchCount}`;
+             if (regionStr) {
+               boundaryGroupName = `Area ${regionStr}${batchCount > 1 ? ` (${batchCount})` : ''}`;
+             } else {
+               boundaryGroupName = `Batch Design ${batchCount}`;
+             }
           }
         }
 
@@ -660,7 +734,7 @@ export default function Home() {
                 return {
                   id: `design:batch:${batchId}:${job.item_id}`,
                   name: job.design_name,
-                  url: `/api/proxy${job.result.url}`,
+                  url: toProxyApiUrl(job.result.url),
                   visible: true,
                   color: "#22c55e",
                   groupId: targetGroupId,
@@ -681,7 +755,7 @@ export default function Home() {
           return;
         }
         if (state.status === "FAILED") throw new Error("Semua job batch gagal");
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 2000));
         return poll();
       };
       await poll();
@@ -768,7 +842,7 @@ export default function Home() {
                 const newDesign: LayerConfig = {
                   id: designId,
                   name: `FTTH Design - ${latestBoundary.name}`,
-                  url: `/api/proxy${result.url}`,
+                  url: toProxyApiUrl(result.url),
                   visible: true,
                   color: "#22c55e",
                   groupId: designGroupId,
@@ -792,8 +866,8 @@ export default function Home() {
                 return newLayers;
               });
 
-              if (result.kmz_url) setKmzUrl(`/api/proxy${result.kmz_url}`);
-              if (result.csv_url) setCsvUrl(`/api/proxy${result.csv_url}`);
+              if (result.kmz_url) setKmzUrl(toProxyApiUrl(result.kmz_url));
+              if (result.csv_url) setCsvUrl(toProxyApiUrl(result.csv_url));
               if (result.stats) setDesignStats(result.stats);
               if (result.validation) setValidationResult(result.validation);
               addToast("Network Core selesai. Generate Homepass tersedia jika titik rumah diperlukan.", "success");
@@ -860,7 +934,7 @@ export default function Home() {
 
             if (pData.result) {
               const result = pData.result;
-              const newDesign: LayerConfig = { id: "design", name: "FTTH Design", url: `/api/proxy${result.url}`, visible: true, color: "#22c55e" };
+              const newDesign: LayerConfig = { id: "design", name: "FTTH Design", url: toProxyApiUrl(result.url), visible: true, color: "#22c55e" };
               setLayers(prev => {
                 const newLayers = [...prev.filter(l => l.id !== 'design'), newDesign];
                 setFilters(prevFilters => {
@@ -875,8 +949,8 @@ export default function Home() {
                 return newLayers;
               });
 
-              if (result.kmz_url) setKmzUrl(`/api/proxy${result.kmz_url}`);
-              if (result.csv_url) setCsvUrl(`/api/proxy${result.csv_url}`);
+              if (result.kmz_url) setKmzUrl(toProxyApiUrl(result.kmz_url));
+              if (result.csv_url) setCsvUrl(toProxyApiUrl(result.csv_url));
               if (result.stats) setDesignStats(result.stats);
               if (result.validation) setValidationResult(result.validation);
               addToast("Kabel dari KML custom berhasil dibuat!", "success");
@@ -911,19 +985,32 @@ export default function Home() {
   };
 
   const handleRegenerateCables = async () => {
+    // Regenerate Kabel is a separate job type. It must not mark the primary
+    // Generate Design button as "Menganalisis..." during restore/polling.
+    setIsGenerating(false);
     setIsRegeneratingCables(true);
     try {
       const formData = new FormData();
       const jobId = `job-${Date.now()}`;
       formData.append("job_id", jobId);
-      rememberJob(jobId);
-      rememberJob(jobId);
+      if (currentProjectId) formData.append("project_id", currentProjectId);
+      const selectedDesign = layers.find(layer => layer.visible && (
+        layer.id === "design" ||
+        layer.id.startsWith("design:single:") ||
+        layer.id.startsWith("design:batch:")
+      ));
+      if (selectedDesign?.id.startsWith("design:batch:")) {
+        const parts = selectedDesign.id.split(":");
+        formData.append("batch_id", parts[2]);
+        formData.append("item_id", parts[3]);
+      }
 
       let eventSource: EventSource | null = null;
       const handleProgress = (event: MessageEvent) => {
         const pData = JSON.parse(event.data);
         if (pData.error) {
           eventSource?.close();
+          setIsGenerating(false);
           setIsRegeneratingCables(false);
           addToast("Regenerate kabel gagal: " + pData.error, "error");
           setGenerationProgress(null);
@@ -933,13 +1020,24 @@ export default function Home() {
         if (pData.done) {
           eventSource?.close();
           setTimeout(() => setGenerationProgress(null), 1500);
+          setIsGenerating(false);
           setIsRegeneratingCables(false);
 
           if (pData.result) {
             const result = pData.result;
-            const newDesign: LayerConfig = { id: "design", name: "FTTH Design", url: `/api/proxy${result.url}`, visible: true, color: "#22c55e" };
+            const newDesign: LayerConfig = {
+              ...(selectedDesign || {}),
+              id: selectedDesign?.id || "design",
+              name: selectedDesign?.name || "FTTH Design",
+              url: toProxyApiUrl(result.url),
+              visible: true,
+              color: selectedDesign?.color || "#22c55e",
+              status: "COMPLETED",
+            };
             setLayers(prev => {
-              const newLayers = [...prev.filter(l => l.id !== 'design'), newDesign];
+              const newLayers = selectedDesign
+                ? prev.map(layer => layer.id === selectedDesign.id ? newDesign : layer)
+                : [...prev.filter(l => l.id !== 'design'), newDesign];
               setFilters(prevFilters => {
                 const generatedFilters = { ...prevFilters, showHouse: false };
                 saveProject(
@@ -952,8 +1050,8 @@ export default function Home() {
               return newLayers;
             });
 
-            if (result.kmz_url) setKmzUrl(`/api/proxy${result.kmz_url}`);
-            if (result.csv_url) setCsvUrl(`/api/proxy${result.csv_url}`);
+              if (result.kmz_url) setKmzUrl(toProxyApiUrl(result.kmz_url));
+              if (result.csv_url) setCsvUrl(toProxyApiUrl(result.csv_url));
             if (result.stats) setDesignStats(result.stats);
             if (result.validation) setValidationResult(result.validation);
             addToast("Regenerate kabel berhasil!", "success");
@@ -973,12 +1071,14 @@ export default function Home() {
         addToast("Proses regenerate kabel sedang berjalan...", "info");
       } else {
         addToast("Regenerate kabel gagal: " + (resp.error?.message || resp.detail), "error");
+        setIsGenerating(false);
         setGenerationProgress(null);
         setIsRegeneratingCables(false);
       }
     } catch (error) {
       console.error("Error regenerating cables:", error);
       addToast("Error regenerating cables. Is the Python API running?", "error");
+      setIsGenerating(false);
       setGenerationProgress(null);
       setIsRegeneratingCables(false);
     }
@@ -1022,7 +1122,7 @@ export default function Home() {
           setIsGeneratingHomepass(false);
           if (pData.result) {
             const result = pData.result;
-            const newDesign: LayerConfig = { id: selectedDesign?.id || "design", name: selectedDesign ? `${selectedDesign.name} + Homepass` : "FTTH Design + Homepass", url: `/api/proxy${result.url}`, visible: true, color: "#22c55e", groupId: selectedDesign?.groupId, groupName: selectedDesign?.groupName, boundaryName: selectedDesign?.boundaryName, status: "COMPLETED" };
+              const newDesign: LayerConfig = { id: selectedDesign?.id || "design", name: selectedDesign ? `${selectedDesign.name} + Homepass` : "FTTH Design + Homepass", url: toProxyApiUrl(result.url), visible: true, color: "#22c55e", groupId: selectedDesign?.groupId, groupName: selectedDesign?.groupName, boundaryName: selectedDesign?.boundaryName, status: "COMPLETED" };
             setLayers(prev => {
               const newLayers = selectedDesign
                 ? prev.map(layer => layer.id === selectedDesign.id ? newDesign : layer)
@@ -1034,8 +1134,8 @@ export default function Home() {
               });
               return newLayers;
             });
-            if (result.kmz_url) setKmzUrl(`/api/proxy${result.kmz_url}`);
-            if (result.csv_url) setCsvUrl(`/api/proxy${result.csv_url}`);
+            if (result.kmz_url) setKmzUrl(toProxyApiUrl(result.kmz_url));
+            if (result.csv_url) setCsvUrl(toProxyApiUrl(result.csv_url));
             addToast("Homepass berhasil ditambahkan tanpa mengulang routing utama.", "success");
           }
         }
@@ -1209,9 +1309,19 @@ export default function Home() {
         onImportLayer={handleImportLayer}
         onSmartGenerate={batchFiles.length > 0 || visibleLayers.some((l: LayerConfig) => l.name.toLowerCase().includes('boundary') || l.name.toLowerCase().includes('pop') || l.name.toLowerCase().includes('olt')) ? handleSmartGenerate : undefined}
         isGenerating={isGenerating}
-        onRegenerateCables={visibleLayers.some((l: LayerConfig) => l.id === "design") ? handleRegenerateCables : undefined}
+      onRegenerateCables={visibleLayers.some((l: LayerConfig) =>
+        l.id === "design" ||
+        l.id.startsWith("design:single:") ||
+        l.id.startsWith("design:batch:")
+      ) ? handleRegenerateCables : undefined}
         isRegeneratingCables={isRegeneratingCables}
-        hasDesign={layers.some(l => l.id === 'design' && l.visible)}
+        hasDesign={layers.some(l =>
+          l.visible && (
+            l.id === 'design' ||
+            l.id.startsWith('design:single:') ||
+            l.id.startsWith('design:batch:')
+          )
+        )}
         onGenerateHomepass={handleGenerateHomepass}
         isGeneratingHomepass={isGeneratingHomepass}
         hasNetworkCore={canGenerateHomepass}
@@ -1245,6 +1355,7 @@ export default function Home() {
           onUnloadProject={unloadProject}
           onNewProject={unloadProject}
           onDeleteProject={deleteProject}
+          onRenameProject={handleRenameProject}
           currentProjectId={currentProjectId}
           onBackToProjects={unloadProject}
           stats={designStats}

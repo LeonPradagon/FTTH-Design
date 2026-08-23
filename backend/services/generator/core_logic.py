@@ -11,7 +11,7 @@ import math
 import time
 import hashlib
 import networkx as nx
-from shapely.geometry import Polygon, Point, box
+from shapely.geometry import Polygon, Point, LineString, box, mapping
 from backend.core.logging import logger
 from backend.core.errors import (
     DesignStateNotFoundError,
@@ -29,6 +29,7 @@ from backend.services.generator.routing import (
     prepare_road_graph,
     route_along_road,
     snap_to_road,
+    build_distribution_tree,
 )
 from backend.services.generator.kml_builder import export_kmz
 from backend.services.generator.csv_exporter import export_csv
@@ -37,7 +38,8 @@ from backend.utils.geometry import haversine_m
 from backend.services.generator.progress import progress_manager
 
 CACHE_DIR = os.path.abspath("cache")
-NETWORK_STATE_VERSION = 2
+NETWORK_STATE_VERSION = 3
+CORE_MANIFEST_VERSION = 1
 
 
 def _report_export_progress(job_id, done, total, message):
@@ -94,6 +96,27 @@ def _fetch_osm_tiled(boundary, pop, force_refresh=False, job_id=None, cache_dir=
     the tile level instead of repeating completed Overpass/OSM requests.
     """
     tiles = _build_generation_tiles(boundary)
+    # A tile road query must describe the tile itself. The old implementation
+    # passed the global POP into every tile, causing each query to expand to
+    # the convex hull between POP and that tile. For a large boundary this
+    # repeatedly downloaded the same long corridor. Add a small set of road
+    # tiles along the POP connector only when POP is outside the boundary.
+    road_tiles = list(tiles)
+    pop_point = Point(pop["lon"], pop["lat"])
+    if not boundary.covers(pop_point):
+        nearest_boundary = boundary.boundary.interpolate(
+            boundary.boundary.project(pop_point)
+        )
+        connector = LineString([pop_point, nearest_boundary]).buffer(0.002)
+        existing = {
+            tuple(round(value, 6) for value in tile.bounds)
+            for tile in road_tiles
+        }
+        for tile in _build_generation_tiles(connector):
+            key = tuple(round(value, 6) for value in tile.bounds)
+            if key not in existing:
+                road_tiles.append(tile)
+                existing.add(key)
     checkpoint_dir = None
     if cache_dir:
         # Include the exact boundary geometry so a retry for a different
@@ -105,54 +128,82 @@ def _fetch_osm_tiled(boundary, pop, force_refresh=False, job_id=None, cache_dir=
         )
         os.makedirs(checkpoint_dir, exist_ok=True)
     if job_id:
-        progress_manager.update(job_id, "LOADING_ROADS", f"Memproses {len(tiles)} tile OSM...", 30)
+        progress_manager.update(job_id, "LOADING_ROADS", f"Memproses {len(road_tiles)} tile OSM...", 30)
 
     def tile_key(tile):
         return "_".join(f"{value:.6f}" for value in tile.bounds).replace("-", "m").replace(".", "d")
 
+    boundary_tile_keys = {
+        tuple(round(value, 6) for value in tile.bounds)
+        for tile in tiles
+    }
+    osm_cache_max_age = int(
+        os.getenv("OSM_CACHE_MAX_AGE_SECONDS", str(24 * 60 * 60))
+    )
+
     def fetch_tile(index, tile):
         key = tile_key(tile)
-        houses_path = os.path.join(checkpoint_dir, f"{index}_{key}.houses.json") if checkpoint_dir else None
+        load_houses = tuple(round(value, 6) for value in tile.bounds) in boundary_tile_keys
+        houses_path = os.path.join(checkpoint_dir, f"{index}_{key}.houses.json") if checkpoint_dir and load_houses else None
         roads_path = os.path.join(checkpoint_dir, f"{index}_{key}.roads.pkl") if checkpoint_dir else None
-        if (not force_refresh and houses_path and roads_path and
-                os.path.exists(houses_path) and os.path.exists(roads_path)):
-            newest = max(os.path.getmtime(houses_path), os.path.getmtime(roads_path))
-            if time.time() - newest <= 24 * 60 * 60:
+        if (
+            not force_refresh
+            and roads_path
+            and os.path.exists(roads_path)
+            and (not load_houses or (houses_path and os.path.exists(houses_path)))
+        ):
+            timestamps = [os.path.getmtime(roads_path)]
+            if houses_path:
+                timestamps.append(os.path.getmtime(houses_path))
+            newest = max(timestamps)
+            if time.time() - newest <= osm_cache_max_age:
                 try:
-                    with open(houses_path) as source:
-                        cached_houses = [tuple(item) for item in json.load(source)]
+                    cached_houses = []
+                    if houses_path:
+                        with open(houses_path) as source:
+                            cached_houses = [tuple(item) for item in json.load(source)]
                     with open(roads_path, "rb") as source:
                         return cached_houses, pickle.load(source), True
                 except Exception as exc:
                     logger.warning("Tile checkpoint %s tidak dapat dibaca: %s", key, exc)
-        houses = fetch_houses_in_boundary(tile, force_refresh=force_refresh)
-        roads = fetch_road_graph(tile, pop, force_refresh=force_refresh)
-        if houses_path and roads_path:
+        houses = fetch_houses_in_boundary(tile, force_refresh=force_refresh) if load_houses else []
+        roads = fetch_road_graph(
+            tile,
+            pop=None,
+            force_refresh=force_refresh,
+            include_pop=False,
+        )
+        if roads_path and (not load_houses or houses_path):
             temporary_houses = f"{houses_path}.tmp"
             temporary_roads = f"{roads_path}.tmp"
-            with open(temporary_houses, "w") as target:
-                json.dump(houses, target)
+            if houses_path:
+                with open(temporary_houses, "w") as target:
+                    json.dump(houses, target)
             with open(temporary_roads, "wb") as target:
                 pickle.dump(roads, target)
-            os.replace(temporary_houses, houses_path)
+            if houses_path:
+                os.replace(temporary_houses, houses_path)
             os.replace(temporary_roads, roads_path)
         return houses, roads, False
 
     houses: list[tuple[float, float]] = []
-    road_graph = nx.MultiDiGraph()
+    road_graphs = []
     from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="osm-tile") as executor:
-        futures = [executor.submit(fetch_tile, index, tile) for index, tile in enumerate(tiles)]
+    max_workers = max(1, int(os.getenv("OSM_TILE_WORKERS", "4")))
+    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="osm-tile") as executor:
+        futures = [executor.submit(fetch_tile, index, tile) for index, tile in enumerate(road_tiles)]
         for index, future in enumerate(futures, start=1):
             tile_houses, tile_graph, from_checkpoint = future.result()
             houses.extend(tile_houses)
-            road_graph = nx.compose(road_graph, _normalize_routing_graph(tile_graph))
+            road_graphs.append(_normalize_routing_graph(tile_graph))
             if job_id:
                 progress_manager.update(
                     job_id, "LOADING_ROADS",
-                    f"Memuat tile OSM {index}/{len(tiles)}{' dari cache' if from_checkpoint else ''}...",
-                    30 + int(index / len(tiles) * 15),
+                    f"Memuat tile OSM {index}/{len(road_tiles)}{' dari cache' if from_checkpoint else ''}...",
+                    30 + int(index / len(road_tiles) * 15),
                 )
+
+    road_graph = nx.compose_all(road_graphs) if road_graphs else nx.MultiDiGraph()
 
     # Tiles intentionally overlap to avoid cutting roads/buildings at tile
     # edges. Remove the overlap perimeter before clustering; otherwise a
@@ -174,10 +225,15 @@ def _cache_paths(cache_dir=None):
     )
 
 
+def _core_manifest_path(cache_dir=None):
+    resolved_cache_dir, _, _ = _cache_paths(cache_dir)
+    return os.path.join(resolved_cache_dir, "core_manifest.json")
+
+
 def invalidate_design_state(cache_dir=None):
     """Remove the previous network cache before starting a new core job."""
     _, design_state_path, road_graph_path = _cache_paths(cache_dir)
-    for path in (design_state_path, road_graph_path):
+    for path in (design_state_path, road_graph_path, _core_manifest_path(cache_dir)):
         try:
             if os.path.exists(path):
                 os.remove(path)
@@ -188,6 +244,48 @@ def invalidate_design_state(cache_dir=None):
             ) from exc
 
 
+def _distribution_length(coords):
+    return sum(
+        haversine_m(coords[index][0], coords[index][1], coords[index + 1][0], coords[index + 1][1])
+        for index in range(len(coords) - 1)
+    )
+
+
+def _normalize_distribution_segments(distribution_segments, odcs):
+    """Normalize new metadata and legacy target_id -> coords cache values."""
+    normalized = {}
+    odp_to_odc = {
+        odp.id: odc.id
+        for odc in odcs
+        for odp in odc.odps
+    }
+    for target_id, value in (distribution_segments or {}).items():
+        if isinstance(value, dict):
+            segment = dict(value)
+            segment.setdefault("target_id", target_id)
+            segment.setdefault("target_label", target_id)
+            segment.setdefault("coords", [])
+            segment.setdefault("connected", bool(segment["coords"]))
+            if segment.get("length_m") is None and segment["coords"]:
+                segment["length_m"] = _distribution_length(segment["coords"])
+            normalized[target_id] = segment
+            continue
+
+        coords = [list(point) for point in (value or [])]
+        source_id = odp_to_odc.get(target_id)
+        normalized[target_id] = {
+            "source_id": source_id,
+            "target_id": target_id,
+            "source_label": source_id,
+            "target_label": target_id,
+            "coords": coords,
+            "length_m": _distribution_length(coords) if coords else None,
+            "routing_cost": None,
+            "connected": bool(coords),
+        }
+    return normalized
+
+
 def save_design_state(
     pop,
     odcs,
@@ -195,6 +293,7 @@ def save_design_state(
     cache_dir=None,
     feeder_segments=None,
     distribution_segments=None,
+    boundary=None,
 ):
     """Simpan posisi POP, ODC, ODP, dan rumah ke file JSON, serta road graph
     ke pickle. Ini memungkinkan regenerate kabel tanpa menjalankan ulang
@@ -207,8 +306,10 @@ def save_design_state(
         "pop": pop,
         "odcs": [],
         "feeder_segments": feeder_segments or [],
-        "distribution_segments": distribution_segments or {},
+        "distribution_segments": {},
     }
+    if boundary is not None:
+        state["boundary"] = mapping(boundary)
     for odc in odcs:
         odc_data = {
             "id": odc.id,
@@ -227,9 +328,15 @@ def save_design_state(
                 "splitter_ratio": odp.splitter.ratio if odp.splitter else None,
                 "splitter_location": odp.splitter.location if odp.splitter else None,
                 "houses": odp.houses,  # list of (lat, lon)
+                "upstream_id": odp.upstream_id,
             }
             odc_data["odps"].append(odp_data)
         state["odcs"].append(odc_data)
+
+    state["distribution_segments"] = _normalize_distribution_segments(
+        distribution_segments,
+        odcs,
+    )
 
     temporary_state_path = f"{design_state_path}.tmp"
     with open(temporary_state_path, "w") as f:
@@ -268,6 +375,7 @@ def load_design_state(cache_dir=None):
                 lat=odp_data["lat"],
                 lon=odp_data["lon"],
                 houses=[tuple(h) for h in odp_data["houses"]],
+                upstream_id=odp_data.get("upstream_id"),
                 splitter=Splitter(
                     ratio=odp_data["splitter_ratio"] or "1:10",
                     location=odp_data["splitter_location"] or "ODP",
@@ -310,10 +418,12 @@ def load_network_state(cache_dir=None):
             message="Cache Network Core rusak. Jalankan Generate Design ulang.",
         ) from exc
 
+    odp_ids = {odp.id for odc in load_design_state(cache_dir=cache_dir)[1] for odp in odc.odps}
     cache_is_complete = (
         state.get("version") == NETWORK_STATE_VERSION
         and isinstance(state.get("feeder_segments"), list)
         and isinstance(state.get("distribution_segments"), dict)
+        and odp_ids == set(state.get("distribution_segments", {}))
     )
 
     if not cache_is_complete:
@@ -322,24 +432,43 @@ def load_network_state(cache_dir=None):
         try:
             pop, odcs = load_design_state(cache_dir=cache_dir)
             road_graph = load_road_graph(cache_dir=cache_dir)
-            if road_graph is None:
-                raise RuntimeError("road graph cache tidak ditemukan")
 
-            feeder_segments, odcs = build_feeder_segments_preserving_order(
-                pop, odcs, road_graph=road_graph
+            # A v2 cache already contains complete paths, but not upstream
+            # metadata. Preserve those paths when possible so migration does
+            # not silently redesign an approved network.
+            existing_segments = _normalize_distribution_segments(
+                state.get("distribution_segments", {}), odcs
             )
-            distribution_segments = {}
-            for odc in odcs:
-                for odp in odc.odps:
-                    path = route_along_road(
-                        road_graph,
-                        (odc.lat, odc.lon),
-                        (odp.lat, odp.lon),
-                        use_external_routing=False,
+            has_all_existing_paths = (
+                odp_ids == set(existing_segments)
+                and all(
+                    item.get("connected") and item.get("coords")
+                    for item in existing_segments.values()
+                )
+            )
+
+            if has_all_existing_paths:
+                distribution_segments = existing_segments
+                for odc in odcs:
+                    for odp in odc.odps:
+                        segment = distribution_segments.get(odp.id, {})
+                        odp.upstream_id = segment.get("source_id") or odc.id
+            else:
+                if road_graph is None:
+                    raise RuntimeError("road graph cache tidak ditemukan")
+                distribution_segments = {}
+                for odc in odcs:
+                    distribution_segments.update(
+                        build_distribution_tree(odc, road_graph)
                     )
-                    if not path:
-                        raise RuntimeError(f"rute distribusi {odc.id} -> {odp.id} tidak ditemukan")
-                    distribution_segments[odp.id] = list(path)
+
+            feeder_segments = state.get("feeder_segments") or []
+            if not feeder_segments:
+                if road_graph is None:
+                    raise RuntimeError("road graph cache tidak ditemukan")
+                feeder_segments, odcs = build_feeder_segments_preserving_order(
+                    pop, odcs, road_graph=road_graph
+                )
 
             save_design_state(
                 pop,
@@ -359,11 +488,16 @@ def load_network_state(cache_dir=None):
 
     pop, odcs = load_design_state(cache_dir=cache_dir)
     odp_ids = {odp.id for odc in odcs for odp in odc.odps}
-    cached_ids = set(state["distribution_segments"])
+    cached_ids = set(state.get("distribution_segments", {}))
     if odp_ids != cached_ids:
         raise DesignStateNotFoundError(
             message="Cache geometri distribusi tidak lengkap. Jalankan Generate Design ulang.",
         )
+    for odc in odcs:
+        for odp in odc.odps:
+            segment = state["distribution_segments"].get(odp.id, {})
+            if isinstance(segment, dict):
+                odp.upstream_id = segment.get("source_id")
     return pop, odcs, state
 
 
@@ -374,6 +508,52 @@ def load_road_graph(cache_dir=None):
         return None
     with open(road_graph_path, "rb") as f:
         return prepare_road_graph(pickle.load(f))
+
+
+def _core_cache_key(boundary_path, pop_path, has_custom_pop, config):
+    """Return the deterministic identity of a generated Network Core."""
+    return {
+        "manifest_version": CORE_MANIFEST_VERSION,
+        "network_state_version": NETWORK_STATE_VERSION,
+        "algorithm_version": "1.0.0",
+        "input_hash": _compute_input_hash(boundary_path, pop_path),
+        "has_custom_pop": bool(has_custom_pop),
+        "config": config.model_dump(mode="json"),
+    }
+
+
+def _load_reusable_core(boundary_path, pop_path, has_custom_pop, config, cache_dir=None):
+    """Load a complete core only when it belongs to the current inputs/config."""
+    # FULL mode contains homepass routing, so keep its existing behaviour.
+    if config.include_homepass or config.force_refresh_osm:
+        return None
+    manifest_path = _core_manifest_path(cache_dir)
+    if not os.path.exists(manifest_path):
+        return None
+    try:
+        with open(manifest_path, "r") as source:
+            manifest = json.load(source)
+        expected = _core_cache_key(boundary_path, pop_path, has_custom_pop, config)
+        if any(manifest.get(key) != value for key, value in expected.items()):
+            return None
+        pop, odcs, state = load_network_state(cache_dir=cache_dir)
+        logger.info("Network Core cache hit: clustering dan routing dilewati")
+        return pop, odcs, state, manifest.get("osm_timestamp")
+    except Exception as exc:
+        logger.warning("Network Core cache tidak dapat dipakai, generate ulang: %s", exc)
+        return None
+
+
+def _save_core_manifest(boundary_path, pop_path, has_custom_pop, config, osm_timestamp, cache_dir=None):
+    resolved_cache_dir, _, _ = _cache_paths(cache_dir)
+    os.makedirs(resolved_cache_dir, exist_ok=True)
+    manifest = _core_cache_key(boundary_path, pop_path, has_custom_pop, config)
+    manifest["osm_timestamp"] = osm_timestamp
+    path = _core_manifest_path(cache_dir)
+    temporary_path = f"{path}.tmp"
+    with open(temporary_path, "w") as target:
+        json.dump(manifest, target, indent=2, sort_keys=True)
+    os.replace(temporary_path, path)
 
 
 def regenerate_cables_only(output_path, include_homepass=False, output_csv=None, cache_dir=None, job_id=None):
@@ -388,7 +568,7 @@ def regenerate_cables_only(output_path, include_homepass=False, output_csv=None,
     logger.info("=" * 60)
 
     _, _, road_graph_path = _cache_paths(cache_dir)
-    pop, odcs = load_design_state(cache_dir=cache_dir)
+    pop, odcs, network_state = load_network_state(cache_dir=cache_dir)
     road_graph = load_road_graph(cache_dir=cache_dir)
 
     logger.info(
@@ -433,8 +613,17 @@ def regenerate_cables_only(output_path, include_homepass=False, output_csv=None,
     total_houses = sum(len(odp.houses) for odc in odcs for odp in odc.odps)
     logger.info("Loaded: %d ODC, %d ODP, %d rumah", len(odcs), total_odp, total_houses)
 
-    # Route feeder tanpa mengubah urutan ODC (sudah benar dari cache)
-    feeder_segments, odcs = build_feeder_segments_preserving_order(pop, odcs, road_graph=road_graph)
+    # Route feeder tanpa mengubah urutan ODC (sudah benar dari cache).
+    # Distribution juga dibangun ulang; sebelumnya fungsi ini hanya memakai
+    # distribution_segments lama sehingga regenerate terlihat tidak berubah.
+    feeder_segments, odcs = build_feeder_segments_preserving_order(
+        pop, odcs, road_graph=road_graph
+    )
+    distribution_segments = {}
+    for odc in odcs:
+        distribution_segments.update(
+            build_distribution_tree(odc, road_graph, max_distance_m=500.0)
+        )
 
     if job_id:
         total_odps = sum(len(odc.odps) for odc in odcs)
@@ -446,7 +635,6 @@ def regenerate_cables_only(output_path, include_homepass=False, output_csv=None,
             85,
         )
     # Export KMZ dengan routing kabel baru
-    distribution_segments = {}
     export_kmz(
         pop,
         odcs,
@@ -455,15 +643,29 @@ def regenerate_cables_only(output_path, include_homepass=False, output_csv=None,
         include_homepass=include_homepass,
         road_graph=road_graph,
         road_feeder=True,
+        distribution_segments=distribution_segments,
+        boundary=network_state.get("boundary"),
         progress_callback=lambda done, total, message: _report_export_progress(
             job_id, done, total, message
         ),
     )
     if output_csv:
         try:
-            export_csv(pop, odcs, feeder_segments, output_csv)
+            export_csv(pop, odcs, feeder_segments, output_csv, distribution_segments=distribution_segments)
         except Exception as e:
             logger.warning("Gagal generate CSV: %s", e)
+    try:
+        save_design_state(
+            pop,
+            odcs,
+            road_graph=road_graph,
+            cache_dir=cache_dir,
+            feeder_segments=feeder_segments,
+            distribution_segments=distribution_segments,
+            boundary=network_state.get("boundary"),
+        )
+    except Exception as e:
+        logger.warning("Gagal memperbarui cache setelah regenerate kabel: %s", e)
     logger.info("Selesai! File KMZ disimpan di %s", output_path)
 
     return output_path
@@ -565,6 +767,10 @@ def generate_cables_from_custom_points(file_path, output_path, include_homepass=
     logger.info("Membangun rantai kabel feeder...")
     feeder_segments, odcs = build_feeder_chain(pop, odcs, road_graph=road_graph)
     distribution_segments = {}
+    for odc in odcs:
+        distribution_segments.update(
+            build_distribution_tree(odc, road_graph)
+        )
     
     if job_id: progress_manager.update(job_id, "EXPORTING", "Mengekspor ke KMZ dengan jalur kabel...", 85)
     # 5. Export (otomatis melakukan routing Distribusi & Drop)
@@ -574,6 +780,7 @@ def generate_cables_from_custom_points(file_path, output_path, include_homepass=
         include_homepass=include_homepass,
         road_graph=road_graph,
         road_feeder=(road_graph is not None),
+        distribution_segments=distribution_segments,
         progress_callback=lambda done, total, message: _report_export_progress(
             job_id, done, total, message
         ),
@@ -581,7 +788,14 @@ def generate_cables_from_custom_points(file_path, output_path, include_homepass=
     
     # 6. Cache design state untuk fitur regenerate-cables
     try:
-        save_design_state(pop, odcs, road_graph=road_graph, cache_dir=cache_dir)
+        save_design_state(
+            pop,
+            odcs,
+            road_graph=road_graph,
+            cache_dir=cache_dir,
+            feeder_segments=feeder_segments,
+            distribution_segments=distribution_segments,
+        )
     except Exception as e:
         logger.warning("Gagal menyimpan custom design state (%s), regenerate-cables tidak tersedia.", e)
     
@@ -614,6 +828,7 @@ def generate_homepass_from_state(output_path, output_csv=None, cache_dir=None, j
         road_feeder=False,
         road_drop=False,
         distribution_segments=distribution_segments,
+        boundary=state.get("boundary"),
         progress_callback=(
             lambda done, total, message: progress_manager.update(
                 job_id,
@@ -624,7 +839,13 @@ def generate_homepass_from_state(output_path, output_csv=None, cache_dir=None, j
         ),
     )
     if output_csv:
-        export_csv(pop, odcs, feeder_segments, output_csv)
+        export_csv(
+            pop,
+            odcs,
+            feeder_segments,
+            output_csv,
+            distribution_segments=distribution_segments,
+        )
     if job_id:
         progress_manager.update(job_id, "EXPORTING", "Homepass selesai, menyiapkan output...", 90)
     return pop, odcs, feeder_segments
@@ -720,6 +941,7 @@ def _run_generator_logic(
     job_id: str | None = None,
 ):
     """Run the full generation pipeline. Returns (pop, odcs, feeder_segments, config, osm_ts)."""
+    pipeline_started = time.perf_counter()
     if config is None:
         config = GenerationConfig()
     osm_timestamp = datetime.now(timezone.utc).isoformat()
@@ -766,7 +988,68 @@ def _run_generator_logic(
             pop["name"],
         )
 
+    # Reuse the complete derived core for an identical CORE request. The raw
+    # OSM tile cache alone does not avoid clustering and cable routing, which
+    # are the expensive stages for large boundaries.
+    cached_core = _load_reusable_core(
+        boundary_path,
+        pop_path,
+        has_custom_pop,
+        config,
+        cache_dir=cache_dir,
+    )
+    if cached_core:
+        cached_pop, cached_odcs, cached_state, cached_osm_timestamp = cached_core
+        if job_id:
+            progress_manager.update(
+                job_id,
+                "EXPORTING",
+                "Memakai Network Core cache; clustering dan routing dilewati...",
+                85,
+            )
+        cached_feeder_segments = cached_state.get("feeder_segments", [])
+        cached_distribution_segments = cached_state.get("distribution_segments", {})
+        export_kmz(
+            cached_pop,
+            cached_odcs,
+            cached_feeder_segments,
+            output_kmz,
+            include_homepass=False,
+            road_graph=None,
+            road_feeder=False,
+            distribution_segments=cached_distribution_segments,
+            boundary=boundary,
+            progress_callback=lambda done, total, message: _report_export_progress(
+                job_id, done, total, message
+            ),
+        )
+        if output_csv:
+            export_csv(
+                cached_pop,
+                cached_odcs,
+                cached_feeder_segments,
+                output_csv,
+                distribution_segments=cached_distribution_segments,
+            )
+        logger.info(
+            "Generation cache hit selesai dalam %.2fs",
+            time.perf_counter() - pipeline_started,
+        )
+        return (
+            cached_pop,
+            cached_odcs,
+            cached_feeder_segments,
+            cached_distribution_segments,
+            config,
+            cached_osm_timestamp or osm_timestamp,
+        )
+
+    # A mismatch means the old derived state must not be used by Homepass.
+    # Keep OSM tile checkpoints intact; only invalidate the derived network.
+    invalidate_design_state(cache_dir=cache_dir)
+
     if job_id: progress_manager.update(job_id, "LOADING_ROADS", "Mengambil data jalan & rumah dari OSM...", 30)
+    osm_started = time.perf_counter()
     try:
         houses, road_graph = _fetch_osm_tiled(
             boundary,
@@ -785,17 +1068,63 @@ def _run_generator_logic(
         raise OSMUnavailableError(
             message=f"Gagal mengambil jaringan jalan OSM ({e}). Generate dihentikan agar kabel tidak memotong rel atau sungai.",
         ) from e
+    logger.info(
+        "Generation stage OSM selesai dalam %.2fs: rumah=%d nodes=%d edges=%d",
+        time.perf_counter() - osm_started,
+        len(houses),
+        len(road_graph.nodes) if road_graph is not None else 0,
+        len(road_graph.edges) if road_graph is not None else 0,
+    )
 
+    clustering_started = time.perf_counter()
     if job_id: progress_manager.update(job_id, "CLUSTERING", "Membuat cluster ODP & ODC...", 50)
     odcs = build_design(houses=houses, road_graph=road_graph, config=config)
+    logger.info(
+        "Generation stage clustering selesai dalam %.2fs: odc=%d odp=%d",
+        time.perf_counter() - clustering_started,
+        len(odcs),
+        sum(len(odc.odps) for odc in odcs),
+    )
     
+    routing_started = time.perf_counter()
     if job_id: progress_manager.update(job_id, "ROUTING", "Melakukan routing kabel feeder...", 70)
+    odc_spacing_started = time.perf_counter()
     if road_graph is not None:
         enforce_min_distance_between_odcs_on_road(road_graph, odcs, min_dist_m=40.0)
     else:
         enforce_min_distance_between_odcs(odcs, min_dist_m=40.0)
+    logger.info(
+        "Routing substage ODC spacing selesai dalam %.2fs",
+        time.perf_counter() - odc_spacing_started,
+    )
+    feeder_started = time.perf_counter()
     feeder_segments, odcs = build_feeder_chain(pop, odcs, road_graph=road_graph)
+    logger.info(
+        "Routing substage feeder selesai dalam %.2fs: segments=%d",
+        time.perf_counter() - feeder_started,
+        len(feeder_segments),
+    )
+    distribution_started = time.perf_counter()
     distribution_segments = {}
+    for odc in odcs:
+        distribution_segments.update(
+            build_distribution_tree(
+                odc,
+                road_graph,
+                max_distance_m=config.max_distribution_length_m,
+            )
+        )
+    logger.info(
+        "Routing substage distribution selesai dalam %.2fs",
+        time.perf_counter() - distribution_started,
+    )
+    logger.info(
+        "Generation stage routing selesai dalam %.2fs: feeder=%d distribution=%d connected=%d",
+        time.perf_counter() - routing_started,
+        len(feeder_segments),
+        len(distribution_segments),
+        sum(1 for item in distribution_segments.values() if item.get("connected")),
+    )
 
     if job_id:
         total_odps = sum(len(odc.odps) for odc in odcs)
@@ -815,9 +1144,14 @@ def _run_generator_logic(
         road_graph=road_graph,
         road_feeder=True,
         distribution_segments=distribution_segments,
+        boundary=boundary,
         progress_callback=lambda done, total, message: _report_export_progress(
             job_id, done, total, message
         ),
+    )
+    logger.info(
+        "Generation stage export selesai; total pipeline %.2fs",
+        time.perf_counter() - pipeline_started,
     )
     # Persist only after the core export has successfully produced all
     # distribution geometries. Homepass can then reuse this exact network.
@@ -830,16 +1164,34 @@ def _run_generator_logic(
             cache_dir=cache_dir,
             feeder_segments=feeder_segments,
             distribution_segments=distribution_segments,
+            boundary=boundary,
         )
     except Exception as e:
         logger.exception("Gagal menyimpan network core state")
         raise ExportFailedError(
             message="Network Core berhasil dibuat tetapi cache untuk Homepass gagal disimpan. Jalankan Generate Design ulang.",
         ) from e
+    try:
+        _save_core_manifest(
+            boundary_path,
+            pop_path,
+            has_custom_pop,
+            config,
+            osm_timestamp,
+            cache_dir=cache_dir,
+        )
+    except Exception as e:
+        logger.warning("Network Core tersimpan tetapi manifest cache gagal dibuat: %s", e)
     if output_csv:
         try:
-            export_csv(pop, odcs, feeder_segments, output_csv)
+            export_csv(
+                pop,
+                odcs,
+                feeder_segments,
+                output_csv,
+                distribution_segments=distribution_segments,
+            )
         except Exception as e:
             logger.warning("Gagal generate CSV (%s)", e)
 
-    return pop, odcs, feeder_segments, config, osm_timestamp
+    return pop, odcs, feeder_segments, distribution_segments, config, osm_timestamp

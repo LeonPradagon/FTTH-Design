@@ -51,7 +51,10 @@ def test_network_cache_contains_routes_and_homepass_does_not_route(sample_odc, t
 
     loaded_pop, loaded_odcs, state = load_network_state(cache_dir=tmp_path)
     assert loaded_pop == pop
-    assert state["distribution_segments"]["ODP-001"] == [list(point) for point in distribution["ODP-001"]]
+    cached_distribution = state["distribution_segments"]["ODP-001"]
+    assert cached_distribution["source_id"] == "ODC-001"
+    assert cached_distribution["target_id"] == "ODP-001"
+    assert cached_distribution["coords"] == [list(point) for point in distribution["ODP-001"]]
 
     output = tmp_path / "homepass.kmz"
     with patch("backend.services.generator.core_logic.export_kmz") as export, patch(
@@ -63,7 +66,9 @@ def test_network_cache_contains_routes_and_homepass_does_not_route(sample_odc, t
     assert kwargs["road_graph"] is None
     assert kwargs["road_feeder"] is False
     assert kwargs["road_drop"] is False
-    assert kwargs["distribution_segments"] == {"ODP-001": [list(point) for point in distribution["ODP-001"]]}
+    assert kwargs["distribution_segments"]["ODP-001"]["coords"] == [
+        list(point) for point in distribution["ODP-001"]
+    ]
 
 
 def test_legacy_cache_is_rejected_for_homepass(sample_odc, tmp_path):

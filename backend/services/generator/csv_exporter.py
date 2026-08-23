@@ -17,7 +17,7 @@ def compute_segment_length(coords):
         total += haversine(coords[i][0], coords[i][1], coords[i+1][0], coords[i+1][1])
     return total
 
-def export_csv(pop, odcs, feeder_segments, output_path):
+def export_csv(pop, odcs, feeder_segments, output_path, distribution_segments=None):
     with open(output_path, mode='w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow(['Tipe', 'Nama', 'Kuantitas/Panjang', 'Satuan', 'Latitude', 'Longitude'])
@@ -35,9 +35,31 @@ def export_csv(pop, odcs, feeder_segments, output_path):
                 odp_name = f"{i:02d}/{j:02d}"
                 writer.writerow(['ODP', odp_name, 1, 'pcs', odp.lat, odp.lon])
                 
-                # Jarak estimasi (haversine * 1.2 slack factor)
-                dist = haversine(odc.lat, odc.lon, odp.lat, odp.lon) * 1.2
-                writer.writerow(['Kabel Distribusi', f"{odc_name} -> {odp_name}", round(dist, 2), 'm', '', ''])
+                segment = (distribution_segments or {}).get(odp.id)
+                source_label = odc_name
+                if isinstance(segment, dict):
+                    source_id = segment.get('source_id')
+                    if source_id == odc.id:
+                        source_label = odc_name
+                    else:
+                        for source_index, source_odc in enumerate(odcs, start=1):
+                            for source_j, source_odp in enumerate(source_odc.odps, start=1):
+                                if source_odp.id == source_id:
+                                    source_label = f"{source_index:02d}/{source_j:02d}"
+                    dist = segment.get('length_m')
+                    if segment.get('connected') and dist is not None:
+                        writer.writerow(['Kabel Distribusi', f"{source_label} -> {odp_name}", round(dist, 2), 'm', '', ''])
+                    else:
+                        writer.writerow(['Kabel Distribusi', f"{source_label} -> {odp_name}", 'DISCONNECTED', '', '', ''])
+                elif segment is not None:
+                    coords = segment
+                    dist = compute_segment_length(coords)
+                    writer.writerow(['Kabel Distribusi', f"{source_label} -> {odp_name}", round(dist, 2), 'm', '', ''])
+                else:
+                    # Legacy callers without a road graph retain the old
+                    # estimated row format.
+                    dist = haversine(odc.lat, odc.lon, odp.lat, odp.lon) * 1.2
+                    writer.writerow(['Kabel Distribusi', f"{source_label} -> {odp_name}", round(dist, 2), 'm', '', ''])
                 
                 for k, h in enumerate(odp.houses, start=1):
                     house_name = f"{i:02d}/{j:02d}-{k:02d}"

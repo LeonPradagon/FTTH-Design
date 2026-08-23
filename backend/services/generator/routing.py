@@ -88,8 +88,9 @@ def route_along_road(
     G,
     from_latlon,
     to_latlon,
-    use_external_routing=True,
+    use_external_routing=False,
     route_cache=None,
+    return_metadata=False,
 ):
     """Cari rute terpendek di graf jalan `G` antara dua titik (lat, lon) 
     dengan menelusuri geometri jalan secara presisi."""
@@ -99,6 +100,33 @@ def route_along_road(
     import os
     from shapely.geometry import Point as ShPoint
     from shapely.ops import substring
+
+    def route_result(coords, routing_cost=None):
+        if not return_metadata:
+            return coords
+        length_m = sum(
+            haversine_m(coords[i][0], coords[i][1], coords[i + 1][0], coords[i + 1][1])
+            for i in range(len(coords) - 1)
+        )
+        return {
+            "coords": coords,
+            "length_m": float(length_m),
+            "routing_cost": float(routing_cost if routing_cost is not None else length_m),
+        }
+
+    def result_coords(value):
+        """Normalize both metadata results and legacy coordinate-list results."""
+        return value["coords"] if isinstance(value, dict) else value
+
+    route_key = (
+        round(from_latlon[0], 7), round(from_latlon[1], 7),
+        round(to_latlon[0], 7), round(to_latlon[1], 7),
+    )
+    if route_cache is not None:
+        cached_routes = route_cache.setdefault("routes", {})
+        cached = cached_routes.get(route_key)
+        if cached is not None:
+            return cached if return_metadata else result_coords(cached)
 
     # GraphHopper is useful for a small number of feeder routes, but calling
     # it once for every HC/drop cable makes large exports spend up to the
@@ -116,7 +144,10 @@ def route_along_road(
                 if data.get("paths"):
                     coords = data["paths"][0]["points"]["coordinates"]
                     # GraphHopper mengembalikan [lon, lat], kita butuh [lat, lon]
-                    return [(lat, lon) for lon, lat in coords]
+                    result = route_result([(lat, lon) for lon, lat in coords])
+                    if route_cache is not None and return_metadata:
+                        route_cache.setdefault("routes", {})[route_key] = result
+                    return result if return_metadata else result_coords(result)
         except Exception as e:
             logger.debug(f"GraphHopper routing skipped/failed: {e}. Fallback to networkx.")
 
@@ -141,10 +172,19 @@ def route_along_road(
     if G.graph.get("ftth_road_profile") != ROAD_PROFILE_VERSION:
         G = prepare_road_graph(G)
 
-    # 1. Snap start and end
+    # 1. Snap start and end. Reuse nearest-edge lookups for repeated endpoints.
+    point_cache = route_cache.setdefault("points", {}) if route_cache is not None else {}
+
+    def locate_cached(point):
+        key = (round(point[0], 7), round(point[1], 7))
+        if key not in point_cache:
+            point_cache[key] = locate_on_road(G, point[0], point[1])
+        return point_cache[key]
+
     try:
-        start_info = locate_on_road(G, from_latlon[0], from_latlon[1])
-        snapped_start = (start_info["line"].interpolate(start_info["t_deg"]).y, start_info["line"].interpolate(start_info["t_deg"]).x)
+        start_info = locate_cached(from_latlon)
+        start_point = start_info["line"].interpolate(start_info["t_deg"])
+        snapped_start = (start_point.y, start_point.x)
         u_orig, v_orig, _ = start_info["edge"]
     except Exception:
         snapped_start = from_latlon
@@ -153,8 +193,9 @@ def route_along_road(
         start_info = None
 
     try:
-        end_info = locate_on_road(G, to_latlon[0], to_latlon[1])
-        snapped_end = (end_info["line"].interpolate(end_info["t_deg"]).y, end_info["line"].interpolate(end_info["t_deg"]).x)
+        end_info = locate_cached(to_latlon)
+        end_point = end_info["line"].interpolate(end_info["t_deg"])
+        snapped_end = (end_point.y, end_point.x)
         u_dest, v_dest, _ = end_info["edge"]
     except Exception:
         snapped_end = to_latlon
@@ -168,7 +209,10 @@ def route_along_road(
     if start_info and end_info and set([u_orig, v_orig]) == set([u_dest, v_dest]):
         route_coords.extend(trace_edge_line(start_info["line"], snapped_start, snapped_end))
         route_coords.append(to_latlon)
-        return route_coords
+        result = route_result(route_coords)
+        if route_cache is not None and return_metadata:
+            route_cache.setdefault("routes", {})[route_key] = result
+        return result if return_metadata else result_coords(result)
 
     # 3. Cari rute terpendek antar node
     valid_starts = list(set([u_orig, v_orig]))
@@ -295,7 +339,10 @@ def route_along_road(
         if not final_coords or final_coords[-1] != coord:
             final_coords.append(coord)
             
-    return final_coords
+    result = route_result(final_coords, best_len)
+    if route_cache is not None and return_metadata:
+        route_cache.setdefault("routes", {})[route_key] = result
+    return result if return_metadata else result_coords(result)
 
 
 def _edge_geometry_and_length(road_graph, u, v, key):
@@ -547,7 +594,181 @@ def arrange_odps_around_odc(odc, offset_m=40.0, road_graph=None):
         used_points.append(result)
 
 
-def build_feeder_chain(pop, odcs, road_graph=None):
+def build_distribution_tree(odc, road_graph, max_distance_m=500.0):
+    """Build a road-constrained distribution tree for one ODC.
+
+    The ODC remains the root and every ODP still counts towards the ODC
+    capacity.  An ODP may nevertheless feed another ODP when that candidate
+    route is valid.  Candidate routes are ordered by the existing routing
+    cost (which prefers major roads) and then by physical length.  A
+    Kruskal-style minimum tree prevents cycles while keeping the operation
+    small: the ODC capacity bounds the number of ODPs in this graph.
+
+    Return value is a dict keyed by target ODP id.  Connected entries contain
+    source/target metadata and road coordinates; disconnected entries are
+    explicit and intentionally contain no straight-line fallback.
+    """
+    odps = list(odc.odps)
+    segments = {}
+    if not odps:
+        return segments
+
+    for odp in odps:
+        odp.upstream_id = None
+
+    if road_graph is None:
+        for odp in odps:
+            segments[odp.id] = {
+                "source_id": None,
+                "target_id": odp.id,
+                "source_label": None,
+                "target_label": odp.id,
+                "coords": [],
+                "length_m": None,
+                "routing_cost": None,
+                "connected": False,
+            }
+        return segments
+
+    route_cache = {"distances": {}, "targeted": True}
+    candidates = []
+
+    def add_candidate(source_id, source_point, target_id, target_point):
+        try:
+            result = route_along_road(
+                road_graph,
+                source_point,
+                target_point,
+                use_external_routing=False,
+                route_cache=route_cache,
+                return_metadata=True,
+            )
+        except Exception as exc:
+            logger.debug(
+                "Distribution route %s -> %s gagal: %s",
+                source_id,
+                target_id,
+                exc,
+            )
+            return
+        if not result or result["length_m"] > max_distance_m:
+            return
+        candidates.append({
+            "source_id": source_id,
+            "target_id": target_id,
+            "coords": result["coords"],
+            "length_m": result["length_m"],
+            "routing_cost": result["routing_cost"],
+        })
+
+    for odp in odps:
+        add_candidate(
+            odc.id,
+            (odc.lat, odc.lon),
+            odp.id,
+            (odp.lat, odp.lon),
+        )
+
+    for index, source in enumerate(odps):
+        for target in odps[index + 1:]:
+            add_candidate(
+                source.id,
+                (source.lat, source.lon),
+                target.id,
+                (target.lat, target.lon),
+            )
+
+    candidates.sort(key=lambda item: (
+        item["routing_cost"],
+        item["length_m"],
+        item["source_id"],
+        item["target_id"],
+    ))
+
+    parent = {odc.id: odc.id}
+
+    def find(node):
+        root = node
+        while parent.get(root, root) != root:
+            root = parent[root]
+        while parent.get(node, node) != node:
+            next_node = parent[node]
+            parent[node] = root
+            node = next_node
+        return root
+
+    def union(left, right):
+        left_root, right_root = find(left), find(right)
+        if left_root == right_root:
+            return False
+        parent[right_root] = left_root
+        return True
+
+    selected = []
+    for candidate in candidates:
+        if union(candidate["source_id"], candidate["target_id"]):
+            selected.append(candidate)
+        if len(selected) == len(odps):
+            break
+
+    # If a component could not be reached through the first tree pass, use a
+    # valid direct ODC route as a deterministic fallback. Never fabricate a
+    # straight line when the road graph cannot connect the device.
+    selected_targets = {item["target_id"] for item in selected}
+    for odp in odps:
+        if odp.id in selected_targets:
+            continue
+        direct = next((item for item in candidates
+                       if item["source_id"] == odc.id and item["target_id"] == odp.id), None)
+        if direct is not None and union(direct["source_id"], direct["target_id"]):
+            selected.append(direct)
+
+    adjacency = {}
+    for item in selected:
+        adjacency.setdefault(item["source_id"], []).append((item["target_id"], item, False))
+        adjacency.setdefault(item["target_id"], []).append((item["source_id"], item, True))
+
+    visited = {odc.id}
+    queue = [odc.id]
+    while queue:
+        source_id = queue.pop(0)
+        for target_id, item, reverse in adjacency.get(source_id, []):
+            if target_id in visited:
+                continue
+            visited.add(target_id)
+            queue.append(target_id)
+            coords = list(reversed(item["coords"])) if reverse else item["coords"]
+            target = next(odp for odp in odps if odp.id == target_id)
+            target.upstream_id = source_id
+            segments[target_id] = {
+                "source_id": source_id,
+                "target_id": target_id,
+                "source_label": source_id,
+                "target_label": target_id,
+                "coords": coords,
+                "length_m": item["length_m"],
+                "routing_cost": item["routing_cost"],
+                "connected": True,
+            }
+
+    for odp in odps:
+        if odp.id not in segments:
+            segments[odp.id] = {
+                "source_id": None,
+                "target_id": odp.id,
+                "source_label": None,
+                "target_label": odp.id,
+                "coords": [],
+                "length_m": None,
+                "routing_cost": None,
+                "connected": False,
+            }
+            logger.warning("ODP %s tidak terhubung ke tree ODC %s", odp.id, odc.id)
+
+    return segments
+
+
+def build_feeder_chain(pop, odcs, road_graph=None, route_cache=None):
     """Susun rantai ODC dari POP (order_odcs_chain), lalu RENUMBER id ODC
     (ODC-001, ODC-002, ...) mengikuti urutan rantai supaya penomoran sesuai
     urutan fisik kabel trunk-nya. Kemudian bangun rute feeder tiap segmen
@@ -564,6 +785,10 @@ def build_feeder_chain(pop, odcs, road_graph=None):
         odc.closure_id = f"CL-{i:03d}"
 
     segments = []
+    # Reuse endpoint and route caches for the complete feeder chain. Keeping
+    # one cache here avoids repeating nearest-edge work when a generated ODC
+    # becomes the next segment's starting point.
+    route_cache = route_cache or {"distances": {}, "targeted": True}
     current_label = pop["name"]
     current_latlon = (pop["lat"], pop["lon"])
     for odc in ordered:
@@ -571,10 +796,12 @@ def build_feeder_chain(pop, odcs, road_graph=None):
         path = None
         if road_graph is not None:
             try:
-                path = route_along_road(
+                result = route_along_road(
                     road_graph, current_latlon, target_latlon,
-                    route_cache={"distances": {}, "targeted": True},
+                    route_cache=route_cache,
+                    return_metadata=True,
                 )
+                path = result.get("coords") if isinstance(result, dict) else result
             except Exception as e:
                 raise RuntimeError(
                     f"Gagal membuat feeder {current_label}->{odc.id} melalui jalan: {e}"
@@ -592,7 +819,7 @@ def build_feeder_chain(pop, odcs, road_graph=None):
     return segments, ordered
 
 
-def build_feeder_segments_preserving_order(pop, odcs, road_graph=None):
+def build_feeder_segments_preserving_order(pop, odcs, road_graph=None, route_cache=None):
     """Bangun rute feeder dari POP ke ODC TANPA mengubah urutan ODC.
     Dipakai oleh regenerate_cables_only: urutan ODC sudah benar dari cache
     (sudah di-sort & renumber saat generate pertama), jadi tidak perlu
@@ -604,6 +831,7 @@ def build_feeder_segments_preserving_order(pop, odcs, road_graph=None):
       odcs: list ODC dengan urutan yang tidak berubah
     """
     segments = []
+    route_cache = route_cache or {"distances": {}, "targeted": True}
     current_label = pop["name"]
     current_latlon = (pop["lat"], pop["lon"])
     for odc in odcs:
@@ -611,10 +839,12 @@ def build_feeder_segments_preserving_order(pop, odcs, road_graph=None):
         path = None
         if road_graph is not None:
             try:
-                path = route_along_road(
+                result = route_along_road(
                     road_graph, current_latlon, target_latlon,
-                    route_cache={"distances": {}, "targeted": True},
+                    route_cache=route_cache,
+                    return_metadata=True,
                 )
+                path = result.get("coords") if isinstance(result, dict) else result
             except Exception as e:
                 raise RuntimeError(
                     f"Gagal membuat feeder {current_label}->{odc.id} melalui jalan: {e}"
@@ -663,6 +893,21 @@ def _two_opt_improve_chain(pop, ordered, max_iter=200):
         return ordered
 
     best = list(ordered)
+    distances = {}
+
+    def point_key(point):
+        if isinstance(point, dict):
+            return (point["lat"], point["lon"])
+        return (point.lat, point.lon)
+
+    def distance(left, right):
+        key = tuple(sorted((point_key(left), point_key(right))))
+        if key not in distances:
+            left_lat, left_lon = point_key(left)
+            right_lat, right_lon = point_key(right)
+            distances[key] = haversine_m(left_lat, left_lon, right_lat, right_lon)
+        return distances[key]
+
     best_len = _chain_length_m(pop, best)
     improved = True
     it = 0
@@ -671,10 +916,26 @@ def _two_opt_improve_chain(pop, ordered, max_iter=200):
         it += 1
         for i in range(n - 1):
             for j in range(i + 1, n):
-                candidate = best[:i] + best[i:j + 1][::-1] + best[j + 1:]
-                cand_len = _chain_length_m(pop, candidate)
+                # Reversing best[i:j] changes only the two boundary edges.
+                # This preserves the old 2-opt choice while reducing each
+                # candidate evaluation from O(n) to O(1).
+                left = pop if i == 0 else best[i - 1]
+                first = best[i]
+                last = best[j]
+                right = best[j + 1] if j + 1 < n else None
+                old_len = distance(left, first)
+                new_len = distance(left, last)
+                if right is not None:
+                    old_len += distance(last, right)
+                    new_len += distance(first, right)
+                cand_len = best_len - old_len + new_len
                 if cand_len < best_len - 1e-6:
-                    best, best_len = candidate, cand_len
+                    best = best[:i] + best[i:j + 1][::-1] + best[j + 1:]
+                    # The candidate length already reflects the exact two
+                    # changed edges. Rebuilding the complete chain here was
+                    # O(n) for every accepted move and became a major cost on
+                    # large ODC sets, while producing the same value.
+                    best_len = cand_len
                     improved = True
     return best
 

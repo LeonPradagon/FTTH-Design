@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { request as httpRequest, type IncomingMessage } from "node:http";
 import { Readable } from "node:stream";
 import { createHmac } from "node:crypto";
+import { auth } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 900;
 
 const BACKEND_ORIGIN = process.env.BACKEND_URL || "http://127.0.0.1:8000";
 const PROXY_TIMEOUT_MS = 15 * 60 * 1000;
+// Keep local development compatible with installations that only configured
+// BETTER_AUTH_SECRET. Production should still use a dedicated secret.
+const BACKEND_PROXY_SECRET = process.env.BACKEND_PROXY_SECRET || process.env.BETTER_AUTH_SECRET;
 
 function requestBackend(
   backendUrl: URL,
@@ -54,41 +57,37 @@ async function proxy(req: NextRequest) {
     const pathAndQuery = url.pathname.replace(/^\/api\/proxy\/?/, '') + url.search;
     const backendUrl = new URL(pathAndQuery, `${BACKEND_ORIGIN.replace(/\/$/, "")}/`);
 
-    const cookieStore = await cookies();
-    const sessionToken = (
-      cookieStore.get('better-auth.session_token')
-      || cookieStore.get('__Secure-better-auth.session_token')
-    )?.value;
-    
     const headers = new Headers(req.headers);
     headers.delete('host'); // Avoid host mismatch
     headers.delete('connection');
+    // These are service-authenticated headers. Never trust values supplied by
+    // a browser directly, even when the request is going through this route.
+    headers.delete('x-user-id');
+    headers.delete('x-user-role');
+    headers.delete('x-user-email');
+    headers.delete('x-proxy-auth');
     
-    if (sessionToken) {
+    // Resolve the session in-process. Calling /api/auth/get-session over HTTP
+    // can lose the cookie behind a reverse proxy or when the public host is
+    // not reachable from the Next.js server itself.
+    if (req.headers.get('cookie')) {
       try {
-        const sessionUrl = new URL('/api/auth/get-session', req.url);
-        const sessionRes = await fetch(sessionUrl.toString(), {
-          headers: {
-            cookie: req.headers.get('cookie') || '',
+        const sessionData = await auth.api.getSession({ headers: req.headers });
+        if (sessionData?.user) {
+          const userId = String(sessionData.user.id);
+          const role = String(sessionData.user.role || 'user');
+          const email = String(sessionData.user.email || '');
+          headers.set('X-User-Id', userId);
+          headers.set('X-User-Role', role);
+          headers.set('X-User-Email', email);
+          if (BACKEND_PROXY_SECRET) {
+            const timestamp = Math.floor(Date.now() / 1000).toString();
+            const payload = `${userId}|${timestamp}|${role}|${email}`;
+            const signature = createHmac('sha256', BACKEND_PROXY_SECRET).update(payload).digest('hex');
+            headers.set('X-Proxy-Auth', `${payload}|${signature}`);
           }
-        });
-        if (sessionRes.ok) {
-          const sessionData = await sessionRes.json();
-          if (sessionData && sessionData.user) {
-            const userId = String(sessionData.user.id);
-            const role = String(sessionData.user.role || 'user');
-            const email = String(sessionData.user.email || '');
-            headers.set('X-User-Id', userId);
-            headers.set('X-User-Role', role);
-            headers.set('X-User-Email', email);
-            const proxySecret = process.env.BACKEND_PROXY_SECRET;
-            if (proxySecret) {
-              const timestamp = Math.floor(Date.now() / 1000).toString();
-              const payload = `${userId}|${timestamp}|${role}|${email}`;
-              const signature = createHmac('sha256', proxySecret).update(payload).digest('hex');
-              headers.set('X-Proxy-Auth', `${payload}|${signature}`);
-            }
-          }
+        } else {
+          console.warn("Proxy request has cookies but no valid Better Auth session");
         }
       } catch (err) {
         console.error("Proxy session verification error:", err);

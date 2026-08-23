@@ -292,19 +292,36 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
     }
   };
 
+  // Project records created before the proxy was introduced contain raw
+  // /api/files URLs. Normalize them at the map boundary so every protected
+  // file request carries the browser session through Next.js.
+  const resolveLayerUrl = (url: string) => {
+    if (url.startsWith('/api/') && !url.startsWith('/api/proxy/')) {
+      return `/api/proxy${url}`;
+    }
+    return url;
+  };
+
   // Default altitude based on initial zoom 4
   const currentZoomRef = useRef(4);
 
   useEffect(() => {
     layers.forEach(async (layer) => {
-      const cacheKey = `${layer.id}-${layer.url}`;
+      const layerUrl = resolveLayerUrl(layer.url);
+      const cacheKey = `${layer.id}-${layerUrl}`;
       if (!layer.visible || geoDataMap[cacheKey] || loadingKeysRef.current.has(cacheKey)) return;
 
       loadingKeysRef.current.add(cacheKey);
       try {
-          const res = await fetch(layer.url, { cache: "no-store" });
+          const res = await fetch(layerUrl, {
+            cache: "no-store",
+            credentials: "include",
+          });
+          if (!res.ok) {
+            throw new Error(`Gagal memuat ${layer.name} (${res.status})`);
+          }
           let body: string;
-          const isKmz = layer.url.toLowerCase().split("?")[0].endsWith(".kmz");
+          const isKmz = layerUrl.toLowerCase().split("?")[0].endsWith(".kmz");
           if (isKmz) {
             const archive = await JSZip.loadAsync(await res.arrayBuffer());
             const kmlEntry = Object.keys(archive.files).find(name => name.toLowerCase().endsWith(".kml"));
@@ -312,9 +329,6 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
             body = await archive.files[kmlEntry].async("text");
           } else {
             body = await res.text();
-          }
-          if (!res.ok) {
-            throw new Error(`Gagal memuat ${layer.name} (${res.status})`);
           }
           // A proxy/auth error is JSON.  Do not pass it to the XML parser and
           // silently render an empty layer.
@@ -393,9 +407,9 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
 
   const deckLayers = useMemo(() => {
     return layers
-      .filter((layer) => layer.visible && geoDataMap[`${layer.id}-${layer.url}`])
+      .filter((layer) => layer.visible && geoDataMap[`${layer.id}-${resolveLayerUrl(layer.url)}`])
       .map((layer) => {
-        const geoJson = geoDataMap[`${layer.id}-${layer.url}`];
+        const geoJson = geoDataMap[`${layer.id}-${resolveLayerUrl(layer.url)}`];
         if (!geoJson || !Array.isArray(geoJson.features)) return null;
         
         const filteredFeatures = geoJson.features.filter((f: any) => {

@@ -13,6 +13,9 @@ class ODP:
     lon: float
     houses: list = field(default_factory=list)
     splitter: Splitter = None
+    # ODC-xxx for a root distribution point, or ODP-xxx when this
+    # distribution point is fed through another ODP on the same ODC tree.
+    upstream_id: str = None
 
 
 @dataclass

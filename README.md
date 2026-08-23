@@ -16,6 +16,26 @@ Aplikasi web untuk membuat rancangan jaringan Fiber To The Home (FTTH) dari data
 - PostgreSQL + PostGIS untuk metadata project/design dan MinIO untuk file.
 - Better Auth, ownership project, signed proxy header, dan audit log.
 
+### Status data lokal saat ini
+
+Yang sudah tersedia di aplikasi:
+
+- Cache regional OSM di `cache/regions/` untuk buildings, road graph, dan POI.
+- Checkpoint OSM tiled di `checkpoints/osm_tiles/<boundary-fingerprint>/`.
+- Cache Network Core: `design_state.json`, `road_graph.pkl`, dan `core_manifest.json`.
+- Cache hasil generation dipisahkan berdasarkan user/project/batch/item sehingga data design antar-user tidak tercampur. Cache regional OSM di `cache/regions/` bersifat shared pada satu instance karena datanya berasal dari sumber publik.
+- Generate ulang dengan input dan konfigurasi yang sama pada scope cache yang sama dapat melewati OSM, clustering, dan routing.
+- Homepass membaca Network Core yang sudah tersimpan sehingga tidak melakukan routing ulang.
+- Routing feeder menggunakan cache endpoint bersama dan optimasi 2-opt tanpa menghitung ulang seluruh rantai pada setiap perubahan.
+
+Yang belum tersedia:
+
+- Belum ada database OSM offline seluruh Indonesia di PostGIS.
+- PostgreSQL/PostGIS saat ini terutama menyimpan metadata project, design, kabel, validasi, dan audit.
+- Jika area belum ada di cache lokal, generator masih mengambil data jalan/gedung dari OSM/Overpass.
+
+`cache/` adalah cache hasil query dan hasil design, bukan salinan lengkap peta seluruh Indonesia.
+
 ## Arsitektur
 
 ```text
@@ -40,6 +60,12 @@ FastAPI Backend :8000 ─── PostgreSQL/PostGIS
 | Worker | `backend/worker.py` | Menjalankan job panjang melalui ARQ/Redis |
 | Database | `backend/schema.prisma` | Schema PostgreSQL/PostGIS dan metadata design |
 | Storage | `backend/services/user_storage.py` | Cache lokal dan object storage MinIO |
+
+PostGIS belum menjadi sumber data OSM pada pipeline saat ini. Data jalan yang
+sudah diambil diproses menjadi graph NetworkX lokal karena engine routing utama
+menggunakan NetworkX agar hasil rute konsisten. Untuk deployment besar, PostGIS
+dapat dijadikan sumber data OSM bersama, lalu graph hanya dibuat untuk boundary
+dan corridor POP yang sedang diproses.
 
 ## Alur aplikasi
 
@@ -76,11 +102,19 @@ Validasi input
 
 Selama proses berjalan, boundary/POP dan project dikunci agar input tidak berubah di tengah job.
 
+Keputusan cache pada tahap ini:
+
+1. Sistem menghitung identitas dari file boundary, file POP, konfigurasi, dan versi algoritma.
+2. Jika `core_manifest.json` cocok pada scope cache yang sama dan Network Core lengkap, ODC/ODP serta jalur kabel yang sama dipakai kembali.
+3. Jika input atau konfigurasi berubah, cache Network Core ditolak.
+4. Pada cache miss, cache OSM tile tetap dipertahankan, tetapi clustering dan routing dijalankan ulang.
+5. Opsi **Refresh data OSM** melewati cache OSM dan juga tidak menggunakan cache Network Core.
+
 ### 3. Generate Homepass
 
 Setelah Network Core selesai, tombol **Generate Homepass** muncul. Tahap ini membaca cache Network Core dan tidak mengulang query OSM, clustering, atau routing utama.
 
-Output Homepass berisi folder HC, titik rumah, kabel langsung ODP → rumah, dan file KMZ/CSV baru. Jika cache core hilang, rusak, atau berasal dari generator lama, user harus menjalankan Generate Design ulang.
+Output Homepass berisi folder HC, titik rumah, kabel langsung ODP → rumah, dan file KMZ/CSV baru. Homepass memerlukan `design_state.json` versi lengkap beserta seluruh geometri distribusi. Jika cache core hilang, rusak, atau berasal dari generator lama, user harus menjalankan Generate Design ulang. `core_manifest.json` digunakan untuk mempercepat Generate Design berikutnya, bukan syarat utama Homepass.
 
 ### 4. Layer dan project
 
@@ -92,11 +126,35 @@ design:{batch_id}:{item_id}
 
 Metadata menyimpan nama design, boundary, group batch, status, dan URL output. Design lama tidak dihapus ketika design baru selesai.
 
+### Jalur kabel distribusi
+
+Distribusi dibuat sebagai tree di dalam ODC yang sama:
+
+```text
+POP -> ODC -> ODP utama -> ODP berikutnya
+```
+
+Setiap hop harus mengikuti road graph lokal, tidak membentuk kabel lurus palsu,
+tidak membentuk siklus, dan dibatasi `max_distribution_length_m` (default 500 m).
+Jika ODP berdekatan serta memiliki jalan valid, ODP dapat menjadi pass-through.
+Jika tidak ada jalan valid, perangkat ditandai tidak terhubung dan kabel palsu
+tidak dibuat. Semua ODP tetap dihitung terhadap kapasitas ODC.
+
+### Worker dan concurrency
+
+Request HTTP hanya membuat job. Proses berat dijalankan worker ARQ melalui Redis.
+Dalam Docker, worker embedded di backend dimatikan dan service `worker` dipakai
+sebagai worker terpisah. Satu worker default memproses maksimal dua job, sedangkan
+pengambilan tile OSM dan clustering memiliki worker thread internal yang jumlahnya
+dapat dikonfigurasi. Menambah concurrency meningkatkan throughput beberapa user,
+tetapi tidak selalu mempercepat satu design; terlalu banyak worker dapat berebut
+RAM/CPU dan memperlambat routing.
+
 ## Pipeline boundary besar
 
 Boundary dipecah menjadi tile dengan overlap kecil agar query OSM tidak terlalu besar. Rumah dari overlap difilter lagi terhadap polygon boundary asli. Setiap tile menyimpan checkpoint buildings dan road graph.
 
-Checkpoint utama:
+Tahap progress utama:
 
 ```text
 validated
@@ -108,7 +166,7 @@ core_export_done
 homepass_done
 ```
 
-Cache tile dipisahkan berdasarkan user, project, batch, item, dan fingerprint geometry. Retry dapat menggunakan tile yang masih valid sehingga tidak selalu mengulang seluruh query.
+Cache tile generation dipisahkan berdasarkan user, project, batch, item, dan fingerprint geometry. Retry dapat menggunakan tile yang masih valid sehingga tidak selalu mengulang seluruh query. Nama tahap di atas adalah status progress pipeline, sedangkan file checkpoint fisiknya berupa `.houses.json` dan `.roads.pkl` per tile.
 
 Cache OSM default berlaku 24 jam:
 
@@ -117,6 +175,27 @@ OSM_CACHE_MAX_AGE_SECONDS=86400
 ```
 
 Dashboard menyediakan opsi **Refresh data OSM** untuk memaksa fetch baru.
+
+### Rencana data OSM lokal skala besar
+
+Untuk menyediakan data jalan dan gedung seluruh Indonesia secara lokal, alur
+yang direkomendasikan adalah:
+
+```text
+OSM .pbf regional
+  -> PostgreSQL/PostGIS (source data bersama)
+  -> query jalan/gedung berdasarkan boundary + buffer POP
+  -> graph NetworkX per area
+  -> cache graph berdasarkan boundary dan versi data
+  -> generator
+```
+
+Arsitektur ini belum aktif sebagai default. Saat ini aplikasi masih memakai
+cache file lokal dan OSM/Overpass sebagai fallback. PostGIS dapat ditambahkan
+kemudian tanpa mengubah output generator, selama data jalan yang diberikan ke
+NetworkX tetap memiliki atribut dan geometri yang sama. Untuk seluruh Indonesia,
+gunakan extract regional atau per provinsi; jangan memuat seluruh graph Indonesia
+ke RAM setiap job.
 
 ## Endpoint penting
 
@@ -144,14 +223,22 @@ USER_CACHE_ROOT/
     {project_hash}/
       {batch_hash}/
         {item_hash}/
-          input/
-          checkpoints/
-          core/
-          homepass/
-          manifest.json
+          input/                  # batch input (jika batch)
+          boundary_*.kml
+          pop_*.kml
+          design_state.json
+          road_graph.pkl
+          core_manifest.json
+          checkpoints/osm_tiles/{boundary-fingerprint}/
+          core/                    # output batch
+          design_ftth_*.kmz
+          design_ftth_*.csv
 ```
 
-Path menggunakan hash scope, bukan input mentah user. Nama output diberi suffix item agar dua boundary bernama sama tidak saling menimpa.
+Path menggunakan hash scope, bukan input mentah user. Endpoint single menyimpan
+input dan output langsung pada scope item, sedangkan batch menyimpan input di
+`input/` dan output core di `core/`. Nama output diberi suffix timestamp/random
+atau item agar dua boundary bernama sama tidak saling menimpa.
 
 ## Menjalankan secara lokal
 
@@ -194,6 +281,9 @@ uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 
 `backend.main` menjalankan ARQ worker lokal saat startup. Jika menjalankan worker terpisah secara manual, pastikan tidak menjalankan worker duplikat yang tidak diperlukan.
 
+Pada Docker Compose, worker embedded backend otomatis dimatikan karena service
+`worker` berjalan terpisah.
+
 Worker manual:
 
 ```bash
@@ -218,7 +308,7 @@ Service Compose:
 - `redis`: queue dan progress;
 - `db`: PostgreSQL + PostGIS;
 - `minio`: object storage;
-- `graphhopper`: routing service opsional.
+- `graphhopper`: service routing opsional; generator utama tetap menggunakan NetworkX dan routing lokal secara default.
 
 ### Environment backend
 
@@ -239,9 +329,22 @@ REQUIRE_AUTH=true
 CORS_ORIGINS=http://localhost:3000
 
 OSM_CACHE_MAX_AGE_SECONDS=86400
+OSM_TILE_WORKERS=4
+CLUSTERING_ODP_WORKERS=15
+CLUSTERING_ODC_WORKERS=10
+ARQ_MAX_JOBS=2
 MAX_BATCH_FILES=100
 MAX_BATCH_FILE_BYTES=52428800
 ```
+
+Generator menyimpan checkpoint OSM lokal di `checkpoints/osm_tiles/` berdasarkan
+fingerprint boundary. Ini adalah cache data jalan/rumah, bukan database OSM
+offline penuh; tile baru tetap perlu diambil dari sumber OSM saat pertama kali
+dipakai. Setelah Network Core berhasil dibuat, `core_manifest.json` menyimpan
+identitas input, konfigurasi, dan versi algoritma. Generate Design dengan input
+yang sama dapat langsung memakai ODC/ODP serta jalur kabel yang tersimpan,
+sehingga tahap OSM, clustering, dan routing dilewati. Jika input atau konfigurasi
+berubah, cache turunan otomatis ditolak dan dibuat ulang.
 
 ### Environment frontend
 
@@ -321,7 +424,7 @@ Pastikan frontend dan backend memakai Redis database yang sama. Status progress 
 
 ### `Cache Network Core ... generator lama`
 
-Jalankan ulang **Generate Design** untuk boundary yang dipilih. Homepass hanya dapat berjalan jika `design_state.json`, distribution geometry, dan manifest core lengkap.
+Jalankan ulang **Generate Design** untuk boundary yang dipilih. Homepass hanya dapat berjalan jika `design_state.json` versi lengkap dan seluruh geometri distribusi tersedia. Manifest core hanya diperlukan agar Generate Design identik berikutnya dapat memakai cache turunan.
 
 ### OSM lambat atau gagal
 
@@ -358,23 +461,29 @@ Sebelum merge atau deploy, jalankan test backend, TypeScript check, build dashbo
 
 ## Struktur output
 
-Network Core:
+Network Core single:
 
 ```text
-FTTH_{boundary}_{timestamp}_core.kmz
-FTTH_{boundary}_{timestamp}_core.csv
+design_ftth_{timestamp}_{random}.kmz
+design_ftth_{timestamp}_{random}.csv
 ```
+
+Network Core batch menggunakan pola `FTTH_{boundary}_{timestamp}_{item}_core.kmz`
+dan `.csv` di folder `core/`.
 
 Homepass:
 
 ```text
-FTTH_{boundary}_{timestamp}_homepass.kmz
-FTTH_{boundary}_{timestamp}_homepass.csv
+design_ftth_{timestamp}_{random}.kmz
+design_ftth_{timestamp}_{random}.csv
 ```
+
+Homepass single memakai pola `design_ftth_homepass_{timestamp}_{random}`.
 
 Isi utama KMZ:
 
 ```text
+BOUNDARY
 OLT
 LINE FD
 ODC 01

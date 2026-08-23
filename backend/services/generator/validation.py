@@ -241,6 +241,83 @@ def _validate_connectivity(
         )
 
 
+def _validate_distribution_tree(
+    odcs: list[ODC],
+    distribution_segments: dict | None,
+    config: GenerationConfig,
+    result: ValidationResult,
+) -> None:
+    """Validate the persisted ODC/ODP distribution tree metadata."""
+    if distribution_segments is None:
+        return
+
+    for odc in odcs:
+        odp_ids = {odp.id for odp in odc.odps}
+        for odp in odc.odps:
+            segment = distribution_segments.get(odp.id)
+            if not segment or not segment.get("connected"):
+                result.add(
+                    ValidationIssue(
+                        severity="ERROR",
+                        code="DISCONNECTED_DISTRIBUTION",
+                        message=f"ODP {odp.id} tidak memiliki jalur distribusi yang terhubung.",
+                        details={"odp_id": odp.id, "odc_id": odc.id},
+                    )
+                )
+                continue
+
+            source_id = segment.get("source_id")
+            if source_id != odc.id and source_id not in odp_ids:
+                result.add(
+                    ValidationIssue(
+                        severity="ERROR",
+                        code="INVALID_DISTRIBUTION_PARENT",
+                        message=f"Upstream ODP {source_id} untuk {odp.id} berada di luar ODC {odc.id}.",
+                        details={"odp_id": odp.id, "odc_id": odc.id, "source_id": source_id},
+                    )
+                )
+
+            length_m = segment.get("length_m")
+            if length_m is not None and length_m > config.max_distribution_length_m:
+                result.add(
+                    ValidationIssue(
+                        severity="ERROR",
+                        code="DISTRIBUTION_LENGTH_EXCEEDED",
+                        message=(
+                            f"Jalur distribusi ke {odp.id} sepanjang {length_m:.0f}m "
+                            f"melewati batas {config.max_distribution_length_m:.0f}m."
+                        ),
+                        details={
+                            "odp_id": odp.id,
+                            "length_m": round(length_m, 1),
+                            "limit_m": config.max_distribution_length_m,
+                        },
+                    )
+                )
+
+        # Follow each parent chain to ensure the tree cannot contain a cycle.
+        for odp in odc.odps:
+            seen = set()
+            current = odp.id
+            while current in odp_ids:
+                if current in seen:
+                    result.add(
+                        ValidationIssue(
+                            severity="ERROR",
+                            code="DISTRIBUTION_CYCLE",
+                            message=f"Ditemukan siklus pada tree distribusi ODC {odc.id}.",
+                            details={"odc_id": odc.id, "odp_id": odp.id},
+                        )
+                    )
+                    break
+                seen.add(current)
+                current = getattr(
+                    next(item for item in odc.odps if item.id == current),
+                    "upstream_id",
+                    None,
+                )
+
+
 # ── Public API ──────────────────────────────────────────────────────
 
 
@@ -249,6 +326,7 @@ def validate_design(
     odcs: list[ODC],
     config: GenerationConfig,
     feeder_segments: list | None = None,
+    distribution_segments: dict | None = None,
 ) -> ValidationResult:
     """Run all validation checks and return the aggregated result."""
     result = ValidationResult()
@@ -258,6 +336,7 @@ def validate_design(
     _validate_radius(odcs, config, result)
     _validate_duplicate_assignments(odcs, result)
     _validate_connectivity(pop, odcs, feeder_segments, result)
+    _validate_distribution_tree(odcs, distribution_segments, config, result)
 
     return result
 
@@ -266,6 +345,7 @@ def compute_design_stats(
     pop: dict,
     odcs: list[ODC],
     feeder_segments: list | None = None,
+    distribution_segments: dict | None = None,
 ) -> dict[str, Any]:
     """Compute summary statistics for the generated design."""
     total_odp = sum(len(odc.odps) for odc in odcs)
@@ -275,8 +355,11 @@ def compute_design_stats(
     total_feeder_m = 0.0
     if feeder_segments:
         for seg in feeder_segments:
-            if isinstance(seg, (list, tuple)) and len(seg) >= 2:
+            if isinstance(seg, dict):
+                coords = seg.get("coords", [])
+            else:
                 coords = seg
+            if isinstance(coords, (list, tuple)) and len(coords) >= 2:
                 for i in range(len(coords) - 1):
                     if isinstance(coords[i], (list, tuple)) and isinstance(
                         coords[i + 1], (list, tuple)
@@ -296,10 +379,17 @@ def compute_design_stats(
             "house_count": sum(len(odp.houses) for odp in odc.odps)
         })
 
+    total_distribution_m = sum(
+        float(segment.get("length_m") or 0.0)
+        for segment in (distribution_segments or {}).values()
+        if segment.get("connected")
+    )
+
     return {
         "odc_count": len(odcs),
         "odp_count": total_odp,
         "customer_count": total_houses,
         "feeder_length_km": round(total_feeder_m / 1000, 2),
+        "distribution_length_km": round(total_distribution_m / 1000, 2),
         "odc_stats": odc_stats,
     }
