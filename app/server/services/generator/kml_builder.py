@@ -173,7 +173,6 @@ def export_kmz(
             elif road_graph and road_feeder:
                 path = route_along_road(
                     road_graph, (odc.lat, odc.lon), (odp.lat, odp.lon),
-                    use_external_routing=False,
                     route_cache=odp_route_cache,
                 )
                 if not path:
@@ -227,7 +226,6 @@ def export_kmz(
                 if road_graph and road_feeder and road_drop:
                     path = route_along_road(
                         road_graph, (odp.lat, odp.lon), (h_lat, h_lon),
-                        use_external_routing=False,
                         route_cache=odp_route_cache,
                     )
                     if not path:

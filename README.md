@@ -309,8 +309,7 @@ Service Compose:
 - `worker`: ARQ generation worker;
 - `redis`: queue dan progress;
 - `db`: PostgreSQL + PostGIS;
-- `seaweedfs`: object storage;
-- `graphhopper`: service routing opsional; generator utama tetap menggunakan NetworkX dan routing lokal secara default.
+- `seaweedfs`: object storage.
 
 ### Environment backend
 

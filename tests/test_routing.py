@@ -67,7 +67,6 @@ def test_route_along_road_default_returns_coordinate_list():
             graph,
             (0.0, 0.001),
             (0.0, 0.009),
-            use_external_routing=False,
         )
 
     assert isinstance(path, list)
