@@ -1181,7 +1181,7 @@ export default function Home() {
   const canGenerateHomepass = hasNetworkCore;
 
   return (
-    <div className="dashboard-container">
+    <div className="app-shell">
       {showVersionHistory && currentProjectId && (
         <VersionHistoryPanel
           projectId={currentProjectId}
