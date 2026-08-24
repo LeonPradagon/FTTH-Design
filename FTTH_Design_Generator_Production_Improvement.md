@@ -370,10 +370,8 @@ Routing Engine
 Application
 ```
 
-Pilihan routing:
-- OSRM
-- GraphHopper
-- Valhalla
+Routing yang dipilih:
+- NetworkX + OSMnx dengan road graph lokal per area
 
 Pemilihan final harus mempertimbangkan volume request, coverage, accuracy, cost, dan update frequency.
 
@@ -971,7 +969,7 @@ Database
 └── PostGIS
 
 Routing
-├── OSRM / GraphHopper / Valhalla
+├── NetworkX + OSMnx
 └── Road Graph Cache
 
 Storage

@@ -60,21 +60,6 @@ services:
       timeout: 3s
       retries: 10
 
-  graphhopper:
-    image: israelhikingmap/graphhopper:11.0
-    restart: unless-stopped
-    ports:
-      - "8989:8989"
-    environment:
-      JAVA_OPTS: -Xmx2g -Xms2g
-    volumes:
-      - graphhopper_data:/data
-    command:
-      - --url
-      - ${GRAPHHOPPER_PBF_URL:-https://download.geofabrik.de/asia/indonesia-latest.osm.pbf}
-      - --host
-      - 0.0.0.0
-
   server:
     build:
       context: .
@@ -86,7 +71,6 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-only-secret-that-is-at-least-32-characters}
       BACKEND_PROXY_SECRET: ${BACKEND_PROXY_SECRET:-dev-only-secret-that-is-at-least-32-characters}
       REDIS_URL: redis://redis:6379/0
-      GRAPHHOPPER_URL: http://graphhopper:8989
       USER_CACHE_ROOT: /workspace/app/server/cache/users
       RUN_EMBEDDED_WORKER: "false"
       STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL:-http://seaweedfs:8333}
@@ -146,4 +130,3 @@ services:
 volumes:
   postgres_data:
   seaweed_data:
-  graphhopper_data:

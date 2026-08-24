@@ -66,21 +66,6 @@ services:
       timeout: 3s
       retries: 10
 
-  graphhopper:
-    image: israelhikingmap/graphhopper:11.0
-    restart: unless-stopped
-    environment:
-      JAVA_OPTS: -Xmx2g -Xms2g
-    volumes:
-      - graphhopper_data:/data
-    command:
-      - --url
-      - ${GRAPHHOPPER_PBF_URL:-https://download.geofabrik.de/asia/indonesia-latest.osm.pbf}
-      - --host
-      - 0.0.0.0
-    networks:
-      - backend
-
   server:
     build:
       context: .
@@ -92,7 +77,6 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env.prod}
       BACKEND_PROXY_SECRET: ${BACKEND_PROXY_SECRET:?Set BACKEND_PROXY_SECRET in .env.prod}
       REDIS_URL: redis://redis:6379/0
-      GRAPHHOPPER_URL: http://graphhopper:8989
       USER_CACHE_ROOT: /workspace/app/server/cache/users
       RUN_EMBEDDED_WORKER: "false"
       STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL:-http://seaweedfs:8333}
@@ -134,7 +118,6 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-ftth}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ftth}?schema=public
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env.prod}
       REDIS_URL: redis://redis:6379/0
-      GRAPHHOPPER_URL: http://graphhopper:8989
       USER_CACHE_ROOT: /workspace/app/server/cache/users
       STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL:-http://seaweedfs:8333}
       STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:-ftth-local}
@@ -195,4 +178,3 @@ volumes:
   generated_data:
   backend_cache:
   seaweed_data:
-  graphhopper_data:

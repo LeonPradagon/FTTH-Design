@@ -92,7 +92,6 @@ def route_along_road(
     G,
     from_latlon,
     to_latlon,
-    use_external_routing=False,
     route_cache=None,
     return_metadata=False,
 ):
@@ -100,8 +99,6 @@ def route_along_road(
     dengan menelusuri geometri jalan secara presisi."""
     import networkx as nx
     import osmnx as ox
-    import requests
-    import os
     from shapely.geometry import Point as ShPoint
     from shapely.ops import substring
 
@@ -131,29 +128,6 @@ def route_along_road(
         cached = cached_routes.get(route_key)
         if cached is not None:
             return cached if return_metadata else result_coords(cached)
-
-    # GraphHopper is useful for a small number of feeder routes, but calling
-    # it once for every HC/drop cable makes large exports spend up to the
-    # HTTP timeout on every cable when the service is unavailable. Exporters
-    # can disable it and use the already loaded local graph directly.
-    if use_external_routing:
-        gh_url = os.getenv("GRAPHHOPPER_URL", "http://localhost:8989")
-        try:
-            res = requests.get(
-                f"{gh_url}/route?point={from_latlon[0]},{from_latlon[1]}&point={to_latlon[0]},{to_latlon[1]}&profile=car&points_encoded=false",
-                timeout=2
-            )
-            if res.status_code == 200:
-                data = res.json()
-                if data.get("paths"):
-                    coords = data["paths"][0]["points"]["coordinates"]
-                    # GraphHopper mengembalikan [lon, lat], kita butuh [lat, lon]
-                    result = route_result([(lat, lon) for lon, lat in coords])
-                    if route_cache is not None and return_metadata:
-                        route_cache.setdefault("routes", {})[route_key] = result
-                    return result if return_metadata else result_coords(result)
-        except Exception as e:
-            logger.debug(f"GraphHopper routing skipped/failed: {e}. Fallback to networkx.")
 
     def trace_edge_line(line, p1, p2):
         t1 = line.project(ShPoint(p1[1], p1[0]))
@@ -648,7 +622,6 @@ def build_distribution_tree(odc, road_graph, max_distance_m=500.0):
                 road_graph,
                 source_point,
                 target_point,
-                use_external_routing=False,
                 route_cache=route_cache,
                 return_metadata=True,
             )
