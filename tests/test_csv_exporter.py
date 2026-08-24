@@ -1,8 +1,8 @@
 import pytest
 import os
 import csv
-from backend.services.generator.models import ODC, ODP, Splitter
-from backend.services.generator.csv_exporter import export_csv
+from server.services.generator.models import ODC, ODP, Splitter
+from server.services.generator.csv_exporter import export_csv
 
 @pytest.fixture
 def sample_data():
@@ -21,14 +21,14 @@ def sample_data():
 def test_export_csv(tmp_path, sample_data):
     pop, odcs, feeder_segments = sample_data
     out_path = tmp_path / "design.csv"
-    
+
     export_csv(pop, odcs, feeder_segments, str(out_path))
-    
+
     assert os.path.exists(out_path)
     with open(out_path, "r", newline="") as f:
         reader = csv.reader(f)
         rows = list(reader)
-        
+
         # Check columns
-        
+
         text = "\n".join([",".join(r) for r in rows])

@@ -2,12 +2,12 @@
 
 import pytest
 
-from backend.services.generator.clustering import (
+from server.services.generator.clustering import (
     capacitated_clustering,
     centroid_of,
     build_design,
 )
-from backend.services.generator.generation_config import GenerationConfig
+from server.services.generator.generation_config import GenerationConfig
 
 
 class TestCapacitatedClustering:
@@ -45,6 +45,13 @@ class TestCapacitatedClustering:
         clusters = capacitated_clustering(points, 8)
         all_indices = sorted(idx for cluster in clusters for idx in cluster)
         assert all_indices == list(range(37))
+
+    def test_minimum_cluster_size_rebalances_the_last_cluster(self):
+        points = [(i, i) for i in range(11)]
+
+        clusters = capacitated_clustering(points, capacity=10, min_size=5)
+
+        assert sorted(map(len, clusters)) == [5, 6]
 
     def test_deterministic(self):
         """Same input → same output (seed=42)."""

@@ -1,0 +1,102 @@
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+import asyncio
+import os
+from contextlib import asynccontextmanager
+
+from server.api.routes import audit, files, generation, projects, versions
+from server.core.logging import logger
+from server.core.errors import FTTHError
+from server.core.response import error_response
+from server.database import db
+from server.storage.dependencies import get_object_storage
+
+import subprocess
+import sys
+
+worker_process = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global worker_process
+    await asyncio.to_thread(get_object_storage().ensure_bucket)
+    await db.connect()
+    # Local development can use an embedded worker for convenience. In
+    # production/Docker the worker is a separate service; starting another
+    # one inside every API replica wastes CPU and competes for the same queue.
+    if os.getenv("RUN_EMBEDDED_WORKER", "true").lower() == "true":
+        worker_process = subprocess.Popen(
+            [sys.executable, "-m", "arq", "server.worker.WorkerSettings"],
+            env=os.environ.copy()
+        )
+        logger.info("Local arq worker started.")
+    else:
+        logger.info("Embedded arq worker disabled; using separate worker service.")
+
+    try:
+        yield
+    finally:
+        await db.disconnect()
+        if worker_process:
+            worker_process.terminate()
+            worker_process.wait()
+            worker_process = None
+            logger.info("Local arq worker terminated.")
+
+app = FastAPI(title="FTTH Design Generator API", lifespan=lifespan)
+
+
+# ── Global exception handlers ──────────────────────────────────────
+
+
+@app.exception_handler(FTTHError)
+async def ftth_error_handler(request: Request, exc: FTTHError):
+    """Translate any FTTHError subclass into the standard error envelope."""
+    logger.warning(
+        "FTTHError [%s] %s — %s", exc.code, exc.message, exc.details or ""
+    )
+    return error_response(
+        code=exc.code,
+        message=exc.message,
+        details=exc.details if exc.details else None,
+        http_status=exc.http_status,
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_error_handler(request: Request, exc: Exception):
+    """Catch-all for unexpected exceptions — log full traceback."""
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    return error_response(
+        code="INTERNAL_ERROR",
+        message="An unexpected error occurred.",
+        http_status=500,
+    )
+
+
+# The Next.js proxy normally talks to this service server-to-server, but keep
+# direct browser access safe for local tooling as well.  Production deployments
+# should set CORS_ORIGINS to a comma-separated allow-list.
+cors_origins = [origin.strip() for origin in os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001",
+).split(",") if origin.strip()]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+app.include_router(files.router)
+app.include_router(projects.router)
+app.include_router(generation.router)
+app.include_router(versions.router)
+app.include_router(audit.router)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("server.main:app", host="0.0.0.0", port=8000, reload=True)

@@ -1,0 +1,15 @@
+shapely
+simplekml
+osmnx
+scikit-learn
+numpy
+fastapi
+uvicorn
+python-multipart
+
+python-dotenv
+pydantic-settings
+prisma
+arq
+redis
+boto3

@@ -3,8 +3,8 @@
 import pytest
 from pydantic import ValidationError
 
-from backend.services.generator.generation_config import GenerationConfig
-from backend.services.generator.models import Splitter, ODP, ODC
+from server.services.generator.generation_config import GenerationConfig
+from server.services.generator.models import Splitter, ODP, ODC
 
 
 class TestGenerationConfig:
@@ -16,7 +16,7 @@ class TestGenerationConfig:
         assert config.max_odc_radius_m == 500.0
         assert config.max_feeder_length_m == 2000.0
         assert config.max_distribution_length_m == 500.0
-        assert config.snapping_distance_m == 50.0
+        assert config.snapping_distance_m == 100.0
         assert config.routing_strategy == "shortest"
 
     def test_custom_values(self):

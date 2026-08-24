@@ -67,7 +67,7 @@ Arsitektur saat ini menggunakan Next.js → FastAPI → PostgreSQL, sementara Fa
               ┌─────▼─────┐   ┌─────▼─────┐   ┌─────▼─────┐
               │  Object    │   │   Cache   │   │   OSM /   │
               │  Storage   │   │   Redis   │   │  Routing  │
-              │ S3 / MinIO │   │           │   │  Service  │
+              │ S3 / SeaweedFS │   │           │   │  Service  │
               └────────────┘   └───────────┘   └───────────┘
 ```
 
@@ -216,7 +216,7 @@ Jangan bergantung pada local filesystem aplikasi.
 
 Gunakan:
 - S3
-- MinIO
+- SeaweedFS
 - Cloudflare R2
 - object storage cloud lain
 
@@ -370,10 +370,8 @@ Routing Engine
 Application
 ```
 
-Pilihan routing:
-- OSRM
-- GraphHopper
-- Valhalla
+Routing yang dipilih:
+- NetworkX + OSMnx dengan road graph lokal per area
 
 Pemilihan final harus mempertimbangkan volume request, coverage, accuracy, cost, dan update frequency.
 
@@ -971,11 +969,11 @@ Database
 └── PostGIS
 
 Routing
-├── OSRM / GraphHopper / Valhalla
+├── NetworkX + OSMnx
 └── Road Graph Cache
 
 Storage
-└── S3 / MinIO
+└── S3 / SeaweedFS
 
 Infrastructure
 ├── Docker

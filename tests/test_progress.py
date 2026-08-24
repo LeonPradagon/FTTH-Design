@@ -1,11 +1,12 @@
 import pytest
 import json
 from unittest.mock import MagicMock, patch
-from backend.services.generator.progress import ProgressManager
+from server.services.generator.progress import ProgressManager
 
 @pytest.fixture
 def mock_redis():
-    with patch("backend.services.generator.progress.redis.from_url") as mock:
+    with patch("server.services.generator.progress.redis.from_url") as mock:
+        mock.return_value.get.return_value = None
         yield mock.return_value
 
 def test_create_job(mock_redis):
@@ -27,6 +28,14 @@ def test_update_job(mock_redis):
     state = json.loads(args[2])
     assert state["stage"] == "CLUSTERING"
     assert state["percent"] == 50
+
+def test_update_preserves_job_owner(mock_redis):
+    mock_redis.get.return_value = json.dumps({"user_id": "user-1", "batch_id": "batch-1"})
+    pm = ProgressManager()
+    pm.update("test_job", "ROUTING", "Routing...", 75)
+    state = json.loads(mock_redis.setex.call_args.args[2])
+    assert state["user_id"] == "user-1"
+    assert state["batch_id"] == "batch-1"
 
 def test_get_status(mock_redis):
     mock_redis.get.return_value = json.dumps({"stage": "ROUTING", "percent": 75, "done": False, "message": "Routing..."})
