@@ -108,6 +108,14 @@ body {
   overflow: hidden;
 }
 
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
 .mt-4 {
   margin-top: 1rem;
 }
