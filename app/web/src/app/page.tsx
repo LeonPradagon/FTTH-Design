@@ -78,6 +78,12 @@ const toProxyApiUrl = (url: string) => {
   return url;
 };
 
+const isGeneratedDesignLayer = (layer: LayerConfig) => (
+  layer.id === "design"
+  || layer.id.startsWith("design:single:")
+  || layer.id.startsWith("design:batch:")
+);
+
 export default function Home() {
   const { data: session, isPending } = useSession();
   const router = useRouter();
@@ -94,7 +100,17 @@ export default function Home() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<{ stage: string, message: string, percent: number } | null>(null);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
-  const [generationConfig, setGenerationConfig] = useState<GenerationConfig>(DEFAULT_CONFIG);
+  const [generationConfig, setGenerationConfig] = useState<GenerationConfig>(() => {
+    if (typeof window === "undefined") return DEFAULT_CONFIG;
+    try {
+      const stored = JSON.parse(window.localStorage.getItem("ftth_generation_config:last") || "null");
+      return stored && typeof stored === "object"
+        ? ({ ...DEFAULT_CONFIG, ...stored } as GenerationConfig)
+        : DEFAULT_CONFIG;
+    } catch {
+      return DEFAULT_CONFIG;
+    }
+  });
   const [designStats, setDesignStats] = useState<DesignStats | null>(null);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [isRegeneratingCables, setIsRegeneratingCables] = useState(false);
@@ -128,7 +144,18 @@ export default function Home() {
   const projectNameRef = useRef("");
   const projectSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const projectContextRef = useRef(0);
+  const generationConfigRef = useRef<GenerationConfig>(DEFAULT_CONFIG);
+  const sessionUserId = (session?.user as { id?: string } | undefined)?.id;
+  const generationConfigStorageKey = sessionUserId
+    ? `ftth_generation_config:${sessionUserId}`
+    : null;
 
+  useEffect(() => {
+    generationConfigRef.current = generationConfig;
+  }, [generationConfig]);
+
+  // Keep a per-user browser copy as a fallback before a project is opened.
+  // The project database value remains canonical once a project is loaded.
   const handleTreeLoaded = useCallback((layerId: string, tree: KmlNode[]) => {
     setKmlTrees(prev => ({ ...prev, [layerId]: tree }));
   }, []);
@@ -277,6 +304,7 @@ export default function Home() {
     name: string,
     overrideLayers?: LayerConfig[],
     overrideFilters?: FeatureFilters,
+    overrideGenerationConfig?: GenerationConfig,
   ) => {
     // Serialize writes. The first save may be a POST; every queued save then
     // observes the newly returned id and becomes a PUT to that same project.
@@ -290,7 +318,8 @@ export default function Home() {
           name,
           layers: overrideLayers || layers,
           filters: overrideFilters || filters,
-          feature_colors: featureColors
+          feature_colors: featureColors,
+          generation_config: overrideGenerationConfig || generationConfigRef.current,
         };
 
         const activeProjectId = currentProjectIdRef.current;
@@ -322,6 +351,21 @@ export default function Home() {
     return projectSaveQueueRef.current;
   };
 
+  const handleConfigSave = (newConfig: GenerationConfig) => {
+    generationConfigRef.current = newConfig;
+    setGenerationConfig(newConfig);
+    if (typeof window !== "undefined") {
+      const serializedConfig = JSON.stringify(newConfig);
+      window.localStorage.setItem("ftth_generation_config:last", serializedConfig);
+      if (generationConfigStorageKey) {
+        window.localStorage.setItem(generationConfigStorageKey, serializedConfig);
+      }
+    }
+    if (currentProjectIdRef.current) {
+      saveProject(projectNameRef.current || "Untitled Project", undefined, undefined, newConfig).catch(console.error);
+    }
+  };
+
   const loadProject = async (id: string) => {
     try {
       const res = await fetch(`/api/proxy/api/projects/${id}`);
@@ -341,6 +385,32 @@ export default function Home() {
         }
         return (val as T) || fallback;
       };
+
+      let savedGenerationConfig = parseJson<Partial<GenerationConfig>>(data.generation_config, {});
+      // Older projects did not have a project-level config field. Recover
+      // their last generated config from DesignVersion before falling back to
+      // defaults, so an existing project does not silently reset.
+      if (!Object.keys(savedGenerationConfig).length) {
+        try {
+          const versionsResponse = await fetch(`/api/proxy/api/projects/${data.id}/versions`);
+          if (versionsResponse.ok) {
+            const versionsPayload = await versionsResponse.json();
+            const latestVersion = (versionsPayload.data || [])[0];
+            savedGenerationConfig = latestVersion?.config || {};
+          }
+        } catch {
+          // The project itself can still be loaded when version history is unavailable.
+        }
+      }
+      const restoredGenerationConfig = {
+        ...DEFAULT_CONFIG,
+        ...(Object.keys(savedGenerationConfig).length ? savedGenerationConfig : {}),
+      } as GenerationConfig;
+      generationConfigRef.current = restoredGenerationConfig;
+      setGenerationConfig(restoredGenerationConfig);
+      if (generationConfigStorageKey && typeof window !== "undefined") {
+        window.localStorage.setItem(generationConfigStorageKey, JSON.stringify(restoredGenerationConfig));
+      }
 
       const rawLayers = parseJson(data.layers, []);
       const uniqueLayers = rawLayers.map((l: LayerConfig, index: number) => {
@@ -388,6 +458,10 @@ export default function Home() {
         return layer;
       });
 
+      // Trees belong to the currently opened project's KML sources. Clear
+      // the previous project's tree so cached map data cannot hide the
+      // expand control while the new project's tree is being restored.
+      setKmlTrees({});
       setLayers(normalizedLayers);
       // Project yang sudah memiliki layer FTTH Design dianggap memiliki
       // kandidat Network Core. Endpoint Homepass tetap memvalidasi cache
@@ -823,6 +897,7 @@ export default function Home() {
         rememberJob(jobId);
 
         let eventSource: EventSource | null = null;
+        let completionHandled = false;
         const handleProgress = (event: MessageEvent) => {
           const pData = JSON.parse(event.data);
           if (pData.error) {
@@ -835,6 +910,8 @@ export default function Home() {
           }
           setGenerationProgress({ stage: pData.stage, message: pData.message, percent: pData.percent });
           if (pData.done) {
+            if (completionHandled) return;
+            completionHandled = true;
             eventSource?.close();
             setTimeout(() => setGenerationProgress(null), 1500);
             setIsGenerating(false);
@@ -862,7 +939,16 @@ export default function Home() {
                   status: "COMPLETED",
                 };
 
-                const newLayers = [...prev, newDesign];
+                // A new generation for the same boundary replaces the
+                // previous design layer. Keeping both visible makes cables
+                // from different generations overlap and look disconnected.
+                const newLayers = [
+                  ...prev.filter(layer => !(
+                    isGeneratedDesignLayer(layer)
+                    && (layer.groupId === designGroupId || layer.id === "design")
+                  )),
+                  newDesign,
+                ];
                 setFilters(prevFilters => {
                   const generatedFilters = { ...prevFilters, showHouse: false };
                   // We do the side effect here safely because this block only runs once per job completion
@@ -885,6 +971,24 @@ export default function Home() {
           }
         };
 
+        // If the proxy closes the SSE connection just as the worker writes
+        // COMPLETED, recover the persisted result instead of leaving the map
+        // without the newly generated layer.
+        const recoverCompletedJob = async () => {
+          try {
+            const statusResponse = await fetch(`/api/proxy/generate/status/${encodeURIComponent(jobId)}`, { cache: "no-store" });
+            if (!statusResponse.ok) return;
+            const statusPayload = await statusResponse.json();
+            if (statusPayload.data) {
+              handleProgress(new MessageEvent("message", {
+                data: JSON.stringify(statusPayload.data),
+              }));
+            }
+          } catch (error) {
+            console.warn("Tidak dapat memulihkan hasil generate:", error);
+          }
+        };
+
         const response = await fetch("/api/proxy/generate", {
           method: "POST",
           body: formData,
@@ -896,6 +1000,11 @@ export default function Home() {
           // Open SSE only after the POST succeeds to avoid reading the state too early.
           eventSource = new EventSource(`/api/proxy/generate/progress/${jobId}`);
           eventSource.onmessage = handleProgress;
+          eventSource.onerror = () => {
+            if (eventSource?.readyState === EventSource.CLOSED && !completionHandled) {
+              void recoverCompletedJob();
+            }
+          };
           addToast("Pembuatan desain FTTH sedang berjalan di latar belakang...", "info");
         } else {
           addToast("Generation failed: " + (resp.error?.message || resp.detail), "error");
@@ -1189,7 +1298,7 @@ export default function Home() {
           canMutate={canChangeProjects}
           onLoadVersion={(v) => {
             // Re-apply config
-            setGenerationConfig({ ...DEFAULT_CONFIG, ...v.config });
+            handleConfigSave({ ...DEFAULT_CONFIG, ...v.config });
             addToast(`Config untuk versi ${v.version} berhasil dimuat. Silakan Generate ulang.`, 'success');
             // We can't automatically fetch the old KML since we don't have object storage yet,
             // but we can set the stats
@@ -1316,7 +1425,7 @@ export default function Home() {
         isOpen={isConfigModalOpen}
         onClose={() => setIsConfigModalOpen(false)}
         config={generationConfig}
-        onSave={setGenerationConfig}
+        onSave={handleConfigSave}
       />
       <Navbar
         onImportLayer={handleImportLayer}

@@ -309,7 +309,11 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
     layers.forEach(async (layer) => {
       const layerUrl = resolveLayerUrl(layer.url);
       const cacheKey = `${layer.id}-${layerUrl}`;
-      if (!layer.visible || geoDataMap[cacheKey] || loadingKeysRef.current.has(cacheKey)) return;
+      // A layer can already have GeoJSON cached while its KML tree is not
+      // available (for example after switching projects). In that case we
+      // still need to fetch/parse the source so the sidebar can show folders.
+      const hasCachedTree = Boolean(kmlTrees?.[layer.id]);
+      if (!layer.visible || (geoDataMap[cacheKey] && hasCachedTree) || loadingKeysRef.current.has(cacheKey)) return;
 
       loadingKeysRef.current.add(cacheKey);
       try {
@@ -403,12 +407,20 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
           loadingKeysRef.current.delete(cacheKey);
         }
     });
-  }, [layers, geoDataMap, onTreeLoaded]);
+  }, [layers, geoDataMap, kmlTrees, onTreeLoaded]);
 
   const deckLayers = useMemo(() => {
-    return layers
+    // Boundary is an area overlay, not an interactive network feature. Keep
+    // it below network layers so it cannot intercept cable hover events.
+    const orderedLayers = [...layers].sort((left, right) => {
+      const leftIsBoundary = left.id === "boundary" ? 0 : 1;
+      const rightIsBoundary = right.id === "boundary" ? 0 : 1;
+      return leftIsBoundary - rightIsBoundary;
+    });
+
+    return orderedLayers
       .filter((layer) => layer.visible && geoDataMap[`${layer.id}-${resolveLayerUrl(layer.url)}`])
-      .map((layer) => {
+      .flatMap((layer) => {
         const geoJson = geoDataMap[`${layer.id}-${resolveLayerUrl(layer.url)}`];
         if (!geoJson || !Array.isArray(geoJson.features)) return null;
         
@@ -442,18 +454,45 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
             properties: f.properties || {}
         }));
 
-        const data: GeoJSON.FeatureCollection = {
-           type: "FeatureCollection",
-           features: validFeatures
-        };
+        const cableFeatures = validFeatures.filter((feature) =>
+          feature.geometry?.type === "LineString" || feature.geometry?.type === "MultiLineString"
+        );
+        // Generated KMZ files contain the boundary polygon in the same
+        // document as the network. Keep polygons separate so they cannot
+        // cover or intercept the cable layer.
+        const areaFeatures = validFeatures.filter((feature) =>
+          feature.geometry?.type === "Polygon" || feature.geometry?.type === "MultiPolygon"
+        );
+        const deviceFeatures = validFeatures.filter((feature) =>
+          feature.geometry?.type !== "LineString"
+          && feature.geometry?.type !== "MultiLineString"
+          && feature.geometry?.type !== "Polygon"
+          && feature.geometry?.type !== "MultiPolygon"
+        );
 
-        return new GeoJsonLayer({
-          id: `geojson-${layer.id}-${layer.url}`,
-          data: data,
-          pickable: true,
+        const createGeoJsonLayer = (
+          features: GeoJSON.Feature[],
+          suffix: "areas" | "devices" | "cables",
+        ) => new GeoJsonLayer({
+          // Cables are kept in a separate layer so the device layer can be
+          // rendered after it. The marker must remain on top of the cable.
+          id: `geojson-${layer.id}-${layer.url}-${suffix}`,
+          data: {
+            type: "FeatureCollection",
+            features,
+          },
+          // Boundary polygons are visual context only. They must never win
+          // the picking test over a cable.
+          pickable: suffix !== "areas",
           stroked: true,
           filled: true,
           lineWidthUnits: 'pixels',
+          // Keep road-constrained cables visually continuous at joins and
+          // endpoints. The geometry still comes from the generated KML; this
+          // only prevents thin square caps from looking like broken cables.
+          lineCapRounded: true,
+          lineJointRounded: true,
+          lineWidthMinPixels: 3,
           pointRadiusUnits: 'pixels',
           getFillColor: (f: any) => {
             const classification = classifyFeature(f, layer);
@@ -488,6 +527,8 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
           },
           getLineWidth: (f: any) => {
             if (f.geometry?.type === "Point") return 1; 
+            const classification = classifyFeature(f, layer);
+            if (classification.isFeeder || classification.isDistribution) return 4;
             return 3;
           },
           pointType: 'icon',
@@ -529,7 +570,14 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
           },
           onHover: (info) => setHoverInfo(info),
         });
+
+        return [
+          createGeoJsonLayer(areaFeatures, "areas"),
+          createGeoJsonLayer(cableFeatures, "cables"),
+          createGeoJsonLayer(deviceFeatures, "devices"),
+        ];
       })
+      .flat()
       .filter(Boolean);
   }, [layers, geoDataMap, filters, treeVisibility, featureColors]);
 

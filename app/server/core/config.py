@@ -1,9 +1,15 @@
+import os
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from server.core.paths import SERVER_DIR
 
+# Pastikan environment variables masuk ke os.environ untuk Prisma
+load_dotenv(dotenv_path=os.path.join(SERVER_DIR, "..", "..", ".env"))
+load_dotenv(dotenv_path=os.path.join(SERVER_DIR, "..", ".env"))
+load_dotenv(dotenv_path=os.path.join(SERVER_DIR, ".env"))
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=(".env", "../.env", "../../.env"), extra="ignore")
 
     database_url: str = f"sqlite:///{SERVER_DIR / 'ftth.db'}"
     better_auth_secret: str

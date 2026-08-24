@@ -29,17 +29,23 @@ from server.services.generator.routing import (
     prepare_road_graph,
     route_along_road,
     snap_to_road,
+    arrange_odps_around_odc,
+    rebalance_odps_by_road_connectivity,
     build_distribution_tree,
 )
 from server.services.generator.kml_builder import export_kmz
 from server.services.generator.csv_exporter import export_csv
-from server.services.generator.kml_parser import read_custom_mapped_kml
+from server.services.generator.kml_parser import read_custom_mapped_kml, read_pop_point
 from server.utils.geometry import haversine_m
 from server.services.generator.progress import progress_manager
 
 CACHE_DIR = os.path.abspath("cache")
-NETWORK_STATE_VERSION = 3
-CORE_MANIFEST_VERSION = 1
+# A cached core is only reusable when its cable geometry was produced by the
+# current connectivity checks. Bumping these versions invalidates cores made
+# before endpoint/parent validation was enforced.
+NETWORK_STATE_VERSION = 4
+CORE_MANIFEST_VERSION = 2
+DEFAULT_MAX_DISTRIBUTION_LENGTH_M = 500.0
 
 
 def _report_export_progress(job_id, done, total, message):
@@ -53,6 +59,88 @@ def _report_export_progress(job_id, done, total, message):
     fraction = done / total if total else 1
     percent = 85 + min(2, int(fraction * 2))
     progress_manager.update(job_id, "EXPORTING", message, percent)
+
+
+def _require_distribution_connectivity(odcs, distribution_segments):
+    """Fail clearly instead of exporting a design with silently missing ODPs.
+
+    ``build_distribution_tree`` already retries valid road routes. This final
+    check makes any remaining impossible connection visible to the caller and
+    prevents an apparently successful KMZ from hiding an unconnected ODP.
+    """
+    missing = []
+    invalid = []
+    for odc in odcs:
+        odp_by_id = {odp.id: odp for odp in odc.odps}
+        valid_source_ids = set(odp_by_id) | {odc.id}
+        for odp in odc.odps:
+            segment = distribution_segments.get(odp.id)
+            if not segment or not segment.get("connected") or len(segment.get("coords") or []) < 2:
+                missing.append(f"{odp.id} (ODC {odc.id})")
+                continue
+
+            source_id = segment.get("source_id")
+            target_id = segment.get("target_id")
+            coords = segment.get("coords") or []
+            if source_id not in valid_source_ids or target_id != odp.id:
+                invalid.append(
+                    f"{odp.id} (parent {source_id or '?'}, target {target_id or '?'})"
+                )
+                continue
+
+            source_point = odc if source_id == odc.id else odp_by_id[source_id]
+            start_error_m = haversine_m(
+                coords[0][0], coords[0][1], source_point.lat, source_point.lon
+            )
+            end_error_m = haversine_m(
+                coords[-1][0], coords[-1][1], odp.lat, odp.lon
+            )
+            # route_along_road explicitly restores both requested endpoints.
+            # A larger mismatch means a stale/corrupt path, not a harmless
+            # projection difference, and must never be exported.
+            if start_error_m > 2.0 or end_error_m > 2.0:
+                invalid.append(
+                    f"{odp.id} (ujung {start_error_m:.1f}m/{end_error_m:.1f}m)"
+                )
+
+        # Every parent chain must terminate at this ODC. This catches a
+        # segment set that has one line per ODP but still contains a cycle or
+        # a parent from another ODC.
+        for odp in odc.odps:
+            seen = set()
+            current = odp.id
+            while current != odc.id:
+                if current in seen:
+                    invalid.append(f"{odp.id} (siklus parent)")
+                    break
+                seen.add(current)
+                parent_segment = distribution_segments.get(current)
+                parent_id = parent_segment.get("source_id") if parent_segment else None
+                if not parent_segment or not parent_segment.get("connected") or parent_id not in valid_source_ids:
+                    invalid.append(f"{odp.id} (rantai berhenti di {current})")
+                    break
+                current = parent_id
+    if missing:
+        preview = ", ".join(missing[:12])
+        suffix = " ..." if len(missing) > 12 else ""
+        raise RoutingFailedError(
+            message=(
+                f"{len(missing)} ODP belum tersambung ke jaringan jalan: {preview}{suffix}. "
+                "Routing sudah mencoba jalan satu arah dan dua arah; periksa posisi ODP/ODC "
+                "agar menempel pada jalan kendaraan yang sama. Kabel lurus otomatis tidak dibuat "
+                "karena dapat melewati bangunan."
+            ),
+        )
+    if invalid:
+        preview = ", ".join(invalid[:12])
+        suffix = " ..." if len(invalid) > 12 else ""
+        raise RoutingFailedError(
+            message=(
+                f"{len(invalid)} segmen distribusi memiliki endpoint atau parent yang tidak valid: "
+                f"{preview}{suffix}. Cache kabel lama dibuang; jalankan generate ulang "
+                "agar setiap kabel dibangun ulang dari ODC ke ODP melalui jalan."
+            ),
+        )
 
 
 def _build_generation_tiles(boundary, tile_size_deg=0.05, overlap_deg=0.002):
@@ -251,6 +339,60 @@ def _distribution_length(coords):
     )
 
 
+def _has_overlong_distribution_segments(distribution_segments, max_length_m):
+    """Return whether a cached distribution path exceeds the design limit.
+
+    Older caches can contain a connected path whose endpoints are valid but
+    whose parent ODC is on the wrong side of a road barrier. Endpoint
+    validation alone cannot detect that case, so it must be treated as a
+    stale mapping and routed again.
+    """
+    for segment in (distribution_segments or {}).values():
+        if not isinstance(segment, dict):
+            continue
+        length_m = segment.get("length_m")
+        if length_m is None and segment.get("coords"):
+            length_m = _distribution_length(segment["coords"])
+        try:
+            if length_m is not None and float(length_m) > max_length_m:
+                return True
+        except (TypeError, ValueError):
+            return True
+    return False
+
+
+def _distribution_limit_from_state(state):
+    """Read the persisted distribution limit with a safe legacy default."""
+    try:
+        value = float((state or {}).get(
+            "max_distribution_length_m",
+            DEFAULT_MAX_DISTRIBUTION_LENGTH_M,
+        ))
+        if value > 0:
+            return value
+    except (TypeError, ValueError):
+        pass
+    return DEFAULT_MAX_DISTRIBUTION_LENGTH_M
+
+
+def _infer_odc_capacity(odcs, default=4):
+    """Read the persisted ODC splitter capacity for cache repair.
+
+    Older design states do not store the full GenerationConfig, but they do
+    persist each ODC splitter ratio (normally ``1:4``). Using that value lets
+    cache migration rebalance ODPs without exceeding the original ODC
+    capacity.
+    """
+    capacities = []
+    for odc in odcs:
+        ratio = getattr(getattr(odc, "splitter", None), "ratio", "") or ""
+        try:
+            capacities.append(int(str(ratio).split(":", 1)[1]))
+        except (IndexError, TypeError, ValueError):
+            continue
+    return max(capacities or [default])
+
+
 def _normalize_distribution_segments(distribution_segments, odcs):
     """Normalize new metadata and legacy target_id -> coords cache values."""
     normalized = {}
@@ -294,6 +436,7 @@ def save_design_state(
     feeder_segments=None,
     distribution_segments=None,
     boundary=None,
+    distribution_max_length_m=None,
 ):
     """Simpan posisi POP, ODC, ODP, dan rumah ke file JSON, serta road graph
     ke pickle. Ini memungkinkan regenerate kabel tanpa menjalankan ulang
@@ -308,6 +451,8 @@ def save_design_state(
         "feeder_segments": feeder_segments or [],
         "distribution_segments": {},
     }
+    if distribution_max_length_m is not None:
+        state["max_distribution_length_m"] = float(distribution_max_length_m)
     if boundary is not None:
         state["boundary"] = mapping(boundary)
     for odc in odcs:
@@ -418,13 +563,32 @@ def load_network_state(cache_dir=None):
             message="Cache Network Core rusak. Jalankan Generate Design ulang.",
         ) from exc
 
-    odp_ids = {odp.id for odc in load_design_state(cache_dir=cache_dir)[1] for odp in odc.odps}
+    _, loaded_odcs = load_design_state(cache_dir=cache_dir)
+    distribution_limit_m = _distribution_limit_from_state(state)
+    odp_ids = {odp.id for odc in loaded_odcs for odp in odc.odps}
     cache_is_complete = (
         state.get("version") == NETWORK_STATE_VERSION
         and isinstance(state.get("feeder_segments"), list)
         and isinstance(state.get("distribution_segments"), dict)
         and odp_ids == set(state.get("distribution_segments", {}))
     )
+    if cache_is_complete:
+        try:
+            _require_distribution_connectivity(
+                loaded_odcs,
+                state.get("distribution_segments", {}),
+            )
+            if _has_overlong_distribution_segments(
+                state.get("distribution_segments", {}),
+                distribution_limit_m,
+            ):
+                # The line can have valid endpoints and still be a stale
+                # ODC->ODP assignment that detours around a barrier.
+                cache_is_complete = False
+        except RoutingFailedError:
+            # IDs can still match when paths are stale/corrupt. Rebuild the
+            # network from the road graph rather than exporting that cache.
+            cache_is_complete = False
 
     if not cache_is_complete:
         # Migrate legacy caches in-place when the road graph is available.
@@ -445,7 +609,16 @@ def load_network_state(cache_dir=None):
                     item.get("connected") and item.get("coords")
                     for item in existing_segments.values()
                 )
+                and not _has_overlong_distribution_segments(
+                    existing_segments,
+                    distribution_limit_m,
+                )
             )
+            if has_all_existing_paths:
+                try:
+                    _require_distribution_connectivity(odcs, existing_segments)
+                except RoutingFailedError:
+                    has_all_existing_paths = False
 
             if has_all_existing_paths:
                 distribution_segments = existing_segments
@@ -456,11 +629,25 @@ def load_network_state(cache_dir=None):
             else:
                 if road_graph is None:
                     raise RuntimeError("road graph cache tidak ditemukan")
+                # A legacy cache can have every ODP present while assigning a
+                # few ODPs to the wrong ODC. Reassign by actual road distance
+                # before rebuilding the tree; otherwise a nearby ODP may be
+                # forced onto a 1km+ detour and appear disconnected.
+                rebalance_odps_by_road_connectivity(
+                    odcs,
+                    road_graph,
+                    max_distribution_length_m=distribution_limit_m,
+                    odc_capacity=_infer_odc_capacity(odcs),
+                )
                 distribution_segments = {}
                 for odc in odcs:
-                    distribution_segments.update(
-                        build_distribution_tree(odc, road_graph)
-                    )
+                    distribution_segments.update(build_distribution_tree(
+                        odc,
+                        road_graph,
+                        max_distance_m=distribution_limit_m,
+                    ))
+
+            _require_distribution_connectivity(odcs, distribution_segments)
 
             feeder_segments = state.get("feeder_segments") or []
             if not feeder_segments:
@@ -477,6 +664,7 @@ def load_network_state(cache_dir=None):
                 cache_dir=cache_dir,
                 feeder_segments=feeder_segments,
                 distribution_segments=distribution_segments,
+                distribution_max_length_m=distribution_limit_m,
             )
             with open(design_state_path, "r") as f:
                 state = json.load(f)
@@ -493,6 +681,7 @@ def load_network_state(cache_dir=None):
         raise DesignStateNotFoundError(
             message="Cache geometri distribusi tidak lengkap. Jalankan Generate Design ulang.",
         )
+    _require_distribution_connectivity(odcs, state["distribution_segments"])
     for odc in odcs:
         for odp in odc.odps:
             segment = state["distribution_segments"].get(odp.id, {})
@@ -515,7 +704,7 @@ def _core_cache_key(boundary_path, pop_path, has_custom_pop, config):
     return {
         "manifest_version": CORE_MANIFEST_VERSION,
         "network_state_version": NETWORK_STATE_VERSION,
-        "algorithm_version": "1.0.0",
+        "algorithm_version": ALGORITHM_VERSION,
         "input_hash": _compute_input_hash(boundary_path, pop_path),
         "has_custom_pop": bool(has_custom_pop),
         "config": config.model_dump(mode="json"),
@@ -609,6 +798,7 @@ def regenerate_cables_only(output_path, include_homepass=False, output_csv=None,
         )
 
     if job_id: progress_manager.update(job_id, "ROUTING", "Melakukan routing ulang kabel...", 50)
+    distribution_limit_m = _distribution_limit_from_state(network_state)
     total_odp = sum(len(odc.odps) for odc in odcs)
     total_houses = sum(len(odp.houses) for odc in odcs for odp in odc.odps)
     logger.info("Loaded: %d ODC, %d ODP, %d rumah", len(odcs), total_odp, total_houses)
@@ -619,11 +809,36 @@ def regenerate_cables_only(output_path, include_homepass=False, output_csv=None,
     feeder_segments, odcs = build_feeder_segments_preserving_order(
         pop, odcs, road_graph=road_graph
     )
+    # Older designs placed one ODP exactly on top of its ODC. A cable between
+    # coincident endpoints is invisible and looks disconnected, so repair only
+    # those legacy groups before rebuilding the cable geometry.
+    for odc in odcs:
+        if any(
+            haversine_m(odc.lat, odc.lon, odp.lat, odp.lon) < 1.0
+            for odp in odc.odps
+        ):
+            arrange_odps_around_odc(odc, offset_m=40.0, road_graph=road_graph)
+    # Re-evaluate the ODC parent from the road graph on every cable
+    # regeneration. The cached parent was originally selected by geographic
+    # proximity and may be separated from its ODP by a river, railway, or
+    # one-way road. Keeping that stale parent is the main cause of the visible
+    # gaps in older generated designs.
+    rebalance_odps_by_road_connectivity(
+        odcs,
+        road_graph,
+        max_distribution_length_m=distribution_limit_m,
+        odc_capacity=_infer_odc_capacity(odcs),
+    )
     distribution_segments = {}
     for odc in odcs:
         distribution_segments.update(
-            build_distribution_tree(odc, road_graph, max_distance_m=500.0)
+            build_distribution_tree(
+                odc,
+                road_graph,
+                max_distance_m=distribution_limit_m,
+            )
         )
+    _require_distribution_connectivity(odcs, distribution_segments)
 
     if job_id:
         total_odps = sum(len(odc.odps) for odc in odcs)
@@ -662,6 +877,7 @@ def regenerate_cables_only(output_path, include_homepass=False, output_csv=None,
             cache_dir=cache_dir,
             feeder_segments=feeder_segments,
             distribution_segments=distribution_segments,
+            distribution_max_length_m=distribution_limit_m,
             boundary=network_state.get("boundary"),
         )
     except Exception as e:
@@ -680,8 +896,26 @@ def generate_cables_from_custom_points(file_path, output_path, include_homepass=
     points = read_custom_mapped_kml(file_path)
 
     if not points['olt']:
+        # Keep compatibility with older KML exports where POP/OLT is only
+        # discoverable through folder/description metadata.
+        inferred_pop = read_pop_point(file_path)
+        if inferred_pop:
+            points['olt'].append(inferred_pop)
+            logger.info("POP/OLT ditemukan dari konteks folder/description KML: %s", inferred_pop['name'])
+
+    if not points['olt']:
+        detected = ", ".join(
+            f"{key.upper()}={len(points[key])}"
+            for key in ("odc", "odp", "hc")
+            if points[key]
+        ) or "tidak ada titik berlabel"
         raise InvalidFileError(
-            message="Tidak ditemukan titik OLT/POP di file custom KML. Pastikan ada nama yang mengandung 'OLT' atau 'POP'.",
+            message=(
+                "Tidak ditemukan titik OLT/POP di file custom KML "
+                f"({detected}). Beri label OLT/POP pada nama Placemark, nama Folder, "
+                "atau description; aplikasi tidak boleh membuat POP fiktif karena feeder "
+                "harus memiliki titik sumber yang nyata."
+            ),
         )
     if not points['odc']:
         raise InvalidFileError(
@@ -713,7 +947,30 @@ def generate_cables_from_custom_points(file_path, output_path, include_homepass=
         odc = ODC(id=odc_pt['name'], lat=odc_pt['lat'], lon=odc_pt['lon'], odps=[], closure_id=f"CL-{i:03d}", splitter=Splitter(ratio="1:4", location="ODC"))
         odcs.append(odc)
 
+    odcs_by_group = {
+        odc_pt.get("mapping_group"): odc
+        for odc_pt, odc in zip(points["odc"], odcs)
+        if odc_pt.get("mapping_group")
+    }
+    odp_points_by_name = {point["name"]: point for point in points["odp"]}
+
     for odp in odp_objects:
+        source_point = odp_points_by_name.get(odp.id, {})
+        explicit_group = source_point.get("mapping_group")
+        mapped_odc = odcs_by_group.get(explicit_group) if explicit_group else None
+        if mapped_odc is not None:
+            mapped_odc.odps.append(odp)
+            continue
+
+        if explicit_group and odcs_by_group:
+            raise InvalidFileError(
+                message=(
+                    f"Mapping {odp.id} menunjuk ke group ODC {explicit_group}, "
+                    "tetapi ODC dengan group tersebut tidak ditemukan. "
+                    "Gunakan nama ODC 17 dan ODP 17/01, atau hapus nomor group."
+                ),
+            )
+
         if not odcs:
             break
         nearest_odc = min(odcs, key=lambda o: haversine_m(odp.lat, odp.lon, o.lat, o.lon))
@@ -771,6 +1028,7 @@ def generate_cables_from_custom_points(file_path, output_path, include_homepass=
         distribution_segments.update(
             build_distribution_tree(odc, road_graph)
         )
+    _require_distribution_connectivity(odcs, distribution_segments)
 
     if job_id: progress_manager.update(job_id, "EXPORTING", "Mengekspor ke KMZ dengan jalur kabel...", 85)
     # 5. Export (otomatis melakukan routing Distribusi & Drop)
@@ -862,7 +1120,7 @@ from server.services.generator.kml_parser import read_boundary, read_points, rea
 from server.services.generator.osm_local import fetch_houses_in_boundary, find_strategic_pop
 from server.services.generator.clustering import build_design
 from server.services.generator.routing import enforce_min_distance_between_odcs, enforce_min_distance_between_odcs_on_road
-from server.services.generator.generation_config import GenerationConfig
+from server.services.generator.generation_config import GenerationConfig, ALGORITHM_VERSION
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
 
@@ -1094,6 +1352,13 @@ def _run_generator_logic(
         enforce_min_distance_between_odcs_on_road(road_graph, odcs, min_dist_m=40.0)
     else:
         enforce_min_distance_between_odcs(odcs, min_dist_m=40.0)
+    if road_graph is not None:
+        rebalance_odps_by_road_connectivity(
+            odcs,
+            road_graph,
+            max_distribution_length_m=config.max_distribution_length_m,
+            odc_capacity=config.odc_capacity,
+        )
     logger.info(
         "Routing substage ODC spacing selesai dalam %.2fs",
         time.perf_counter() - odc_spacing_started,
@@ -1115,6 +1380,7 @@ def _run_generator_logic(
                 max_distance_m=config.max_distribution_length_m,
             )
         )
+    _require_distribution_connectivity(odcs, distribution_segments)
     logger.info(
         "Routing substage distribution selesai dalam %.2fs",
         time.perf_counter() - distribution_started,
@@ -1165,6 +1431,7 @@ def _run_generator_logic(
             cache_dir=cache_dir,
             feeder_segments=feeder_segments,
             distribution_segments=distribution_segments,
+            distribution_max_length_m=config.max_distribution_length_m,
             boundary=boundary,
         )
     except Exception as e:

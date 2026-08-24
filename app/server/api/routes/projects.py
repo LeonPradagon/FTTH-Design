@@ -5,7 +5,7 @@ All endpoints return the standard response envelope:
 """
 
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from prisma import Json
 
@@ -33,6 +33,30 @@ LEGACY_DEFAULT_FEATURE_COLORS = {
     "distribution": "#3b82f6",
 }
 
+# Kept inside the existing filters JSON for compatibility with local Prisma
+# clients that were generated before Project.generation_config was added.
+# The API strips this internal key before returning filters to the frontend.
+GENERATION_CONFIG_FILTER_KEY = "__generation_config__"
+
+
+def _json_dict(value) -> dict:
+    return value if isinstance(value, dict) else {}
+
+
+def _filters_without_internal_config(value) -> dict:
+    return {
+        key: item
+        for key, item in _json_dict(value).items()
+        if key != GENERATION_CONFIG_FILTER_KEY
+    }
+
+
+def _stored_generation_config(project) -> dict:
+    schema_config = getattr(project, "generation_config", None)
+    if isinstance(schema_config, dict) and schema_config:
+        return schema_config
+    return _json_dict(getattr(project, "filters", {})).get(GENERATION_CONFIG_FILTER_KEY, {}) or {}
+
 
 def get_allowed_feature_colors(requested_colors: dict, current_user: dict) -> dict:
     if current_user.get("role") == "admin":
@@ -51,21 +75,27 @@ class ProjectCreate(BaseModel):
     layers: list
     filters: dict
     feature_colors: dict
+    generation_config: dict = Field(default_factory=dict)
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
     layers: Optional[list] = None
     filters: Optional[dict] = None
     feature_colors: Optional[dict] = None
+    generation_config: Optional[dict] = None
 
 @router.post("/projects")
 async def create_project(project: ProjectCreate, current_user: dict = Depends(get_generation_user)):
+    filters = {
+        **project.filters,
+        GENERATION_CONFIG_FILTER_KEY: project.generation_config,
+    }
     async with db.tx() as transaction:
         db_project = await transaction.project.create(
             data={
                 "name": project.name,
                 "layers": Json(project.layers),
-                "filters": Json(project.filters),
+                "filters": Json(filters),
                 "feature_colors": Json(get_allowed_feature_colors(project.feature_colors, current_user)),
                 "userId": current_user["id"]
             }
@@ -120,10 +150,21 @@ async def update_project(project_id: str, project_update: ProjectUpdate, current
 
     old_project = _serialize_project(project)
     update_data = project_update.model_dump(exclude_unset=True)
+    generation_config = update_data.pop("generation_config", None)
     if "layers" in update_data and update_data["layers"] is not None:
         update_data["layers"] = Json(update_data["layers"])
     if "filters" in update_data and update_data["filters"] is not None:
-        update_data["filters"] = Json(update_data["filters"])
+        filters = {
+            **_json_dict(update_data["filters"]),
+            **({GENERATION_CONFIG_FILTER_KEY: generation_config} if generation_config is not None else {}),
+        }
+        update_data["filters"] = Json(filters)
+    elif generation_config is not None:
+        filters = {
+            **_json_dict(project.filters),
+            GENERATION_CONFIG_FILTER_KEY: generation_config,
+        }
+        update_data["filters"] = Json(filters)
     if current_user.get("role") != "admin":
         update_data["feature_colors"] = Json(DEFAULT_FEATURE_COLORS.copy())
     elif "feature_colors" in update_data and update_data["feature_colors"] is not None:
@@ -174,8 +215,9 @@ def _serialize_project(project) -> dict:
         "id": project.id,
         "name": project.name,
         "layers": project.layers,
-        "filters": project.filters,
+        "filters": _filters_without_internal_config(getattr(project, "filters", {})),
         "feature_colors": project.feature_colors,
+        "generation_config": _stored_generation_config(project),
         "userId": project.userId,
         "created_at": project.created_at.isoformat() if project.created_at else None,
         "updated_at": project.updated_at.isoformat() if project.updated_at else None,

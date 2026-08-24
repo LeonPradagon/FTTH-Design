@@ -12,7 +12,9 @@ from server.services.generator.core_logic import (
     load_network_state,
     generate_homepass_from_state,
     _fetch_osm_tiled,
+    _require_distribution_connectivity,
 )
+from server.core.errors import RoutingFailedError
 from unittest.mock import patch
 from server.services.generator.models import ODC, ODP, Splitter
 
@@ -69,6 +71,90 @@ def test_network_cache_contains_routes_and_homepass_does_not_route(sample_odc, t
     assert kwargs["distribution_segments"]["ODP-001"]["coords"] == [
         list(point) for point in distribution["ODP-001"]
     ]
+
+
+def test_network_cache_repairs_connected_but_overlong_distribution(sample_odc, tmp_path):
+    pop = {"name": "POP-001", "lat": -6.115, "lon": 106.148}
+    feeder = [{
+        "from_label": "POP-001",
+        "to_label": "ODC-001",
+        "coords": [(pop["lat"], pop["lon"]), (sample_odc.lat, sample_odc.lon)],
+    }]
+    source = (sample_odc.lat, sample_odc.lon)
+    target = (sample_odc.odps[0].lat, sample_odc.odps[0].lon)
+    stale_path = [source, (source[0] + 0.006, source[1]), target]
+    save_design_state(
+        pop,
+        [sample_odc],
+        cache_dir=tmp_path,
+        feeder_segments=feeder,
+        distribution_segments={"ODP-001": stale_path},
+    )
+
+    repaired = {
+        "source_id": "ODC-001",
+        "target_id": "ODP-001",
+        "coords": [list(source), list(target)],
+        "length_m": 100.0,
+        "routing_cost": 100.0,
+        "connected": True,
+    }
+    with patch("server.services.generator.core_logic.load_road_graph", return_value=object()), \
+         patch("server.services.generator.core_logic.rebalance_odps_by_road_connectivity") as rebalance, \
+         patch("server.services.generator.core_logic.build_distribution_tree", return_value={"ODP-001": repaired}) as build_tree:
+        _, _, state = load_network_state(cache_dir=tmp_path)
+
+    rebalance.assert_called_once()
+    assert build_tree.call_args.kwargs["max_distance_m"] == 500.0
+    assert state["distribution_segments"]["ODP-001"]["coords"] == [
+        list(source),
+        list(target),
+    ]
+
+
+def test_distribution_validation_rejects_stale_endpoint(sample_odc):
+    distribution = {
+        "ODP-001": {
+            "source_id": "ODC-001",
+            "target_id": "ODP-001",
+            "coords": [
+                [-6.119, 106.149],
+                [-6.120, 106.151],  # target is over 100m away from the ODP
+            ],
+            "connected": True,
+        }
+    }
+
+    with pytest.raises(RoutingFailedError, match="endpoint atau parent"):
+        _require_distribution_connectivity([sample_odc], distribution)
+
+
+def test_distribution_validation_rejects_parent_cycle(sample_odc):
+    second = ODP(
+        id="ODP-002",
+        lat=-6.121,
+        lon=106.151,
+        houses=[],
+        splitter=Splitter("1:10", "ODP"),
+    )
+    sample_odc.odps.append(second)
+    distribution = {
+        "ODP-001": {
+            "source_id": "ODP-002",
+            "target_id": "ODP-001",
+            "coords": [[-6.121, 106.151], [-6.120, 106.150]],
+            "connected": True,
+        },
+        "ODP-002": {
+            "source_id": "ODP-001",
+            "target_id": "ODP-002",
+            "coords": [[-6.120, 106.150], [-6.121, 106.151]],
+            "connected": True,
+        },
+    }
+
+    with pytest.raises(RoutingFailedError, match="endpoint atau parent"):
+        _require_distribution_connectivity([sample_odc], distribution)
 
 
 def test_legacy_cache_is_rejected_for_homepass(sample_odc, tmp_path):

@@ -297,6 +297,14 @@ def route_along_road(
                 dist_start_v = (coords[0][0] - v_coord[0])**2 + (coords[0][1] - v_coord[1])**2
                 if dist_start_v < dist_start_u:
                     coords.reverse()
+                # Ensure continuity: stitch this edge geometry to the
+                # previous segment by replacing its first point with the
+                # last point already in route_coords.  Without this,
+                # OSM edge geometries can have tiny gaps at graph nodes
+                # that make the cable look disconnected on the map.
+                if route_coords:
+                    coords[0] = route_coords[-1]
+                coords[-1] = (G.nodes[v]["y"], G.nodes[v]["x"])
                 route_coords.extend(coords)
                 continue
         route_coords.append((G.nodes[v]["y"], G.nodes[v]["x"]))
@@ -316,11 +324,83 @@ def route_along_road(
     for coord in route_coords:
         if not final_coords or final_coords[-1] != coord:
             final_coords.append(coord)
-            
+
+    # Guarantee the path starts and ends at the originally requested
+    # endpoints. We insert them if they differ from the snapped points
+    # so we don't overwrite the perpendicular snap point on the road.
+    if len(final_coords) >= 1:
+        if final_coords[0] != from_latlon:
+            final_coords.insert(0, from_latlon)
+        if final_coords[-1] != to_latlon:
+            final_coords.append(to_latlon)
+
     result = route_result(final_coords, best_len)
     if route_cache is not None and return_metadata:
         route_cache.setdefault("routes", {})[route_key] = result
     return result if return_metadata else result_coords(result)
+
+
+def route_with_connectivity_fallback(
+    road_graph,
+    from_latlon,
+    to_latlon,
+    route_cache=None,
+    return_metadata=False,
+):
+    """Route on roads and retry on an undirected view when needed.
+
+    OSM vehicle graphs can be directed because of one-way traffic rules. A
+    fiber cable can be installed along that same road in either direction, so
+    rejecting a path only because the vehicle graph is one-way creates false
+    disconnected ODP/ODC segments. The retry still uses road geometry; it is
+    not a straight-line fallback through buildings.
+    """
+    try:
+        result = route_along_road(
+            road_graph,
+            from_latlon,
+            to_latlon,
+            route_cache=route_cache,
+            return_metadata=return_metadata,
+        )
+    except Exception as exc:
+        logger.debug(
+            "Rute directed gagal untuk %s -> %s, mencoba konektivitas dua arah: %s",
+            from_latlon,
+            to_latlon,
+            exc,
+        )
+        result = None
+    if result or not road_graph.is_directed():
+        return result
+
+    try:
+        undirected_graph = road_graph.to_undirected(as_view=True)
+        # Do not reuse a failed directed route cache for the retry. The cache
+        # is keyed by endpoints, not by graph directionality.
+        retry_cache = {"distances": {}, "targeted": True}
+        result = route_along_road(
+            undirected_graph,
+            from_latlon,
+            to_latlon,
+            route_cache=retry_cache,
+            return_metadata=return_metadata,
+        )
+        if result:
+            logger.info(
+                "Rute kabel memakai retry road-undirected: %s -> %s",
+                from_latlon,
+                to_latlon,
+            )
+        return result
+    except Exception as exc:
+        logger.warning(
+            "Retry konektivitas road-undirected gagal untuk %s -> %s: %s",
+            from_latlon,
+            to_latlon,
+            exc,
+        )
+        return None
 
 
 def _edge_geometry_and_length(road_graph, u, v, key):
@@ -512,10 +592,9 @@ def snap_odcs_to_road(road_graph, odcs):
 
 def arrange_odps_around_odc(odc, offset_m=40.0, road_graph=None):
     """Atur ulang posisi tiap ODP dalam 1 ODC:
-      - ODP yang aslinya PALING DEKAT dengan ODC ditaruh PERSIS di titik ODC
-        (jarak 0 m -- co-located, umum untuk kabinet FTTH gabungan).
-      - ODP sisanya disebar pada jarak `offset_m` meter (default 40 m) dari
-        ODC. Kalau `road_graph` tersedia, jaraknya ditempuh dengan BERJALAN
+      - Semua ODP ditempatkan terpisah dari ODC agar kabel ODC -> ODP
+        memiliki geometri yang terlihat. Jarak minimalnya `offset_m` meter.
+      - Kalau `road_graph` tersedia, jaraknya ditempuh dengan BERJALAN
         DI SEPANJANG JALAN (walk_along_road) -- dijamin hasilnya tetap di
         jalur jalan/feeder, bukan offset garis lurus yang bisa nyasar ke
         pekarangan rumah. Dicoba beberapa kombinasi arah (maju/mundur) dan
@@ -537,13 +616,11 @@ def arrange_odps_around_odc(odc, offset_m=40.0, road_graph=None):
 
     ordered = sorted(odc.odps, key=dist_to_odc)
 
-    # ODP terdekat -> co-located persis di titik ODC
-    ordered[0].lat, ordered[0].lon = odc.lat, odc.lon
-    used_points = [(ordered[0].lat, ordered[0].lon)]
-
-    rest = ordered[1:]
-    n = len(rest)
-    for idx, odp in enumerate(rest):
+    # Jangan menaruh ODP persis di ODC. Dua marker yang bertumpuk membuat
+    # kabel distribusi menjadi LineString nol-panjang dan tampak patah/hilang.
+    used_points = []
+    n = len(ordered)
+    for idx, odp in enumerate(ordered):
         result = None
         if road_graph is not None:
             # coba beberapa kombinasi arah & percabangan, ambil yang pertama
@@ -569,12 +646,327 @@ def arrange_odps_around_odc(odc, offset_m=40.0, road_graph=None):
             if road_graph is not None:
                 print(f"  Peringatan: {odp.id} tidak dapat ditempatkan unik di jalan dalam "
                       f"radius {offset_m:.0f} m (jalan lurus/tidak ada persimpangan terdekat), "
-                      f"pakai offset garis lurus.")
+                      f"cari titik jalan terdekat.")
             bearing = (360.0 / n) * idx if n else 0
             result = offset_latlon(odc.lat, odc.lon, offset_m, bearing)
+            if road_graph is not None:
+                try:
+                    # Never leave an ODP fallback inside a building block;
+                    # route endpoints must remain on the road graph.
+                    result = snap_to_road(road_graph, result[0], result[1])
+                except Exception:
+                    pass
 
         odp.lat, odp.lon = result
         used_points.append(result)
+
+
+def rebalance_odps_by_road_connectivity(
+    odcs,
+    road_graph,
+    max_distribution_length_m=500.0,
+    odc_capacity=4,
+):
+    """Move generated ODPs to a reachable ODC when the cluster parent is bad.
+
+    Clustering uses geographic centroids, while cables must use the road
+    network. A point can therefore be only 100 m from its ODC as the crow
+    flies but require a multi-kilometre detour because of a railway, highway,
+    river, or disconnected road component. Before exporting the distribution
+    tree, try nearby ODCs and choose a valid road connection under the design
+    limit. Explicit custom ODC/ODP mappings do not call this function.
+
+    ODC capacity is never exceeded. When a nearby ODC is full, a capacity-safe
+    swap is attempted if it improves the combined road length.
+    """
+    if road_graph is None or not odcs:
+        return odcs
+
+    route_cache = {"distances": {}, "targeted": True}
+    all_odps = [(odc, odp) for odc in odcs for odp in odc.odps]
+
+    # Solve the parent assignment globally for every design. A
+    # greedy move cannot repair a full target ODC (ODP-025 was exactly this
+    # case: ODC-002 was the best road parent but already had four ODPs).
+    # The flow keeps every ODC within capacity while minimizing total road
+    # length. The assignment only routes each ODP to a bounded set of nearby
+    # ODCs, so the flow remains practical for large dashboard designs. The
+    # previous size cutoff sent large designs through greedy mapping and left
+    # capacity-full ODC clusters with disconnected ODPs.
+    if _assign_odps_globally_by_road(
+        odcs,
+        road_graph,
+        max_distribution_length_m=max_distribution_length_m,
+        odc_capacity=odc_capacity,
+        route_cache=route_cache,
+    ):
+        return odcs
+
+    def route(source, target):
+        try:
+            return route_with_connectivity_fallback(
+                road_graph,
+                (source.lat, source.lon),
+                (target.lat, target.lon),
+                route_cache=route_cache,
+                return_metadata=True,
+            )
+        except Exception as exc:
+            logger.debug("ODP rebalancing route gagal: %s", exc)
+            return None
+
+    def geo_distance(odc, odp):
+        return haversine_m(odc.lat, odc.lon, odp.lat, odp.lon)
+
+    def candidate_odcs(odp, current):
+        return sorted(
+            (odc for odc in odcs if odc is not current),
+            key=lambda odc: geo_distance(odc, odp),
+        )[:12]
+
+    # Iterate because moving one ODP can open a slot for another one.
+    for original_current, odp in list(all_odps):
+        # A previous capacity-safe swap may have moved this ODP. Always use
+        # its current parent rather than the parent captured before the loop.
+        current = next(
+            (odc for odc in odcs if odp in odc.odps),
+            original_current,
+        )
+        current_route = route(current, odp)
+        current_length = current_route.get("length_m") if current_route else None
+        if current_length is not None and current_length <= max_distribution_length_m:
+            continue
+
+        best_move = None
+        for candidate in candidate_odcs(odp, current):
+            candidate_route = route(candidate, odp)
+            candidate_length = candidate_route.get("length_m") if candidate_route else None
+            if candidate_length is None or candidate_length > max_distribution_length_m:
+                continue
+
+            if len(candidate.odps) < odc_capacity:
+                best_move = (candidate, None, current_length, candidate_length)
+                break
+
+            # Keep the capacity limit by swapping with one ODP from the
+            # candidate ODC. Only accept a swap when both new routes exist and
+            # their total is strictly better than the old pair.
+            for swap_odp in candidate.odps:
+                swap_route = route(current, swap_odp)
+                swap_length = swap_route.get("length_m") if swap_route else None
+                if swap_length is None or swap_length > max_distribution_length_m:
+                    continue
+                old_swap_route = route(candidate, swap_odp)
+                old_swap_length = old_swap_route.get("length_m") if old_swap_route else None
+                old_total = (current_length or float("inf")) + (old_swap_length or float("inf"))
+                new_total = candidate_length + swap_length
+                if new_total < old_total:
+                    best_move = (candidate, swap_odp, current_length, candidate_length)
+                    break
+            if best_move:
+                break
+
+        if not best_move:
+            continue
+
+        candidate, swap_odp, old_length, new_length = best_move
+        current.odps.remove(odp)
+        candidate.odps.append(odp)
+        if swap_odp is not None:
+            candidate.odps.remove(swap_odp)
+            current.odps.append(swap_odp)
+            logger.info(
+                "Rebalance ODP %s: %s <-> %s untuk rute jalan yang lebih pendek",
+                odp.id,
+                current.id,
+                candidate.id,
+            )
+        else:
+            logger.info(
+                "Rebalance ODP %s: %s -> %s (rute %.0fm -> %.0fm)",
+                odp.id,
+                current.id,
+                candidate.id,
+                old_length if old_length is not None else 0,
+                new_length,
+            )
+
+    return odcs
+
+
+def _assign_odps_globally_by_road(
+    odcs,
+    road_graph,
+    max_distribution_length_m,
+    odc_capacity,
+    route_cache,
+):
+    """Capacity-constrained minimum-cost assignment of ODPs to ODCs.
+
+    The geographically nearest ODC candidates are routed first for each ODP;
+    the current parent is always included. If that local candidate graph is
+    infeasible, or selects an over-limit route, candidates are expanded to
+    every ODC for the affected ODPs. Costs are actual road lengths, so a
+    nearby ODC on the wrong side of a barrier loses to a slightly farther ODC
+    with a valid road connection without making large boundaries pay the
+    all-pairs routing cost up front.
+    """
+    all_odps = [odp for odc in odcs for odp in odc.odps]
+    if not all_odps or not odcs:
+        return True
+
+    candidate_count = min(len(odcs), max(12, odc_capacity * 4))
+    route_options = {}
+    route_lengths = {}
+    current_parent = {
+        odp.id: odc
+        for odc in odcs
+        for odp in odc.odps
+    }
+
+    def add_route_option(odp, odc):
+        """Cache one ODC candidate and return its actual road length."""
+        key = (odp.id, odc.id)
+        if key in route_lengths:
+            return route_lengths[key]
+        try:
+            result = route_with_connectivity_fallback(
+                road_graph,
+                (odc.lat, odc.lon),
+                (odp.lat, odp.lon),
+                route_cache=route_cache,
+                return_metadata=True,
+            )
+        except Exception as exc:
+            logger.debug("Global ODP mapping route gagal %s -> %s: %s", odc.id, odp.id, exc)
+            route_lengths[key] = None
+            return None
+        if not result:
+            route_lengths[key] = None
+            return None
+
+        length_m = float(result.get("length_m") or 0.0)
+        route_lengths[key] = length_m
+        # Integer weights are required by network_simplex. The penalty is
+        # intentionally much larger than normal local route differences.
+        penalty = max_distribution_length_m * 1000 if length_m > max_distribution_length_m else 0
+        route_options[key] = int(round((length_m + penalty) * 100))
+        return length_m
+
+    def add_local_candidates(odp):
+        current = current_parent[odp.id]
+        candidates = sorted(
+            odcs,
+            key=lambda odc: haversine_m(odc.lat, odc.lon, odp.lat, odp.lon),
+        )[:candidate_count]
+        if current not in candidates:
+            candidates.append(current)
+        for odc in candidates:
+            add_route_option(odp, odc)
+
+    for odp in all_odps:
+        add_local_candidates(odp)
+
+    def solve_assignments():
+        """Solve the current candidate graph and return assignments."""
+        # Build a min-cost flow: source -> ODP (one each) -> ODC
+        # (capacity) -> sink.
+        flow_graph = nx.DiGraph()
+        source, sink = "__odp_source__", "__odc_sink__"
+        flow_graph.add_node(source, demand=-len(all_odps))
+        flow_graph.add_node(sink, demand=len(all_odps))
+        for odp in all_odps:
+            odp_node = ("odp", odp.id)
+            flow_graph.add_node(odp_node, demand=0)
+            flow_graph.add_edge(source, odp_node, capacity=1, weight=0)
+        for odc in odcs:
+            odc_node = ("odc", odc.id)
+            flow_graph.add_node(odc_node, demand=0)
+            flow_graph.add_edge(odc_node, sink, capacity=odc_capacity, weight=0)
+        for (odp_id, odc_id), weight in route_options.items():
+            flow_graph.add_edge(
+                ("odp", odp_id),
+                ("odc", odc_id),
+                capacity=1,
+                weight=weight,
+            )
+
+        try:
+            _, flow = nx.network_simplex(flow_graph)
+        except (nx.NetworkXError, nx.NetworkXUnfeasible) as exc:
+            logger.warning("Global mapping ODP-ODC tidak feasible: %s", exc)
+            return None
+
+        assignments = {}
+        for odp in all_odps:
+            odp_flow = flow.get(("odp", odp.id), {})
+            selected = next(
+                (node[1] for node, amount in odp_flow.items() if amount > 0 and node[0] == "odc"),
+                None,
+            )
+            if selected is None:
+                logger.warning("ODP %s tidak mendapat parent ODC dari global mapping", odp.id)
+                return None
+            assignments[odp.id] = selected
+        return assignments
+
+    assignments = solve_assignments()
+    if assignments is None:
+        # The local candidate graph can be disconnected in a large boundary.
+        # Expand all candidates once before falling back to the legacy local
+        # repair, otherwise a valid ODC outside the first 16 geometric
+        # neighbours is never considered.
+        for odp in all_odps:
+            for odc in odcs:
+                add_route_option(odp, odc)
+        assignments = solve_assignments()
+
+    if assignments is None:
+        return False
+
+    def over_limit_or_missing(assignment):
+        return [
+            odp for odp in all_odps
+            if route_lengths.get((odp.id, assignment.get(odp.id))) is None
+            or route_lengths[(odp.id, assignment[odp.id])] > max_distribution_length_m
+        ]
+
+    problematic = over_limit_or_missing(assignments)
+    if problematic:
+        # The first solve is intentionally local. Only ODPs that still have a
+        # missing/over-limit selected route are expanded to every ODC, keeping
+        # large designs fast while still repairing cross-barrier assignments.
+        for odp in problematic:
+            for odc in odcs:
+                add_route_option(odp, odc)
+        assignments = solve_assignments()
+        if assignments is None:
+            return False
+        if over_limit_or_missing(assignments):
+            logger.warning(
+                "Global mapping tidak menemukan rute distribusi <= %.0fm untuk semua ODP",
+                max_distribution_length_m,
+            )
+            return False
+
+    changed = sum(
+        assignments[odp.id] != current_parent[odp.id].id
+        for odp in all_odps
+    )
+    if changed == 0:
+        return True
+
+    odc_by_id = {odc.id: odc for odc in odcs}
+    for odc in odcs:
+        odc.odps.clear()
+    for odp in all_odps:
+        odc_by_id[assignments[odp.id]].odps.append(odp)
+    logger.info(
+        "Global road mapping selesai: %d/%d ODP berpindah parent ODC",
+        changed,
+        len(all_odps),
+    )
+    return True
 
 
 def build_distribution_tree(odc, road_graph, max_distance_m=500.0):
@@ -582,14 +974,18 @@ def build_distribution_tree(odc, road_graph, max_distance_m=500.0):
 
     The ODC remains the root and every ODP still counts towards the ODC
     capacity.  An ODP may nevertheless feed another ODP when that candidate
-    route is valid.  Candidate routes are ordered by the existing routing
-    cost (which prefers major roads) and then by physical length.  A
-    Kruskal-style minimum tree prevents cycles while keeping the operation
-    small: the ODC capacity bounds the number of ODPs in this graph.
+    route is valid. Candidate routes beyond ``max_distance_m`` are rejected;
+    the caller can then reassign that ODP to another reachable ODC before
+    export. Direct ODC→ODP routes are selected before ODP→ODP shortcuts so
+    the exported cable layout remains easy to read. An ODP→ODP route is only
+    used when the direct ODC route is unavailable. A Kruskal-style minimum
+    tree prevents cycles while keeping the operation small: the ODC capacity
+    bounds the number of ODPs in this graph.
 
-    Return value is a dict keyed by target ODP id.  Connected entries contain
-    source/target metadata and road coordinates; disconnected entries are
-    explicit and intentionally contain no straight-line fallback.
+    Return value is a dict keyed by target ODP id. Connected entries contain
+    source/target metadata and road coordinates. ODPs without a valid road
+    route remain disconnected rather than being connected by a line through
+    buildings.
     """
     odps = list(odc.odps)
     segments = {}
@@ -600,17 +996,6 @@ def build_distribution_tree(odc, road_graph, max_distance_m=500.0):
         odp.upstream_id = None
 
     if road_graph is None:
-        for odp in odps:
-            segments[odp.id] = {
-                "source_id": None,
-                "target_id": odp.id,
-                "source_label": None,
-                "target_label": odp.id,
-                "coords": [],
-                "length_m": None,
-                "routing_cost": None,
-                "connected": False,
-            }
         return segments
 
     route_cache = {"distances": {}, "targeted": True}
@@ -618,7 +1003,7 @@ def build_distribution_tree(odc, road_graph, max_distance_m=500.0):
 
     def add_candidate(source_id, source_point, target_id, target_point):
         try:
-            result = route_along_road(
+            result = route_with_connectivity_fallback(
                 road_graph,
                 source_point,
                 target_point,
@@ -633,7 +1018,17 @@ def build_distribution_tree(odc, road_graph, max_distance_m=500.0):
                 exc,
             )
             return
-        if not result or result["length_m"] > max_distance_m:
+        if not result:
+            return
+        if result["length_m"] > max_distance_m:
+            logger.warning(
+                "Rute distribusi %s -> %s terlalu jauh (%.0fm > %.0fm); "
+                "ODP akan dicari-kan parent ODC lain.",
+                source_id,
+                target_id,
+                result["length_m"],
+                max_distance_m,
+            )
             return
         candidates.append({
             "source_id": source_id,
@@ -660,7 +1055,13 @@ def build_distribution_tree(odc, road_graph, max_distance_m=500.0):
                 (target.lat, target.lon),
             )
 
+    # Prefer the explicit ODC -> ODP relationship whenever it is routable.
+    # Sorting only by route cost made a short ODP -> ODP edge win over a
+    # valid direct ODC edge, which produced visually confusing branches and
+    # labels such as "ODP 01/01 TO ODP 01/02" even though both ODPs had a
+    # valid path from the ODC.
     candidates.sort(key=lambda item: (
+        0 if item["source_id"] == odc.id else 1,
         item["routing_cost"],
         item["length_m"],
         item["source_id"],
@@ -719,9 +1120,19 @@ def build_distribution_tree(odc, road_graph, max_distance_m=500.0):
                 continue
             visited.add(target_id)
             queue.append(target_id)
-            coords = list(reversed(item["coords"])) if reverse else item["coords"]
+            coords = list(reversed(item["coords"])) if reverse else list(item["coords"])
             target = next(odp for odp in odps if odp.id == target_id)
             target.upstream_id = source_id
+            # After reversing, enforce that the segment endpoints match
+            # the actual device positions.  This prevents sub-meter gaps
+            # that make a cable appear to stop in the middle of the road.
+            if coords:
+                source_obj = odc if source_id == odc.id else next(
+                    (o for o in odps if o.id == source_id), None
+                )
+                if source_obj:
+                    coords[0] = (source_obj.lat, source_obj.lon)
+                coords[-1] = (target.lat, target.lon)
             segments[target_id] = {
                 "source_id": source_id,
                 "target_id": target_id,
@@ -735,17 +1146,88 @@ def build_distribution_tree(odc, road_graph, max_distance_m=500.0):
 
     for odp in odps:
         if odp.id not in segments:
-            segments[odp.id] = {
-                "source_id": None,
-                "target_id": odp.id,
-                "source_label": None,
-                "target_label": odp.id,
-                "coords": [],
-                "length_m": None,
-                "routing_cost": None,
-                "connected": False,
-            }
-            logger.warning("ODP %s tidak terhubung ke tree ODC %s", odp.id, odc.id)
+            # The ODP has no valid road route. Try to reposition it to a
+            # point on the road network that IS reachable from the ODC.
+            # This rescues ODPs that were placed on a disconnected road
+            # component or snapped to the wrong edge.
+            repositioned = False
+            for direction in (1, -1):
+                for branch_choice in range(6):
+                    for dist_m in (40.0, 80.0, 120.0):
+                        try:
+                            candidate = walk_along_road(
+                                road_graph, odc.lat, odc.lon, dist_m,
+                                direction=direction, branch_choice=branch_choice,
+                            )
+                        except Exception:
+                            candidate = None
+                        if candidate is None:
+                            continue
+                        # Verify a road route actually exists to this candidate.
+                        try:
+                            result = route_with_connectivity_fallback(
+                                road_graph,
+                                (odc.lat, odc.lon),
+                                candidate,
+                                route_cache=route_cache,
+                                return_metadata=True,
+                            )
+                        except Exception:
+                            result = None
+                        if not result or result["length_m"] > max_distance_m:
+                            continue
+                        # Check that this candidate is not too close to an
+                        # existing ODP to avoid overlapping markers.
+                        if all(
+                            haversine_m(*candidate, o.lat, o.lon) > 5.0
+                            for o in odps if o.id != odp.id
+                        ):
+                            old_lat, old_lon = odp.lat, odp.lon
+                            odp.lat, odp.lon = candidate
+                            coords = result["coords"]
+                            if coords:
+                                coords[0] = (odc.lat, odc.lon)
+                                coords[-1] = (odp.lat, odp.lon)
+                            odp.upstream_id = odc.id
+                            segments[odp.id] = {
+                                "source_id": odc.id,
+                                "target_id": odp.id,
+                                "source_label": odc.id,
+                                "target_label": odp.id,
+                                "coords": coords,
+                                "length_m": result["length_m"],
+                                "routing_cost": result["routing_cost"],
+                                "connected": True,
+                            }
+                            repositioned = True
+                            logger.info(
+                                "ODP %s reposisi dari (%.6f,%.6f) ke (%.6f,%.6f) "
+                                "agar tersambung ke ODC %s via jalan (%.0fm).",
+                                odp.id, old_lat, old_lon,
+                                odp.lat, odp.lon, odc.id, result["length_m"],
+                            )
+                            break
+                    if repositioned:
+                        break
+                if repositioned:
+                    break
+
+            if not repositioned:
+                segments[odp.id] = {
+                    "source_id": None,
+                    "target_id": odp.id,
+                    "source_label": None,
+                    "target_label": odp.id,
+                    "coords": [],
+                    "length_m": None,
+                    "routing_cost": None,
+                    "connected": False,
+                }
+                logger.warning(
+                    "ODP %s tidak punya rute jalan ke tree ODC %s; kabel distribusi tidak dibuat.",
+                    odp.id,
+                    odc.id,
+                )
 
     return segments
 
@@ -778,7 +1260,7 @@ def build_feeder_chain(pop, odcs, road_graph=None, route_cache=None):
         path = None
         if road_graph is not None:
             try:
-                result = route_along_road(
+                result = route_with_connectivity_fallback(
                     road_graph, current_latlon, target_latlon,
                     route_cache=route_cache,
                     return_metadata=True,
@@ -798,7 +1280,43 @@ def build_feeder_chain(pop, odcs, road_graph=None, route_cache=None):
         current_label = odc.id
         current_latlon = target_latlon
 
+    _validate_feeder_chain(pop, ordered, segments)
     return segments, ordered
+
+
+def _validate_feeder_chain(pop, odcs, segments):
+    """Pastikan setiap ODC tersambung berurutan dalam feeder chain.
+
+    Validasi ini mencegah hasil generate menyimpan feeder yang hilang atau
+    endpoint yang tidak menempel ke POP/ODC. Hubungan ODP lintas ODC kemudian
+    dapat mengikuti chain ini tanpa membuat kabel distribusi langsung antar-ODP.
+    """
+    if len(segments) != len(odcs):
+        raise RuntimeError(
+            f"Feeder chain tidak lengkap: {len(segments)} segmen untuk {len(odcs)} ODC."
+        )
+
+    expected_source = pop["name"]
+    expected_source_point = (pop["lat"], pop["lon"])
+    for index, (segment, odc) in enumerate(zip(segments, odcs), start=1):
+        if segment.get("from_label") != expected_source or segment.get("to_label") != odc.id:
+            raise RuntimeError(
+                "Feeder chain tidak berurutan pada segmen "
+                f"{index}: diharapkan {expected_source}->{odc.id}, "
+                f"mendapatkan {segment.get('from_label')}->{segment.get('to_label')}."
+            )
+
+        coords = segment.get("coords") or []
+        if len(coords) < 2:
+            raise RuntimeError(f"Feeder {expected_source}->{odc.id} tidak memiliki geometri.")
+
+        if haversine_m(*coords[0], *expected_source_point) > 1.0:
+            raise RuntimeError(f"Endpoint awal feeder {expected_source}->{odc.id} tidak menempel.")
+        if haversine_m(*coords[-1], odc.lat, odc.lon) > 1.0:
+            raise RuntimeError(f"Endpoint akhir feeder {expected_source}->{odc.id} tidak menempel.")
+
+        expected_source = odc.id
+        expected_source_point = (odc.lat, odc.lon)
 
 
 def build_feeder_segments_preserving_order(pop, odcs, road_graph=None, route_cache=None):
@@ -821,7 +1339,7 @@ def build_feeder_segments_preserving_order(pop, odcs, road_graph=None, route_cac
         path = None
         if road_graph is not None:
             try:
-                result = route_along_road(
+                result = route_with_connectivity_fallback(
                     road_graph, current_latlon, target_latlon,
                     route_cache=route_cache,
                     return_metadata=True,
@@ -841,6 +1359,7 @@ def build_feeder_segments_preserving_order(pop, odcs, road_graph=None, route_cac
         current_label = odc.id
         current_latlon = target_latlon
 
+    _validate_feeder_chain(pop, odcs, segments)
     return segments, odcs
 
 
