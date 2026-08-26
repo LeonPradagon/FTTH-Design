@@ -641,7 +641,7 @@ export default function Home() {
       const url = toProxyApiUrl(uploadData.url);
       const isBoundary = fileToUse.name.toLowerCase().includes('boundary');
       const isPop = fileToUse.name.toLowerCase().includes('pop') || fileToUse.name.toLowerCase().includes('olt');
-      const importId = crypto.randomUUID();
+      const importId = crypto.randomUUID?.() ?? crypto.getRandomValues(new Uint32Array(4)).join("-");
       const newLayerId = `import-${importId}`;
 
       // Get region string from KML via Reverse Geocoding
