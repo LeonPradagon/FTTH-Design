@@ -405,7 +405,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: '#4b5563' }}>Proyek Tersimpan</h3>
-              <button
+              {/* <button
                 onClick={() => { if (!isGenerationLocked && onNewProject) onNewProject(); }}
                 disabled={isGenerationLocked}
                 style={{
@@ -423,7 +423,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
                 }}
               >
                 <Plus size={14} /> Baru
-              </button>
+              </button> */}
             </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto', flex: 1 }}>
