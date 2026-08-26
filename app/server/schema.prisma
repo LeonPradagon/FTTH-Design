@@ -105,6 +105,7 @@ model Project {
   layers         Json              @default("[]")
   filters        Json              @default("{}")
   feature_colors Json              @default("{}")
+  generation_config Json            @default("{}")
   userId         String?
   user           User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
   created_at     DateTime          @default(now())

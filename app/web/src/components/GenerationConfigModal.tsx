@@ -27,7 +27,7 @@ export const DEFAULT_CONFIG: GenerationConfig = {
   max_odc_radius_m: 500.0,
   max_feeder_length_m: 2000.0,
   max_distribution_length_m: 500.0,
-  snapping_distance_m: 50.0,
+  snapping_distance_m: 100.0,
   routing_strategy: 'shortest',
 };
 
@@ -39,15 +39,26 @@ interface GenerationConfigModalProps {
 }
 
 export default function GenerationConfigModal({ isOpen, onClose, config, onSave }: GenerationConfigModalProps) {
-  const [formData, setFormData] = useState<GenerationConfig>(config);
+  const [draft, setDraft] = useState<GenerationConfig>(config);
+  const [isDirty, setIsDirty] = useState(false);
+  // While the user is editing, keep the local draft. Otherwise render the
+  // latest project config directly so switching projects never shows stale
+  // values from the previous modal session.
+  const formData = isDirty ? draft : config;
+
+  const closeModal = () => {
+    setIsDirty(false);
+    onClose();
+  };
 
   if (!isOpen) return null;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
 
-    setFormData(prev => ({
-      ...prev,
+    setIsDirty(true);
+    setDraft(prev => ({
+      ...(isDirty ? prev : config),
       [name]: type === 'checkbox'
         ? (e.target as HTMLInputElement).checked
         : type === 'number' ? Number(value) : value
@@ -55,12 +66,14 @@ export default function GenerationConfigModal({ isOpen, onClose, config, onSave 
   };
 
   const handleReset = () => {
-    setFormData(DEFAULT_CONFIG);
+    setIsDirty(true);
+    setDraft(DEFAULT_CONFIG);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSave(formData);
+    setIsDirty(false);
     onClose();
   };
 
@@ -75,7 +88,7 @@ export default function GenerationConfigModal({ isOpen, onClose, config, onSave 
             <h2 className="text-xl font-bold text-gray-800">Generator Configuration</h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={closeModal}
             className="p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-500"
           >
             <X className="w-5 h-5" />
@@ -211,7 +224,7 @@ export default function GenerationConfigModal({ isOpen, onClose, config, onSave 
           <div className="flex gap-3">
             <button
               type="button"
-              onClick={onClose}
+              onClick={closeModal}
               className="px-5 py-2 text-gray-600 hover:bg-gray-200 rounded-md transition-colors"
             >
               Cancel

@@ -401,7 +401,11 @@ async def generate_homepass_task(ctx, output_kmz_path: str, output_csv_path: str
 async def startup(ctx):
     await asyncio.to_thread(get_object_storage().ensure_bucket)
     await db.connect()
-    logger.info("Worker starting up...")
+    logger.info(
+        "Worker starting up... generator_version=%s algorithm_version=%s",
+        GENERATOR_VERSION,
+        ALGORITHM_VERSION,
+    )
 
 async def shutdown(ctx):
     await db.disconnect()

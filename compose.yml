@@ -40,8 +40,8 @@ services:
       S3_BUCKET: ${SEAWEEDFS_BUCKET:-ftth-designs}
     volumes:
       - seaweed_data:/data
-    expose:
-      - "8333"
+    ports:
+      - "8333:8333"
     healthcheck:
       test: ["CMD", "curl", "-sS", "-o", "/dev/null", "http://127.0.0.1:8333/"]
       interval: 10s

@@ -21,8 +21,11 @@ class RoutingStrategy(str, Enum):
 
 
 # ── Algorithm / generator version constants ─────────────────────────
-ALGORITHM_VERSION = "1.0.0"
-GENERATOR_VERSION = "1.0.0"
+# Bump when clustering, parent assignment, or routing behavior changes. This
+# invalidates reusable Network Core caches so a new generate runs the updated
+# placement/routing logic.
+ALGORITHM_VERSION = "1.7.0"
+GENERATOR_VERSION = "1.7.0"
 
 
 class GenerationConfig(BaseModel):
@@ -98,7 +101,7 @@ class GenerationConfig(BaseModel):
 
     # ── Snapping ────────────────────────────────────────────────────
     snapping_distance_m: float = Field(
-        default=50.0,
+        default=100.0,
         ge=5.0,
         le=500.0,
         description="Maximum distance (m) to snap a generated point to the nearest road.",
@@ -129,7 +132,7 @@ class GenerationConfig(BaseModel):
                 "max_odc_radius_m": 500.0,
                 "max_feeder_length_m": 2000.0,
                 "max_distribution_length_m": 500.0,
-                "snapping_distance_m": 50.0,
+                "snapping_distance_m": 100.0,
                 "routing_strategy": "shortest",
             }
         }

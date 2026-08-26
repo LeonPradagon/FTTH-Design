@@ -1,5 +1,6 @@
 import simplekml
 from shapely.geometry import shape
+from server.core.logging import logger
 from server.services.generator.routing import route_along_road
 
 def export_kmz(
@@ -149,15 +150,17 @@ def export_kmz(
             opt.style.iconstyle.scale = 0.9
 
             coords = [(odc.lon, odc.lat), (odp.lon, odp.lat)]
-            distribution_connected = True
+            # When routing metadata is supplied, it is the source of truth.
+            # Never silently recreate a missing segment with a direct line.
+            distribution_connected = distribution_segments is None
             distribution_source_label = odc_label
             cached_distribution = (
                 distribution_segments.get(odp.id)
                 if distribution_segments is not None else None
             )
             if isinstance(cached_distribution, dict):
-                distribution_connected = bool(cached_distribution.get("connected"))
                 path = cached_distribution.get("coords") or []
+                distribution_connected = bool(cached_distribution.get("connected")) and bool(path)
                 source_id = cached_distribution.get("source_id")
                 distribution_source_label = (
                     odc_labels.get(source_id)
@@ -170,7 +173,8 @@ def export_kmz(
             elif cached_distribution is not None:
                 # Backward-compatible v2 cache format: target_id -> coords.
                 coords = [(lon, lat) for lat, lon in cached_distribution]
-            elif road_graph and road_feeder:
+                distribution_connected = bool(coords)
+            elif distribution_segments is None and road_graph and road_feeder:
                 path = route_along_road(
                     road_graph, (odc.lat, odc.lon), (odp.lat, odp.lon),
                     route_cache=odp_route_cache,
@@ -178,20 +182,14 @@ def export_kmz(
                 if not path:
                     raise RuntimeError(f"Tidak ada koneksi jalan untuk kabel distribusi {odc_label} -> {odp_label}.")
                 coords = [(lon, lat) for lat, lon in path]
-                if distribution_segments is not None:
-                    distribution_segments[odp.id] = {
-                        "source_id": odc.id,
-                        "target_id": odp.id,
-                        "source_label": odc.id,
-                        "target_label": odp.id,
-                        "coords": list(path),
-                        "connected": True,
-                    }
+            elif distribution_segments is not None:
+                logger.warning(
+                    "Segmen distribusi %s -> %s tidak ada di metadata routing; kabel dilewati.",
+                    odc_label,
+                    odp_label,
+                )
 
             if distribution_connected:
-                if len(coords) == 1:
-                    coords.append((coords[0][0] + 0.00001, coords[0][1] + 0.00001))
-
                 dist = fol_dist.newlinestring(
                     name=f"{distribution_source_label} TO ODP {odp_label}",
                     coords=coords,
@@ -232,9 +230,6 @@ def export_kmz(
                         raise RuntimeError(f"Tidak ada koneksi jalan untuk kabel drop {odp_label} -> {hc_label}.")
                     drop_coords = [(lon, lat) for lat, lon in path]
                 
-                if len(drop_coords) == 1:
-                    drop_coords.append((drop_coords[0][0] + 0.00001, drop_coords[0][1] + 0.00001))
-
                 drop = fol_drop.newlinestring(
                     name=f"ODP {odp_label} TO HC {hc_label}",
                     coords=drop_coords,
