@@ -42,7 +42,7 @@ async def _publish_generation_artifacts(
     user_id: str,
     output_kmz_path: str,
     output_csv_path: str,
-) -> dict:
+) -> None:
     output_kmz_name = Path(output_kmz_path).name
     output_csv_name = Path(output_csv_path).name
     await asyncio.to_thread(upload_file, user_id, output_kmz_name, Path(output_kmz_path))
@@ -60,7 +60,6 @@ async def _publish_generation_artifacts(
         result=Json(result),
     )
     progress_manager.complete(job_id, result=result)
-    return result
 
 
 async def generate_task(
@@ -75,11 +74,9 @@ async def generate_task(
     job_id: str,
     project_id: str | None,
     user_id: str,
-    output_kml_name: str,
     output_kmz_name: str,
     output_csv_name: str,
     batch_id: str | None = None,
-    batch_item_id: str | None = None,
 ):
     try:
         await _update_generation_job(

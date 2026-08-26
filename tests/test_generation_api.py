@@ -294,7 +294,6 @@ def test_generation_audit_includes_previous_config(tmp_path):
                 job_id="job-2",
                 project_id="project-1",
                 user_id="engineer-1",
-                output_kml_name="design.kml",
                 output_kmz_name=output_kmz.name,
                 output_csv_name=output_csv.name,
             )

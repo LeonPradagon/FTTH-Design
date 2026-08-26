@@ -66,7 +66,7 @@ class ProgressManager:
                      user_id: str | None = None):
         public_fields = {
             "job_id", "item_id", "boundary_name", "design_name", "status",
-            "error", "output_kmz_name", "output_kml_name", "output_csv_name",
+            "error", "output_kmz_name", "output_csv_name",
         }
         public_jobs = [{key: value for key, value in job.items() if key in public_fields} for job in jobs]
         state = {

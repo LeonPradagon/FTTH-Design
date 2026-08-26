@@ -252,7 +252,6 @@ async def generate_design(
             has_custom_pop = True
 
         output_kmz_name = create_user_filename("design_ftth", "kmz")
-        output_kml_name = create_user_filename("design_ftth", "kml")
         output_csv_name = create_user_filename("design_ftth", "csv")
 
         output_kmz_path = user_dir / output_kmz_name
@@ -272,7 +271,6 @@ async def generate_design(
             has_custom_pop=has_custom_pop,
             cache_dir=str(user_dir),
             gen_config_dict=gen_config.model_dump(),
-            output_kml_name=output_kml_name,
             output_kmz_name=output_kmz_name,
             output_csv_name=output_csv_name,
         )
@@ -394,7 +392,6 @@ async def generate_batch(
             "pop_path": str(pop_item),
             "cache_dir": str(item_dir),
             "output_kmz_name": f"{prefix}_core.kmz",
-            "output_kml_name": f"{prefix}_core.kml",
             "output_csv_name": f"{prefix}_core.csv",
         })
 
@@ -427,10 +424,8 @@ async def generate_batch(
             has_custom_pop=True,
             cache_dir=job["cache_dir"],
             gen_config_dict=gen_config.model_dump(),
-            output_kml_name=job["output_kml_name"],
             output_kmz_name=job["output_kmz_name"],
             output_csv_name=job["output_csv_name"],
-            batch_item_id=job["item_id"],
         )
     batch_state = progress_manager.get_batch(batch_id)
     # Keeps the endpoint deterministic in degraded Redis/test environments;
@@ -521,10 +516,8 @@ async def retry_batch_item(batch_id: str, item_id: str, current_user: dict = Dep
             "config",
             GenerationConfig(include_homepass=False).model_dump(mode="json"),
         ),
-        output_kml_name=job["output_kml_name"],
         output_kmz_name=job["output_kmz_name"],
         output_csv_name=job["output_csv_name"],
-        batch_item_id=item_id,
     )
     progress_manager.update_batch_job(batch_id, job.get("job_id", ""), job_id=new_job_id, status="QUEUED", error=None)
     return success_response(data={"batch_id": batch_id, "item_id": item_id, "job_id": new_job_id})
