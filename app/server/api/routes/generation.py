@@ -109,6 +109,20 @@ def _batch_slug(filename: str) -> str:
     return stem or "design"
 
 
+def _parse_feature_colors_from_form(colors_json: Optional[str]) -> dict:
+    """Parse the current UI colors passed along with an export request."""
+    if not colors_json:
+        return {}
+    try:
+        colors = json.loads(colors_json)
+    except json.JSONDecodeError as exc:
+        raise InvalidFileError(
+            message=f"Invalid feature colors JSON: {exc}",
+            details={"raw": colors_json[:200]},
+        ) from exc
+    return colors if isinstance(colors, dict) else {}
+
+
 def _is_boundary_file(filename: str) -> bool:
     lowered = filename.lower()
     return not _is_pop_file(filename) and any(token in lowered for token in ("boundary", "polygon", "area"))
@@ -206,6 +220,7 @@ async def generate_design(
     popFile: Optional[UploadFile] = File(None),
     config: Optional[str] = Form(None),
     mode: Optional[str] = Form(None),
+    feature_colors: Optional[str] = Form(None),
     job_id: Optional[str] = Form(None),
     project_id: Optional[str] = Form(None),
     current_user: dict = Depends(get_generation_user),
@@ -226,6 +241,7 @@ async def generate_design(
             raise InvalidFileError(message="Boundary KML/KMZ wajib diunggah.")
 
         gen_config = _parse_config_from_form(config)
+        parsed_feature_colors = _parse_feature_colors_from_form(feature_colors)
         # Existing API clients that omit mode keep the legacy full-export
         # behaviour. The dashboard explicitly sends CORE.
         effective_mode = (mode or ("FULL" if gen_config.include_homepass else "CORE")).upper()
@@ -271,6 +287,7 @@ async def generate_design(
             output_kml_name=output_kml_name,
             output_kmz_name=output_kmz_name,
             output_csv_name=output_csv_name,
+            feature_colors=parsed_feature_colors,
         )
 
         return success_response(
@@ -290,6 +307,7 @@ async def generate_batch(
     project_id: Optional[str] = Form(None),
     config: Optional[str] = Form(None),
     force_refresh: bool = Form(False),
+    feature_colors: Optional[str] = Form(None),
     current_user: dict = Depends(get_generation_user),
 ):
     """Create one isolated generation job per boundary/POP pair."""
@@ -302,6 +320,7 @@ async def generate_batch(
     await _require_project_access(project_id, current_user)
 
     parsed_config = _parse_config_from_form(config)
+    parsed_feature_colors = _parse_feature_colors_from_form(feature_colors)
     gen_config = parsed_config.model_copy(update={
         "include_homepass": False,
         "force_refresh_osm": force_refresh or parsed_config.force_refresh_osm,
@@ -399,7 +418,11 @@ async def generate_batch(
 
     progress_manager.create_batch(batch_id, jobs, project_id=project_id, user_id=current_user["id"])
     with open(batch_root / "manifest.json", "w") as manifest_file:
-        json.dump({"project_id": project_id, "jobs": jobs}, manifest_file, indent=2)
+        json.dump(
+            {"project_id": project_id, "feature_colors": parsed_feature_colors, "jobs": jobs},
+            manifest_file,
+            indent=2,
+        )
     for job in jobs:
         if job["status"] == "SKIPPED":
             progress_manager.update_batch_job(batch_id, job["job_id"], status="SKIPPED")
@@ -426,6 +449,7 @@ async def generate_batch(
             output_kmz_name=job["output_kmz_name"],
             output_csv_name=job["output_csv_name"],
             batch_item_id=job["item_id"],
+            feature_colors=parsed_feature_colors,
         )
     batch_state = progress_manager.get_batch(batch_id)
     # Keeps the endpoint deterministic in degraded Redis/test environments;
@@ -494,6 +518,7 @@ async def retry_batch_item(batch_id: str, item_id: str, current_user: dict = Dep
         raise HTTPException(status_code=404, detail="Manifest batch tidak ditemukan.")
     with open(manifest_path) as manifest_file:
         manifest = json.load(manifest_file)
+    manifest_feature_colors = manifest.get("feature_colors", {})
     job = next((item for item in manifest.get("jobs", []) if item.get("item_id") == item_id), None)
     if not job or job.get("status") == "SKIPPED":
         raise HTTPException(status_code=404, detail="Item batch tidak dapat di-retry.")
@@ -517,6 +542,7 @@ async def retry_batch_item(batch_id: str, item_id: str, current_user: dict = Dep
         output_kmz_name=job["output_kmz_name"],
         output_csv_name=job["output_csv_name"],
         batch_item_id=item_id,
+        feature_colors=manifest_feature_colors,
     )
     progress_manager.update_batch_job(batch_id, job.get("job_id", ""), job_id=new_job_id, status="QUEUED", error=None)
     return success_response(data={"batch_id": batch_id, "item_id": item_id, "job_id": new_job_id})
@@ -614,6 +640,7 @@ async def generate_homepass(
     project_id: Optional[str] = Form(None),
     batch_id: Optional[str] = Form(None),
     item_id: Optional[str] = Form(None),
+    feature_colors: Optional[str] = Form(None),
     current_user: dict = Depends(get_generation_user),
 ):
     """Generate HC and direct ODP-to-house lines from the last core cache."""
@@ -623,6 +650,7 @@ async def generate_homepass(
         job_id = str(uuid.uuid4())
     progress_manager.create_job(job_id, user_id=current_user["id"], batch_id=batch_id)
     try:
+        parsed_feature_colors = _parse_feature_colors_from_form(feature_colors)
         user_dir = _resolve_homepass_cache_dir(
             current_user["id"], project_id, batch_id, item_id
         )
@@ -646,6 +674,7 @@ async def generate_homepass(
             output_kmz_path=str(output_kmz_path),
             output_csv_path=str(output_csv_path),
             cache_dir=str(user_dir),
+            feature_colors=parsed_feature_colors,
         )
         return success_response(data={
             "message": "Homepass generation job accepted.",
@@ -664,6 +693,7 @@ async def regenerate_cables(
     project_id: Optional[str] = Form(None),
     batch_id: Optional[str] = Form(None),
     item_id: Optional[str] = Form(None),
+    feature_colors: Optional[str] = Form(None),
     current_user: dict = Depends(get_generation_user)
 ):
     await _require_project_access(project_id, current_user)
@@ -673,6 +703,7 @@ async def regenerate_cables(
     progress_manager.create_job(job_id, user_id=current_user["id"], batch_id=batch_id)
 
     try:
+        parsed_feature_colors = _parse_feature_colors_from_form(feature_colors)
         user_dir = _resolve_homepass_cache_dir(
             current_user["id"], project_id, batch_id, item_id
         )
@@ -693,6 +724,7 @@ async def regenerate_cables(
             include_homepass=True,
             output_csv=str(output_csv_path),
             cache_dir=str(user_dir),
+            feature_colors=parsed_feature_colors,
         )
 
         return success_response(
@@ -712,6 +744,7 @@ async def regenerate_cables(
 async def generate_custom(
     customFile: UploadFile = File(...),
     job_id: Optional[str] = Form(None),
+    feature_colors: Optional[str] = Form(None),
     current_user: dict = Depends(get_generation_user),
 ):
     if not job_id:
@@ -720,6 +753,7 @@ async def generate_custom(
     progress_manager.create_job(job_id, user_id=current_user["id"])
 
     try:
+        parsed_feature_colors = _parse_feature_colors_from_form(feature_colors)
         user_dir = get_user_cache_dir(current_user["id"])
         cleanup_old_files(user_dir)
         custom_path = user_dir / create_user_filename("custom_mapping", "kml")
@@ -741,6 +775,7 @@ async def generate_custom(
             include_homepass=True,
             output_csv=str(output_csv_path),
             cache_dir=str(user_dir),
+            feature_colors=parsed_feature_colors,
         )
 
         return success_response(

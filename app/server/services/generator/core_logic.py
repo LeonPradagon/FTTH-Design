@@ -745,7 +745,14 @@ def _save_core_manifest(boundary_path, pop_path, has_custom_pop, config, osm_tim
     os.replace(temporary_path, path)
 
 
-def regenerate_cables_only(output_path, include_homepass=False, output_csv=None, cache_dir=None, job_id=None):
+def regenerate_cables_only(
+    output_path,
+    include_homepass=False,
+    output_csv=None,
+    cache_dir=None,
+    job_id=None,
+    feature_colors=None,
+):
     """Regenerate HANYA jalur kabel (feeder, distribusi, drop) tanpa mengubah
     posisi ODC/ODP/tiang/rumah. Membaca posisi dari design state cache dan
     road graph dari pickle cache, lalu menjalankan routing + export KMZ.
@@ -860,6 +867,7 @@ def regenerate_cables_only(output_path, include_homepass=False, output_csv=None,
         road_feeder=True,
         distribution_segments=distribution_segments,
         boundary=network_state.get("boundary"),
+        feature_colors=feature_colors,
         progress_callback=lambda done, total, message: _report_export_progress(
             job_id, done, total, message
         ),
@@ -887,7 +895,15 @@ def regenerate_cables_only(output_path, include_homepass=False, output_csv=None,
     return output_path
 
 
-def generate_cables_from_custom_points(file_path, output_path, include_homepass=False, output_csv=None, cache_dir=None, job_id=None):
+def generate_cables_from_custom_points(
+    file_path,
+    output_path,
+    include_homepass=False,
+    output_csv=None,
+    cache_dir=None,
+    job_id=None,
+    feature_colors=None,
+):
     """
     Men-generate jalur kabel (routing mengikuti jalan OSM) dari file KML custom
     yang sudah berisi titik-titik mapping OLT, ODC, ODP, dan RUMAH.
@@ -1039,6 +1055,7 @@ def generate_cables_from_custom_points(file_path, output_path, include_homepass=
         road_graph=road_graph,
         road_feeder=(road_graph is not None),
         distribution_segments=distribution_segments,
+        feature_colors=feature_colors,
         progress_callback=lambda done, total, message: _report_export_progress(
             job_id, done, total, message
         ),
@@ -1060,7 +1077,13 @@ def generate_cables_from_custom_points(file_path, output_path, include_homepass=
     return output_path
 
 
-def generate_homepass_from_state(output_path, output_csv=None, cache_dir=None, job_id=None):
+def generate_homepass_from_state(
+    output_path,
+    output_csv=None,
+    cache_dir=None,
+    job_id=None,
+    feature_colors=None,
+):
     """Export HC/drop cables from the last Network Core without OSM/routing."""
     if job_id:
         progress_manager.update(job_id, "PARSING", "Memuat cache Network Core...", 10)
@@ -1087,6 +1110,7 @@ def generate_homepass_from_state(output_path, output_csv=None, cache_dir=None, j
         road_drop=False,
         distribution_segments=distribution_segments,
         boundary=state.get("boundary"),
+        feature_colors=feature_colors,
         progress_callback=(
             lambda done, total, message: progress_manager.update(
                 job_id,
@@ -1197,6 +1221,7 @@ def _run_generator_logic(
     cache_dir=None,
     config: GenerationConfig | None = None,
     job_id: str | None = None,
+    feature_colors=None,
 ):
     """Run the full generation pipeline. Returns (pop, odcs, feeder_segments, config, osm_ts)."""
     pipeline_started = time.perf_counter()
@@ -1277,6 +1302,7 @@ def _run_generator_logic(
             road_feeder=False,
             distribution_segments=cached_distribution_segments,
             boundary=boundary,
+            feature_colors=feature_colors,
             progress_callback=lambda done, total, message: _report_export_progress(
                 job_id, done, total, message
             ),
@@ -1412,6 +1438,7 @@ def _run_generator_logic(
         road_feeder=True,
         distribution_segments=distribution_segments,
         boundary=boundary,
+        feature_colors=feature_colors,
         progress_callback=lambda done, total, message: _report_export_progress(
             job_id, done, total, message
         ),

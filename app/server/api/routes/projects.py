@@ -17,11 +17,11 @@ router = APIRouter(prefix="/api")
 
 DEFAULT_FEATURE_COLORS = {
     "pop": "#eab308",
-    "odc": "#ef4444",
-    "odp": "#3b82f6",
+    "odc": "#ff0000",
+    "odp": "#0000ff",
     "house": "#6b7280",
-    "feeder": "#ef4444",
-    "distribution": "#8b5cf6",
+    "feeder": "#ff0000",
+    "distribution": "#aa00ff",
 }
 
 LEGACY_DEFAULT_FEATURE_COLORS = {
@@ -31,6 +31,15 @@ LEGACY_DEFAULT_FEATURE_COLORS = {
     "house": "#6b7280",
     "feeder": "#ef4444",
     "distribution": "#3b82f6",
+}
+
+PREVIOUS_DEFAULT_FEATURE_COLORS = {
+    "pop": "#eab308",
+    "odc": "#ef4444",
+    "odp": "#3b82f6",
+    "house": "#6b7280",
+    "feeder": "#ef4444",
+    "distribution": "#8b5cf6",
 }
 
 # Kept inside the existing filters JSON for compatibility with local Prisma
@@ -60,11 +69,14 @@ def _stored_generation_config(project) -> dict:
 
 def get_allowed_feature_colors(requested_colors: dict, current_user: dict) -> dict:
     if current_user.get("role") == "admin":
-        uses_legacy_defaults = all(
-            str(requested_colors.get(key, "")).lower() == color
-            for key, color in LEGACY_DEFAULT_FEATURE_COLORS.items()
+        uses_old_defaults = any(
+            all(
+                str(requested_colors.get(key, "")).lower() == color
+                for key, color in palette.items()
+            )
+            for palette in (LEGACY_DEFAULT_FEATURE_COLORS, PREVIOUS_DEFAULT_FEATURE_COLORS)
         )
-        if uses_legacy_defaults:
+        if uses_old_defaults:
             return DEFAULT_FEATURE_COLORS.copy()
         return {**DEFAULT_FEATURE_COLORS, **requested_colors}
     return DEFAULT_FEATURE_COLORS.copy()

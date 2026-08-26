@@ -36,6 +36,7 @@ export type LayerConfig = {
   id: string;
   name: string;
   url: string;
+  csvUrl?: string;
   visible: boolean;
   color?: string;
   groupId?: string;
@@ -387,20 +388,21 @@ export default function Home() {
       };
 
       let savedGenerationConfig = parseJson<Partial<GenerationConfig>>(data.generation_config, {});
-      // Older projects did not have a project-level config field. Recover
-      // their last generated config from DesignVersion before falling back to
-      // defaults, so an existing project does not silently reset.
-      if (!Object.keys(savedGenerationConfig).length) {
-        try {
-          const versionsResponse = await fetch(`/api/proxy/api/projects/${data.id}/versions`);
-          if (versionsResponse.ok) {
-            const versionsPayload = await versionsResponse.json();
-            const latestVersion = (versionsPayload.data || [])[0];
+      let latestVersion: DesignVersion | undefined;
+      // Load the latest version once both for legacy config recovery and for
+      // restoring download URLs for projects saved before csvUrl was stored
+      // on generated layers.
+      try {
+        const versionsResponse = await fetch(`/api/proxy/api/projects/${data.id}/versions`);
+        if (versionsResponse.ok) {
+          const versionsPayload = await versionsResponse.json();
+          latestVersion = (versionsPayload.data || [])[0];
+          if (!Object.keys(savedGenerationConfig).length) {
             savedGenerationConfig = latestVersion?.config || {};
           }
-        } catch {
-          // The project itself can still be loaded when version history is unavailable.
         }
+      } catch {
+        // The project itself can still be loaded when version history is unavailable.
       }
       const restoredGenerationConfig = {
         ...DEFAULT_CONFIG,
@@ -457,6 +459,22 @@ export default function Home() {
         }
         return layer;
       });
+
+      const generatedDesignLayer = [...normalizedLayers].reverse().find((layer: LayerConfig) =>
+        isGeneratedDesignLayer(layer) && layer.visible
+      ) || [...normalizedLayers].reverse().find((layer: LayerConfig) =>
+        isGeneratedDesignLayer(layer)
+      );
+      const restoredKmzUrl = generatedDesignLayer?.url && /\.kmz(?:$|[?#])/i.test(generatedDesignLayer.url)
+        ? generatedDesignLayer.url
+        : null;
+      const restoredCsvUrl = generatedDesignLayer?.csvUrl
+        ? toProxyApiUrl(generatedDesignLayer.csvUrl)
+        : latestVersion?.artifacts?.csv
+          ? toProxyApiUrl(latestVersion.artifacts.csv)
+          : null;
+      setKmzUrl(restoredKmzUrl);
+      setCsvUrl(restoredCsvUrl);
 
       // Trees belong to the currently opened project's KML sources. Clear
       // the previous project's tree so cached map data cannot hide the
@@ -773,6 +791,7 @@ export default function Home() {
       const formData = new FormData();
       batchFiles.forEach(file => formData.append("files", file, file.name));
       formData.append("config", JSON.stringify({ ...generationConfig, include_homepass: false }));
+      formData.append("feature_colors", JSON.stringify(featureColors));
       if (currentProjectId) formData.append("project_id", currentProjectId);
       const response = await fetch("/api/proxy/generate/batch", { method: "POST", body: formData });
       const payload = await response.json();
@@ -791,7 +810,7 @@ export default function Home() {
           item_id: string;
           design_name: string;
           boundary_name: string;
-          result?: { url?: string };
+          result?: { url?: string; csv_url?: string };
           percent?: number;
           stage?: string;
           message?: string;
@@ -808,6 +827,15 @@ export default function Home() {
 
         if (state.status === "COMPLETED") {
           const hasNewDesign = jobs.some(job => job.status === "COMPLETED" && job.result?.url);
+          const latestCompletedJob = [...jobs].reverse().find(job =>
+            job.status === "COMPLETED" && job.result?.url
+          );
+          if (latestCompletedJob?.result?.url) {
+            setKmzUrl(toProxyApiUrl(latestCompletedJob.result.url));
+            setCsvUrl(latestCompletedJob.result.csv_url
+              ? toProxyApiUrl(latestCompletedJob.result.csv_url)
+              : null);
+          }
           setLayers(prev => {
             const newLayers: LayerConfig[] = jobs.flatMap(job => {
                 if (job.status !== "COMPLETED" || !job.result?.url) return [];
@@ -819,6 +847,7 @@ export default function Home() {
                   id: `design:batch:${batchId}:${job.item_id}`,
                   name: job.design_name,
                   url: toProxyApiUrl(job.result.url),
+                  csvUrl: job.result.csv_url ? toProxyApiUrl(job.result.csv_url) : undefined,
                   visible: true,
                   color: "#22c55e",
                   groupId: targetGroupId,
@@ -891,6 +920,7 @@ export default function Home() {
         // retained for compatibility, but Homepass is now a separate job.
         formData.append("config", JSON.stringify({ ...generationConfig, include_homepass: false }));
         formData.append("mode", "CORE");
+        formData.append("feature_colors", JSON.stringify(featureColors));
 
         const jobId = `job-${Date.now()}`;
         formData.append("job_id", jobId);
@@ -930,6 +960,7 @@ export default function Home() {
                   id: designId,
                   name: `FTTH Design - ${latestBoundary.name}`,
                   url: toProxyApiUrl(result.url),
+                  csvUrl: result.csv_url ? toProxyApiUrl(result.csv_url) : undefined,
                   visible: true,
                   color: "#22c55e",
                   groupId: designGroupId,
@@ -1030,6 +1061,7 @@ export default function Home() {
 
         const formData = new FormData();
         formData.append("customFile", customBlob, customLayer.name);
+        formData.append("feature_colors", JSON.stringify(featureColors));
 
         const jobId = `job-${Date.now()}`;
         formData.append("job_id", jobId);
@@ -1053,7 +1085,7 @@ export default function Home() {
 
             if (pData.result) {
               const result = pData.result;
-              const newDesign: LayerConfig = { id: "design", name: "FTTH Design", url: toProxyApiUrl(result.url), visible: true, color: "#22c55e" };
+              const newDesign: LayerConfig = { id: "design", name: "FTTH Design", url: toProxyApiUrl(result.url), csvUrl: result.csv_url ? toProxyApiUrl(result.csv_url) : undefined, visible: true, color: "#22c55e" };
               setLayers(prev => {
                 const newLayers = [...prev.filter(l => l.id !== 'design'), newDesign];
                 setFilters(prevFilters => {
@@ -1112,6 +1144,7 @@ export default function Home() {
       const formData = new FormData();
       const jobId = `job-${Date.now()}`;
       formData.append("job_id", jobId);
+      formData.append("feature_colors", JSON.stringify(featureColors));
       if (currentProjectId) formData.append("project_id", currentProjectId);
       const selectedDesign = layers.find(layer => layer.visible && (
         layer.id === "design" ||
@@ -1149,6 +1182,7 @@ export default function Home() {
               id: selectedDesign?.id || "design",
               name: selectedDesign?.name || "FTTH Design",
               url: toProxyApiUrl(result.url),
+              csvUrl: result.csv_url ? toProxyApiUrl(result.csv_url) : undefined,
               visible: true,
               color: selectedDesign?.color || "#22c55e",
               status: "COMPLETED",
@@ -1210,6 +1244,7 @@ export default function Home() {
       const formData = new FormData();
       const jobId = `job-${Date.now()}`;
       formData.append("job_id", jobId);
+      formData.append("feature_colors", JSON.stringify(featureColors));
       const activeBoundary = layers.find(layer => layer.visible && (
         layer.name.toLowerCase().includes("boundary") || layer.id === "boundary"
       ));
@@ -1241,7 +1276,7 @@ export default function Home() {
           setIsGeneratingHomepass(false);
           if (pData.result) {
             const result = pData.result;
-              const newDesign: LayerConfig = { id: selectedDesign?.id || "design", name: selectedDesign ? `${selectedDesign.name} + Homepass` : "FTTH Design + Homepass", url: toProxyApiUrl(result.url), visible: true, color: "#22c55e", groupId: selectedDesign?.groupId, groupName: selectedDesign?.groupName, boundaryName: selectedDesign?.boundaryName, status: "COMPLETED" };
+              const newDesign: LayerConfig = { id: selectedDesign?.id || "design", name: selectedDesign ? `${selectedDesign.name} + Homepass` : "FTTH Design + Homepass", url: toProxyApiUrl(result.url), csvUrl: result.csv_url ? toProxyApiUrl(result.csv_url) : undefined, visible: true, color: "#22c55e", groupId: selectedDesign?.groupId, groupName: selectedDesign?.groupName, boundaryName: selectedDesign?.boundaryName, status: "COMPLETED" };
             setLayers(prev => {
               const newLayers = selectedDesign
                 ? prev.map(layer => layer.id === selectedDesign.id ? newDesign : layer)

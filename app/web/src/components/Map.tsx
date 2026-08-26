@@ -76,12 +76,20 @@ type FeatureClassification = {
 };
 
 const classifyFeature = (feature: any, layer: LayerConfig): FeatureClassification => {
-  const name = String(feature.properties?.name || "");
+  const name = String(feature.properties?.name || "").trim();
+  const compactName = name.replace(/\s+/g, "");
   const description = String(feature.properties?.description || "");
+  const iconUrl = String(
+    feature.properties?.icon
+      || feature.properties?.iconUrl
+      || feature.properties?.iconHref
+      || ""
+  ).toLowerCase();
   const folderPath = String(feature.properties?.kmlFolderPath || "");
   const nameUpper = name.toUpperCase();
   const descriptionUpper = description.toUpperCase();
   const folderPathUpper = folderPath.toUpperCase();
+  const folderParts = folderPathUpper.split("/").map((part) => part.trim());
   const layerNameUpper = layer.name.toUpperCase();
   const geometryType = feature.geometry?.type;
   const isLine = geometryType === "LineString" || geometryType === "MultiLineString";
@@ -90,6 +98,7 @@ const classifyFeature = (feature: any, layer: LayerConfig): FeatureClassificatio
   const hasPopContext = folderPathUpper
     .split("/")
     .some((part) => /(^|\s)(POP|OLT)(\s|$)/.test(part.trim()));
+  const hasOdpContext = folderParts.some((part) => part === "ODP" || part.startsWith("ODP "));
 
   const isPop = isPoint && (
     layer.id === "pop"
@@ -100,16 +109,23 @@ const classifyFeature = (feature: any, layer: LayerConfig): FeatureClassificatio
     || nameUpper.includes("POP")
     || nameUpper.includes("OLT")
   );
-  const isOdc = isPoint && (
-    nameUpper.startsWith("ODC") || descriptionUpper.includes("JUMLAH ODP:")
-  );
   const isClosure = isPoint && (
     nameUpper.includes("JOIN CLOSURE") || nameUpper.includes("CLOSURE")
   );
-  const isOdp = isPoint && (
+  const isOdpLabel = (
+    nameUpper.includes("ODP")
+    || /^\d{1,3}\/\d{1,3}(?:-\d{1,3})?$/.test(compactName)
+  );
+  const isOdc = isPoint && !isClosure && !isOdpLabel && (
+    nameUpper.startsWith("ODC") || descriptionUpper.includes("JUMLAH ODP:")
+  );
+  const isOdp = isPoint && !isOdc && (
     /^\d{1,2}\/\d{1,2}$/.test(name)
+    || /^\d{1,3}\/\d{1,3}$/.test(compactName)
     || descriptionUpper.includes("INDUK: ODC")
-    || nameUpper.includes("ODP")
+    || isOdpLabel
+    || hasOdpContext
+    || (iconUrl.includes("triangle") && !isClosure)
   );
   const isHouse = isPoint && (
     /^\d{1,2}\/\d{1,2}-\d{1,2}$/.test(name)
@@ -118,7 +134,10 @@ const classifyFeature = (feature: any, layer: LayerConfig): FeatureClassificatio
   );
 
   const isFeeder = isLine && (
-    nameUpper.includes("FEEDER")
+    nameUpper.startsWith("FD ")
+    || nameUpper.startsWith("FD_")
+    || folderPathUpper.split("/").some((part) => ["LINE FD", "FEEDER", "KABEL FEEDER", "FEEDER ROUTE"].includes(part.trim()))
+    || nameUpper.includes("FEEDER")
     || descriptionUpper.includes("FEEDER")
     || feature.properties?.stroke === "#ff0000"
   );

@@ -52,6 +52,7 @@ async def generate_task(
     output_csv_name: str,
     batch_id: str | None = None,
     batch_item_id: str | None = None,
+    feature_colors: dict | None = None,
 ):
     try:
         await _update_generation_job(
@@ -71,6 +72,7 @@ async def generate_task(
             cache_dir,
             config,
             job_id,
+            feature_colors,
         )
 
         if not os.path.exists(output_kmz_path):
@@ -295,13 +297,30 @@ async def generate_task(
             progress_manager.update_batch_job(batch_id, job_id, status="FAILED", error=str(e))
         raise
 
-async def regenerate_cables_task(ctx, output_path: str, include_homepass: bool, output_csv: str, cache_dir: str, job_id: str, user_id: str):
+async def regenerate_cables_task(
+    ctx,
+    output_path: str,
+    include_homepass: bool,
+    output_csv: str,
+    cache_dir: str,
+    job_id: str,
+    user_id: str,
+    feature_colors: dict | None = None,
+):
     from server.services.generator.core_logic import regenerate_cables_only
     try:
         await _update_generation_job(
             job_id, status="RUNNING", stage="STARTING", progress=2, error=None
         )
-        await asyncio.to_thread(regenerate_cables_only, output_path, include_homepass, output_csv, cache_dir, job_id)
+        await asyncio.to_thread(
+            regenerate_cables_only,
+            output_path,
+            include_homepass,
+            output_csv,
+            cache_dir,
+            job_id,
+            feature_colors,
+        )
 
         output_kmz_name = Path(output_path).name
         output_csv_name = Path(output_csv).name
@@ -327,13 +346,32 @@ async def regenerate_cables_task(ctx, output_path: str, include_homepass: bool, 
         await _record_job_failure(job_id, e)
         raise
 
-async def generate_custom_task(ctx, custom_path: str, output_kmz_path: str, include_homepass: bool, output_csv: str, cache_dir: str, job_id: str, user_id: str):
+async def generate_custom_task(
+    ctx,
+    custom_path: str,
+    output_kmz_path: str,
+    include_homepass: bool,
+    output_csv: str,
+    cache_dir: str,
+    job_id: str,
+    user_id: str,
+    feature_colors: dict | None = None,
+):
     from server.services.generator.core_logic import generate_cables_from_custom_points
     try:
         await _update_generation_job(
             job_id, status="RUNNING", stage="STARTING", progress=2, error=None
         )
-        await asyncio.to_thread(generate_cables_from_custom_points, custom_path, output_kmz_path, include_homepass, output_csv, cache_dir, job_id)
+        await asyncio.to_thread(
+            generate_cables_from_custom_points,
+            custom_path,
+            output_kmz_path,
+            include_homepass,
+            output_csv,
+            cache_dir,
+            job_id,
+            feature_colors,
+        )
 
         output_kmz_name = Path(output_kmz_path).name
         output_csv_name = Path(output_csv).name
@@ -360,7 +398,15 @@ async def generate_custom_task(ctx, custom_path: str, output_kmz_path: str, incl
         raise
 
 
-async def generate_homepass_task(ctx, output_kmz_path: str, output_csv_path: str, cache_dir: str, job_id: str, user_id: str):
+async def generate_homepass_task(
+    ctx,
+    output_kmz_path: str,
+    output_csv_path: str,
+    cache_dir: str,
+    job_id: str,
+    user_id: str,
+    feature_colors: dict | None = None,
+):
     """Create the optional HC/drop layer from the immutable core cache."""
     try:
         await _update_generation_job(
@@ -373,6 +419,7 @@ async def generate_homepass_task(ctx, output_kmz_path: str, output_csv_path: str
             output_csv_path,
             cache_dir,
             job_id,
+            feature_colors,
         )
         output_kmz_name = Path(output_kmz_path).name
         output_csv_name = Path(output_csv_path).name

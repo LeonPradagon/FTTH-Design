@@ -1,4 +1,5 @@
 import asyncio
+import json
 import pytest
 from fastapi.testclient import TestClient
 from types import SimpleNamespace
@@ -67,6 +68,25 @@ def test_generate_design_success(tmp_path, mock_redis_pool, mock_progress_manage
     assert kwargs["job_id"] == response.json()["data"]["job_id"]
     assert kwargs["user_id"] == "test_user_id"
     assert kwargs["project_id"] is None
+
+
+def test_generate_design_forwards_feature_colors(tmp_path, mock_redis_pool, mock_progress_manager, mock_storage_upload):
+    boundary_file = tmp_path / "boundary.kml"
+    boundary_file.write_text("<kml></kml>")
+    feature_colors = {
+        "feeder": "#112233",
+        "distribution": "#445566",
+    }
+
+    with open(boundary_file, "rb") as f:
+        response = client.post(
+            "/generate",
+            files={"boundaryFile": ("boundary.kml", f)},
+            data={"feature_colors": json.dumps(feature_colors)},
+        )
+
+    assert response.status_code == 200
+    assert mock_redis_pool.enqueue_job.call_args.kwargs["feature_colors"] == feature_colors
 
 def test_regenerate_cables(mock_redis_pool, mock_progress_manager, mock_storage_upload):
     with patch(

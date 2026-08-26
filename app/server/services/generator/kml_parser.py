@@ -18,6 +18,13 @@ def _mapping_group_key(name, kind):
     if kind == "odc":
         match = re.search(r"(?<![A-Z0-9])ODC\s*[-_ ]?\s*(\d+)\b", normalized)
     else:
+        # Reference exports use names such as ``ODC004.ODP003``. The ODC
+        # number is the parent group; the ODP number is only the child index.
+        odc_match = re.search(
+            r"(?<![A-Z0-9])ODC\s*[-_ ]?\s*(\d+)\b", normalized
+        )
+        if odc_match:
+            return odc_match.group(1)
         match = re.search(r"(?<![A-Z0-9])ODP\s*[-_ ]?\s*(\d+)\s*/\s*\d+\b", normalized)
         if not match:
             # Compact ODP names such as ``17/01`` commonly live in an
@@ -172,9 +179,9 @@ def read_custom_mapped_kml(path):
         text = str(text or "")
         if re.search(r"(?<![A-Z0-9])(?:OLT|POP)(?![A-Z0-9])", text, re.IGNORECASE):
             return "olt"
-        if re.search(r"(?<![A-Z0-9])ODC(?![A-Z0-9])", text, re.IGNORECASE):
+        if re.search(r"(?<![A-Z0-9])ODC(?:\s*[-_ ]?\s*\d+)?", text, re.IGNORECASE):
             return "odc"
-        if re.search(r"(?<![A-Z0-9])ODP(?![A-Z0-9])", text, re.IGNORECASE):
+        if re.search(r"(?<![A-Z0-9])ODP(?:\s*[-_ ]?\s*\d+)?", text, re.IGNORECASE):
             return "odp"
         if re.search(r"(?<![A-Z0-9])(?:HC|RUMAH|HOME\s*PASS)(?![A-Z0-9])", text, re.IGNORECASE):
             return "hc"
@@ -195,11 +202,16 @@ def read_custom_mapped_kml(path):
         folder_text = " ".join(folder for folder in folders if folder)
         pt_data = {"name": display_name, "lat": lat, "lon": lon}
 
-        # A compact name such as ``17/01`` is an ODP even when its
-        # description mentions its parent ODC. Prefer that unambiguous form
-        # before scanning description text.
-        if re.fullmatch(r"\s*\d+\s*/\s*\d+\s*", display_name):
+        # ODP identifiers from the reference KMZ can be compound, for
+        # example ``ODC004.ODP003``. Check ODP in the placemark name before
+        # ODC; otherwise the shared ODC prefix misclassifies the point.
+        if (
+            re.fullmatch(r"\s*\d+\s*/\s*\d+\s*", display_name)
+            or re.search(r"(?<![A-Z0-9])ODP", display_name, re.IGNORECASE)
+        ):
             role = "odp"
+        elif re.search(r"(?<![A-Z0-9])ODC", display_name, re.IGNORECASE):
+            role = "odc"
         else:
             # Prefer the Placemark name/description. Folder context is the
             # fallback because a folder may contain different point types.
