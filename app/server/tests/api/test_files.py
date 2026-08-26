@@ -1,7 +1,11 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from server.api.deps import get_current_user, get_generation_user
+from server.api.deps import (
+    get_current_user,
+    get_generation_user,
+    get_rate_limited_generation_user,
+)
 from server.api.routes.files import router
 from server.storage.dependencies import get_object_storage
 from server.tests.fakes import InMemoryObjectStorage
@@ -16,6 +20,7 @@ def create_test_client(storage: InMemoryObjectStorage) -> TestClient:
     }
     app.dependency_overrides[get_current_user] = lambda: current_user
     app.dependency_overrides[get_generation_user] = lambda: current_user
+    app.dependency_overrides[get_rate_limited_generation_user] = lambda: current_user
     app.dependency_overrides[get_object_storage] = lambda: storage
     return TestClient(app)
 

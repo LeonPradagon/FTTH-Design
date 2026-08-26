@@ -2,12 +2,17 @@ import asyncio
 import hashlib
 import hmac
 import time
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from server.api.deps import get_generation_user, get_optional_user
+from server.api.deps import (
+    get_generation_user,
+    get_optional_user,
+    get_rate_limited_generation_user,
+)
 
 
 def _request_with_proxy_auth(value: str | None) -> Request:
@@ -75,3 +80,18 @@ def test_unknown_role_cannot_start_generation():
         asyncio.run(get_generation_user({"id": "guest-1", "role": "guest"}))
 
     assert exc.value.status_code == 403
+
+
+def test_generation_rate_limit_is_enforced(monkeypatch):
+    monkeypatch.setenv("GENERATION_RATE_LIMIT", "1")
+    limiter = AsyncMock()
+    limiter.eval = AsyncMock(side_effect=[1, 2])
+    user = {"id": "engineer-1", "role": "engineer"}
+
+    with patch("server.api.deps.rate_limit_redis", limiter):
+        assert asyncio.run(get_rate_limited_generation_user(user)) == user
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(get_rate_limited_generation_user(user))
+
+    assert exc.value.status_code == 429
+    assert "Retry-After" in exc.value.headers

@@ -25,7 +25,11 @@ from server.core.errors import (
     DesignStateNotFoundError,
 )
 from server.core.response import success_response
-from server.api.deps import get_current_user, get_generation_user
+from server.api.deps import (
+    get_current_user,
+    get_generation_user,
+    get_rate_limited_generation_user,
+)
 from server.api.upload_validation import validate_design_upload
 from server.database import db
 from server.services.user_storage import (
@@ -209,7 +213,7 @@ async def generate_design(
     mode: Optional[str] = Form(None),
     job_id: Optional[str] = Form(None),
     project_id: Optional[str] = Form(None),
-    current_user: dict = Depends(get_generation_user),
+    current_user: dict = Depends(get_rate_limited_generation_user),
 ):
     """Generate a full FTTH network design asynchronously."""
     if not job_id:
@@ -219,12 +223,13 @@ async def generate_design(
     progress_manager.create_job(job_id, user_id=current_user["id"])
 
     try:
+        if not boundaryFile or not boundaryFile.filename:
+            raise InvalidFileError(message="Boundary KML/KMZ wajib diunggah.")
+        if not project_id:
+            raise HTTPException(status_code=400, detail="Project wajib disimpan sebelum generation.")
         await _require_project_access(project_id, current_user)
         user_dir = get_generation_cache_dir(current_user["id"], project_id)
         cleanup_old_files(user_dir)
-
-        if not boundaryFile or not boundaryFile.filename:
-            raise InvalidFileError(message="Boundary KML/KMZ wajib diunggah.")
         validate_design_upload(boundaryFile)
         if popFile and popFile.filename:
             validate_design_upload(popFile)
@@ -292,11 +297,13 @@ async def generate_batch(
     project_id: Optional[str] = Form(None),
     config: Optional[str] = Form(None),
     force_refresh: bool = Form(False),
-    current_user: dict = Depends(get_generation_user),
+    current_user: dict = Depends(get_rate_limited_generation_user),
 ):
     """Create one isolated generation job per boundary/POP pair."""
     if not files:
         raise InvalidFileError(message="Minimal satu file boundary wajib diunggah.")
+    if not project_id:
+        raise HTTPException(status_code=400, detail="Project wajib disimpan sebelum generation.")
     max_files = int(os.getenv("MAX_BATCH_FILES", "100"))
     max_file_bytes = int(os.getenv("MAX_BATCH_FILE_BYTES", str(50 * 1024 * 1024)))
     if len(files) > max_files:
@@ -481,7 +488,7 @@ async def get_batch_progress(batch_id: str, current_user: dict = Depends(get_cur
 
 
 @router.post("/generate/batch/{batch_id}/retry/{item_id}")
-async def retry_batch_item(batch_id: str, item_id: str, current_user: dict = Depends(get_generation_user)):
+async def retry_batch_item(batch_id: str, item_id: str, current_user: dict = Depends(get_rate_limited_generation_user)):
     state = progress_manager.get_batch(batch_id)
     if not state:
         raise HTTPException(status_code=404, detail="Batch tidak ditemukan.")
@@ -615,7 +622,7 @@ async def generate_homepass(
     project_id: Optional[str] = Form(None),
     batch_id: Optional[str] = Form(None),
     item_id: Optional[str] = Form(None),
-    current_user: dict = Depends(get_generation_user),
+    current_user: dict = Depends(get_rate_limited_generation_user),
 ):
     """Generate HC and direct ODP-to-house lines from the last core cache."""
     await _require_project_access(project_id, current_user)
@@ -665,7 +672,7 @@ async def regenerate_cables(
     project_id: Optional[str] = Form(None),
     batch_id: Optional[str] = Form(None),
     item_id: Optional[str] = Form(None),
-    current_user: dict = Depends(get_generation_user)
+    current_user: dict = Depends(get_rate_limited_generation_user)
 ):
     await _require_project_access(project_id, current_user)
     if not job_id:
@@ -713,7 +720,7 @@ async def regenerate_cables(
 async def generate_custom(
     customFile: UploadFile = File(...),
     job_id: Optional[str] = Form(None),
-    current_user: dict = Depends(get_generation_user),
+    current_user: dict = Depends(get_rate_limited_generation_user),
 ):
     if not job_id:
         import uuid

@@ -2,12 +2,19 @@ import os
 import hmac
 import hashlib
 import time
+import redis.asyncio as redis
+from redis.exceptions import RedisError
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from server.core.config import settings
 from server.database import db
 
 from fastapi import Request
+
+rate_limit_redis = redis.from_url(
+    os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+    decode_responses=True,
+)
 
 async def get_optional_user(request: Request):
     # The dedicated proxy secret is preferred.  BETTER_AUTH_SECRET is kept as
@@ -61,6 +68,33 @@ async def get_generation_user(user: dict = Depends(get_optional_user)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
     if user.get("role") not in {"admin", "engineer", "user"}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Generation access is not allowed")
+    return user
+
+
+async def get_rate_limited_generation_user(user: dict = Depends(get_generation_user)):
+    """Limit costly upload and generation requests per authenticated user."""
+    limit = max(1, int(os.getenv("GENERATION_RATE_LIMIT", "10")))
+    window = max(1, int(os.getenv("GENERATION_RATE_WINDOW_SECONDS", "60")))
+    now = int(time.time())
+    key = f"generation_rate:{user['id']}:{now // window}"
+    try:
+        count = await rate_limit_redis.eval(
+            "local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],ARGV[1]) end; return n",
+            1,
+            key,
+            window,
+        )
+    except RedisError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Rate limiter tidak tersedia.",
+        ) from exc
+    if count > limit:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Terlalu banyak permintaan generation. Coba lagi sebentar.",
+            headers={"Retry-After": str(window - now % window)},
+        )
     return user
 
 

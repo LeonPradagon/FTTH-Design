@@ -827,7 +827,6 @@ def regenerate_cables_only(output_path, include_homepass=False, output_csv=None,
                 odc,
                 road_graph,
                 max_distance_m=distribution_limit_m,
-                allow_reposition=False,
             )
         )
     _require_distribution_connectivity(odcs, distribution_segments)

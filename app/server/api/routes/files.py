@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
-from server.api.deps import get_current_user, get_generation_user
+from server.api.deps import get_current_user, get_generation_user, get_rate_limited_generation_user
 from server.api.upload_validation import validate_design_upload
 from server.core.logging import logger
 from server.core.response import success_response
@@ -37,7 +37,7 @@ def _iter_body(body: BinaryIO, chunk_size: int = 64 * 1024) -> Iterator[bytes]:
 @router.post("/api/upload")
 async def upload_file(
     file: UploadFile = File(...),
-    current_user: dict = Depends(get_generation_user),
+    current_user: dict = Depends(get_rate_limited_generation_user),
     storage: ObjectStorage = Depends(get_object_storage),
 ):
     filename = f"{uuid4().hex[:10]}_{_safe_filename(validate_design_upload(file))}"
