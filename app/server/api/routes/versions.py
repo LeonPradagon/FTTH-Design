@@ -4,7 +4,7 @@ from prisma import Json
 from server.api.deps import get_admin_user, get_current_user, get_generation_user
 from server.api.routes.files import _download_object
 from server.core.response import error_response, success_response
-from server.database import db
+from server.database import db, lock_project_version_sequence
 from server.storage.base import ObjectStorage
 from server.storage.dependencies import get_object_storage
 
@@ -174,6 +174,7 @@ async def _copy_version(
     action: str,
 ):
     async with db.tx() as transaction:
+        await lock_project_version_sequence(transaction, project_id)
         source = await transaction.designversion.find_unique(
             where={"projectId_version": {"projectId": project_id, "version": version}}
         )

@@ -770,10 +770,16 @@ export default function Home() {
     setIsGenerating(true);
     setGenerationProgress({ stage: "QUEUED", message: "Menyiapkan batch design...", percent: 1 });
     try {
+      if (!currentProjectIdRef.current) {
+        await saveProject(projectName || "Untitled Project");
+      }
+      const activeProjectId = currentProjectIdRef.current;
+      if (!activeProjectId) throw new Error("Project harus tersimpan sebelum generate.");
+
       const formData = new FormData();
       batchFiles.forEach(file => formData.append("files", file, file.name));
       formData.append("config", JSON.stringify({ ...generationConfig, include_homepass: false }));
-      if (currentProjectId) formData.append("project_id", currentProjectId);
+      formData.append("project_id", activeProjectId);
       const response = await fetch("/api/proxy/generate/batch", { method: "POST", body: formData });
       const payload = await response.json();
       if (!payload.success) throw new Error(payload.error?.message || payload.detail || "Batch gagal dibuat");
@@ -873,6 +879,12 @@ export default function Home() {
       setHasNetworkCore(false);
       addToast(popLayer ? "Mengambil data Boundary dan POP dari peta..." : "Mengambil data Boundary (POP akan digenerate otomatis)...", "info");
       try {
+        if (!currentProjectIdRef.current) {
+          await saveProject(projectName || "Untitled Project");
+        }
+        const activeProjectId = currentProjectIdRef.current;
+        if (!activeProjectId) throw new Error("Project harus tersimpan sebelum generate.");
+
         const boundaryRes = await fetch(boundaryLayer.url);
         if (!boundaryRes.ok) throw new Error(`Gagal mengambil file boundary: ${boundaryRes.statusText}`);
         const boundaryBlob = await boundaryRes.blob();
@@ -891,6 +903,7 @@ export default function Home() {
         // retained for compatibility, but Homepass is now a separate job.
         formData.append("config", JSON.stringify({ ...generationConfig, include_homepass: false }));
         formData.append("mode", "CORE");
+        formData.append("project_id", activeProjectId);
 
         const jobId = `job-${Date.now()}`;
         formData.append("job_id", jobId);
@@ -939,13 +952,12 @@ export default function Home() {
                   status: "COMPLETED",
                 };
 
-                // A new generation for the same boundary replaces the
-                // previous design layer. Keeping both visible makes cables
-                // from different generations overlap and look disconnected.
                 const newLayers = [
-                  ...prev.filter(layer => !(
+                  ...prev.map(layer => (
                     isGeneratedDesignLayer(layer)
                     && (layer.groupId === designGroupId || layer.id === "design")
+                      ? { ...layer, visible: false }
+                      : layer
                   )),
                   newDesign,
                 ];

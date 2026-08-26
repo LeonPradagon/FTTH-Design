@@ -969,7 +969,7 @@ def _assign_odps_globally_by_road(
     return True
 
 
-def build_distribution_tree(odc, road_graph, max_distance_m=500.0):
+def build_distribution_tree(odc, road_graph, max_distance_m=500.0, allow_reposition=True):
     """Build a road-constrained distribution tree for one ODC.
 
     The ODC remains the root and every ODP still counts towards the ODC
@@ -1146,6 +1146,18 @@ def build_distribution_tree(odc, road_graph, max_distance_m=500.0):
 
     for odp in odps:
         if odp.id not in segments:
+            if not allow_reposition:
+                segments[odp.id] = {
+                    "source_id": None,
+                    "target_id": odp.id,
+                    "source_label": None,
+                    "target_label": odp.id,
+                    "coords": [],
+                    "length_m": None,
+                    "routing_cost": None,
+                    "connected": False,
+                }
+                continue
             # The ODP has no valid road route. Try to reposition it to a
             # point on the road network that IS reachable from the ODC.
             # This rescues ODPs that were placed on a disconnected road

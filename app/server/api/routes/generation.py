@@ -26,6 +26,7 @@ from server.core.errors import (
 )
 from server.core.response import success_response
 from server.api.deps import get_current_user, get_generation_user
+from server.api.upload_validation import validate_design_upload
 from server.database import db
 from server.services.user_storage import (
     create_user_filename,
@@ -224,6 +225,9 @@ async def generate_design(
 
         if not boundaryFile or not boundaryFile.filename:
             raise InvalidFileError(message="Boundary KML/KMZ wajib diunggah.")
+        validate_design_upload(boundaryFile)
+        if popFile and popFile.filename:
+            validate_design_upload(popFile)
 
         gen_config = _parse_config_from_form(config)
         # Existing API clients that omit mode keep the legacy full-export
@@ -312,13 +316,10 @@ async def generate_batch(
     input_dir.mkdir(parents=True, exist_ok=True)
     saved_files: list[tuple[str, Path]] = []
     for upload in files:
-        filename = Path(upload.filename or "upload.kml").name
+        filename = validate_design_upload(upload, max_file_bytes)
         destination = input_dir / f"{uuid.uuid4().hex[:10]}_{filename}"
         with open(destination, "wb") as output:
             shutil.copyfileobj(upload.file, output)
-        if destination.stat().st_size > max_file_bytes:
-            destination.unlink(missing_ok=True)
-            raise HTTPException(status_code=413, detail=f"Ukuran file maksimal {max_file_bytes // (1024 * 1024)} MB.")
         upload_file(current_user["id"], destination.name, destination)
         saved_files.append((filename, destination))
 
@@ -399,7 +400,11 @@ async def generate_batch(
 
     progress_manager.create_batch(batch_id, jobs, project_id=project_id, user_id=current_user["id"])
     with open(batch_root / "manifest.json", "w") as manifest_file:
-        json.dump({"project_id": project_id, "jobs": jobs}, manifest_file, indent=2)
+        json.dump(
+            {"project_id": project_id, "config": gen_config.model_dump(mode="json"), "jobs": jobs},
+            manifest_file,
+            indent=2,
+        )
     for job in jobs:
         if job["status"] == "SKIPPED":
             progress_manager.update_batch_job(batch_id, job["job_id"], status="SKIPPED")
@@ -512,7 +517,10 @@ async def retry_batch_item(batch_id: str, item_id: str, current_user: dict = Dep
         output_csv_path=str(output_dir / job["output_csv_name"]),
         has_custom_pop=True,
         cache_dir=job["cache_dir"],
-        gen_config_dict=GenerationConfig(include_homepass=False).model_dump(),
+        gen_config_dict=manifest.get(
+            "config",
+            GenerationConfig(include_homepass=False).model_dump(mode="json"),
+        ),
         output_kml_name=job["output_kml_name"],
         output_kmz_name=job["output_kmz_name"],
         output_csv_name=job["output_csv_name"],
@@ -720,6 +728,7 @@ async def generate_custom(
     progress_manager.create_job(job_id, user_id=current_user["id"])
 
     try:
+        validate_design_upload(customFile)
         user_dir = get_user_cache_dir(current_user["id"])
         cleanup_old_files(user_dir)
         custom_path = user_dir / create_user_filename("custom_mapping", "kml")

@@ -30,7 +30,7 @@ def test_uploaded_file_is_available_from_its_compatible_data_url() -> None:
             "file": (
                 "../../Site Plan.kml",
                 b"<kml>site</kml>",
-                "application/vnd.google-earth.kml+xml",
+                "text/html",
             )
         },
     )

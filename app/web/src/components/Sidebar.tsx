@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronDown, ChevronRight, Filter, Server, Triangle, Home, Route, Cable, Layers, Trash2, Folder, ArrowLeft, Edit2, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronDown, ChevronRight, Filter, Server, Triangle, Home, Route, Cable, Layers, Trash2, Folder, ArrowLeft, Edit2 } from 'lucide-react';
 import { LayerConfig, KmlNode } from '../app/page';
 import { KmlTreeViewer } from './KmlTreeViewer';
 import ValidationStatsPanel, { DesignStats, ValidationResult } from './ValidationStatsPanel';
@@ -29,7 +29,10 @@ interface SidebarProps {
   onChangeLayerColor?: (id: string, color: string) => void;
   savedProjects?: { id: string; name: string; updated_at?: string; created_at?: string }[];
   onLoadProject?: (id: string) => void;
+  onUnloadProject?: () => void;
+  onNewProject?: () => void;
   onDeleteProject?: (id: string) => void;
+  onRenameProject?: (id: string, name: string) => void;
   currentProjectId?: string | null;
   onBackToProjects?: () => void;
   stats?: DesignStats | null;
@@ -37,7 +40,7 @@ interface SidebarProps {
   isGenerationLocked?: boolean;
 }
 
-export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTrees, onToggleTreeNode, isCollapsed, onToggle, featureColors, canEditColors = false, onColorChange, onChangeLayerColor, savedProjects = [], onLoadProject, onUnloadProject, onNewProject, onDeleteProject, onRenameProject, currentProjectId, onBackToProjects, stats, validation, isGenerationLocked = false }: SidebarProps & { onRenameProject?: (id: string, name: string) => void, onUnloadProject?: () => void, onNewProject?: () => void }) {
+export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTrees, onToggleTreeNode, isCollapsed, onToggle, featureColors, canEditColors = false, onColorChange, onChangeLayerColor, savedProjects = [], onLoadProject, onDeleteProject, onRenameProject, currentProjectId, onBackToProjects, stats, validation, isGenerationLocked = false }: SidebarProps) {
   const [projectToDelete, setProjectToDelete] = useState<{ id: string, name: string } | null>(null);
   const [projectToRename, setProjectToRename] = useState<{ id: string, name: string } | null>(null);
   const [renameInput, setRenameInput] = useState("");
@@ -86,7 +89,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
 
     return (
       <React.Fragment key={layer.id}>
-        <div 
+        <div
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -103,7 +106,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden' }}>
             {hasTree ? (
-              <div 
+              <div
                 onClick={(e) => {
                   e.stopPropagation();
                   setExpandedLayers(prev => ({ ...prev, [layer.id]: !prev[layer.id] }));
@@ -117,14 +120,14 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
             ) : (
               <div style={{ width: '18px' }} />
             )}
-            <div style={{ 
-              width: '20px', 
-              height: '20px', 
-              borderRadius: '4px', 
-              backgroundColor: `${layer.color || '#9ca3af'}15`, 
+            <div style={{
+              width: '20px',
+              height: '20px',
+              borderRadius: '4px',
+              backgroundColor: `${layer.color || '#9ca3af'}15`,
               color: layer.color || '#9ca3af',
-              display: 'flex', 
-              alignItems: 'center', 
+              display: 'flex',
+              alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0
             }}>
@@ -134,7 +137,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
               {layer.name}
             </span>
           </div>
-          
+
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {isBoundary && canEditColors && onChangeLayerColor && (
               <input
@@ -156,7 +159,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
                 title={`Ubah warna ${layer.name}`}
               />
             )}
-            <div 
+            <div
               style={{
                 width: '28px',
                 height: '16px',
@@ -167,7 +170,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
                 flexShrink: 0
               }}
             >
-              <div 
+              <div
                 style={{
                   width: '12px',
                   height: '12px',
@@ -186,10 +189,10 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
 
         {isLayerExpanded && hasTree && onToggleTreeNode && (
           <div style={{ marginLeft: '26px', paddingLeft: '8px', borderLeft: '1px solid #e5e7eb', marginBottom: '4px', marginTop: '2px' }}>
-            <KmlTreeViewer 
-              nodes={kmlTrees[layer.id]} 
-              layerId={layer.id} 
-              onToggle={onToggleTreeNode} 
+            <KmlTreeViewer
+              nodes={kmlTrees[layer.id]}
+              layerId={layer.id}
+              onToggle={onToggleTreeNode}
             />
           </div>
         )}
@@ -202,18 +205,18 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
     const isCollapsed = collapsedFolders[folderKey];
     const allVisible = folderLayers.every(l => l.visible);
     const someVisible = folderLayers.some(l => l.visible);
-    
+
     return (
       <div key={folderKey} style={{ display: 'flex', flexDirection: 'column' }}>
-        <div 
+        <div
           onClick={() => setCollapsedFolders(p => ({ ...p, [folderKey]: !p[folderKey] }))}
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'space-between', 
-            padding: '4px 6px', 
-            borderRadius: '4px', 
-            cursor: 'pointer', 
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '4px 6px',
+            borderRadius: '4px',
+            cursor: 'pointer',
             transition: 'background-color 0.2s',
             margin: '1px 0'
           }}
@@ -227,8 +230,8 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
             <Folder size={14} color="#6b7280" />
             <span style={{ fontSize: '13px', fontWeight: 500, color: '#4b5563' }}>{title} ({folderLayers.length})</span>
           </div>
-          
-          <div 
+
+          <div
             onClick={(e) => {
               e.stopPropagation();
               folderLayers.forEach(l => {
@@ -246,7 +249,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
             }}
             title={allVisible ? "Sembunyikan Semua" : "Tampilkan Semua"}
           >
-            <div 
+            <div
               style={{
                 width: '12px',
                 height: '12px',
@@ -261,7 +264,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
             />
           </div>
         </div>
-        
+
         {!isCollapsed && (
           <div style={{ paddingLeft: '14px', display: 'flex', flexDirection: 'column', gap: '2px', borderLeft: '1px solid #e5e7eb', marginLeft: '12px', marginTop: '2px', marginBottom: '4px' }}>
             {folderLayers.map(layer => renderLayerItem(layer))}
@@ -272,7 +275,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
   };
 
   return (
-    <div 
+    <div
       className={`sidebar-container ${isCollapsed ? 'collapsed' : ''}`}
       style={{
         position: 'absolute',
@@ -295,7 +298,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
       }}
     >
       {/* Header */}
-      <div 
+      <div
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -368,7 +371,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
             )}
           </div>
         )}
-        <button 
+        <button
           onClick={onToggle}
           style={{
             background: isCollapsed ? '#f3f4f6' : 'transparent',
@@ -389,7 +392,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
       </div>
 
       {/* Content */}
-      <div 
+      <div
         style={{
           padding: '16px 20px',
           display: isCollapsed ? 'none' : 'flex',
@@ -405,31 +408,12 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: '#4b5563' }}>Proyek Tersimpan</h3>
-              {/* <button
-                onClick={() => { if (!isGenerationLocked && onNewProject) onNewProject(); }}
-                disabled={isGenerationLocked}
-                style={{
-                  border: 'none',
-                  borderRadius: '6px',
-                  padding: '6px 10px',
-                  background: isGenerationLocked ? '#e5e7eb' : '#3b82f6',
-                  color: isGenerationLocked ? '#9ca3af' : 'white',
-                  cursor: isGenerationLocked ? 'not-allowed' : 'pointer',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                <Plus size={14} /> Baru
-              </button> */}
             </div>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto', flex: 1 }}>
               {savedProjects.length === 0 && <div style={{ fontSize: '13px', color: '#6b7280', textAlign: 'center', marginTop: '20px' }}>Belum ada proyek tersimpan. Silakan buat proyek baru.</div>}
               {savedProjects.map((p) => (
-                <div 
+                <div
                   key={p.id}
                   className="project-item"
                   style={{
@@ -458,7 +442,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
                   <div style={{ fontSize: '12px', color: '#6b7280' }}>
                     {new Date(p.updated_at || p.created_at || "2024-01-01").toLocaleDateString('id-ID')}
                   </div>
-                  
+
                   {onDeleteProject && (
                     <button
                       onClick={(e) => {
@@ -532,7 +516,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
           // PROJECT DETAIL MODE
           <>
             {filterItems.map((item) => (
-              <div 
+              <div
                 key={item.key}
                 style={{
                   display: 'flex',
@@ -543,8 +527,8 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
                 onClick={() => onToggleFilter(item.key)}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div 
-                    style={{ 
+                  <div
+                    style={{
                       color: featureColors ? featureColors[item.colorKey] : '#374151',
                       display: 'flex',
                       alignItems: 'center',
@@ -554,8 +538,8 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
                   >
                     {item.icon}
                   </div>
-                  <span style={{ 
-                    fontSize: '13px', 
+                  <span style={{
+                    fontSize: '13px',
                     color: filters[item.key] ? '#374151' : '#9ca3af',
                     fontWeight: filters[item.key] ? 500 : 400,
                     cursor: 'pointer'
@@ -563,7 +547,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
                     {item.label}
                   </span>
                 </div>
-                
+
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   {canEditColors && featureColors && onColorChange && (
                     <input
@@ -583,7 +567,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
                       title={`Ubah warna ${item.label}`}
                     />
                   )}
-                  <div 
+                  <div
                     style={{
                       width: '36px',
                       height: '20px',
@@ -613,15 +597,15 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
             <ValidationStatsPanel stats={stats || null} validation={validation || null} inline />
 
             <div style={{ height: '1px', backgroundColor: '#e5e7eb', margin: '8px 0' }} />
-            
+
             {/* Main Folder (Project) */}
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <div 
+              <div
                 onClick={() => setIsMainFolderCollapsed(!isMainFolderCollapsed)}
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '6px', 
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
                   cursor: 'pointer',
                   padding: '4px 0',
                   color: '#374151',
@@ -638,10 +622,10 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
                   {savedProjects.find(p => p.id === currentProjectId)?.name || 'Proyek Baru'}
                 </span>
               </div>
-              
+
               {!isMainFolderCollapsed && (
                 <div style={{ paddingLeft: '14px', borderLeft: '1px solid #e5e7eb', marginLeft: '7px', display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
-                  {Array.from(groups.entries()).map(([groupId, groupLayers]) => 
+                  {Array.from(groups.entries()).map(([groupId, groupLayers]) =>
                     renderFolder(groupNames.get(groupId) || 'Batch Design', groupId, groupLayers)
                   )}
                   {ungrouped.length > 0 && renderFolder("Lainnya", "lainnya", ungrouped)}
@@ -680,7 +664,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
               Apakah Anda yakin ingin menghapus proyek <b>&quot;{projectToDelete.name}&quot;</b>? Tindakan ini tidak dapat dibatalkan.
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
-              <button 
+              <button
                 onClick={() => setProjectToDelete(null)}
                 style={{
                   padding: '10px 16px',
@@ -698,7 +682,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
               >
                 Batal
               </button>
-              <button 
+              <button
                 onClick={() => {
                   if (onDeleteProject) onDeleteProject(projectToDelete.id);
                   setProjectToDelete(null);
@@ -774,7 +758,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
               }}
             />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
-              <button 
+              <button
                 onClick={() => setProjectToRename(null)}
                 style={{
                   padding: '10px 16px',
@@ -792,7 +776,7 @@ export function Sidebar({ filters, onToggleFilter, layers, onToggleLayer, kmlTre
               >
                 Batal
               </button>
-              <button 
+              <button
                 onClick={() => {
                   if (renameInput.trim() && onRenameProject) {
                     onRenameProject(projectToRename.id, renameInput.trim());

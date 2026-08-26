@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
 from server.api.deps import get_current_user, get_generation_user
+from server.api.upload_validation import validate_design_upload
 from server.core.logging import logger
 from server.core.response import success_response
 from server.services.user_storage import user_file_url, user_object_key
@@ -39,13 +40,9 @@ async def upload_file(
     current_user: dict = Depends(get_generation_user),
     storage: ObjectStorage = Depends(get_object_storage),
 ):
-    filename = f"{uuid4().hex[:10]}_{_safe_filename(file.filename)}"
+    filename = f"{uuid4().hex[:10]}_{_safe_filename(validate_design_upload(file))}"
     object_key = user_object_key(current_user["id"], filename)
-    content_type = (
-        file.content_type
-        or mimetypes.guess_type(filename)[0]
-        or "application/octet-stream"
-    )
+    content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
 
     try:
         await file.seek(0)
