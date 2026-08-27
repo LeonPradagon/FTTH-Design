@@ -13,6 +13,20 @@ const PROXY_TIMEOUT_MS = 15 * 60 * 1000;
 // BETTER_AUTH_SECRET. Production should still use a dedicated secret.
 const BACKEND_PROXY_SECRET = process.env.BACKEND_PROXY_SECRET || process.env.BETTER_AUTH_SECRET;
 
+// These headers describe the connection between the backend and this proxy,
+// not the response sent from this proxy to the browser. Forwarding them can
+// leave file downloads pending after the complete body has arrived.
+const HOP_BY_HOP_RESPONSE_HEADERS = new Set([
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+]);
+
 function requestBackend(
   backendUrl: URL,
   method: string,
@@ -102,6 +116,8 @@ async function proxy(req: NextRequest) {
 
     const resHeaders = new Headers();
     for (const [name, value] of Object.entries(res.headers)) {
+      const normalizedName = name.toLowerCase();
+      if (HOP_BY_HOP_RESPONSE_HEADERS.has(normalizedName)) continue;
       if (Array.isArray(value)) {
         value.forEach((item) => resHeaders.append(name, item));
       } else if (value !== undefined) {
@@ -109,7 +125,6 @@ async function proxy(req: NextRequest) {
       }
     }
     resHeaders.delete('content-encoding');
-    resHeaders.delete('content-length');
 
     if (resHeaders.get('content-type')?.includes('text/event-stream')) {
       resHeaders.set('content-encoding', 'none');
