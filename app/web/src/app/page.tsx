@@ -659,7 +659,7 @@ export default function Home() {
       const url = toProxyApiUrl(uploadData.url);
       const isBoundary = fileToUse.name.toLowerCase().includes('boundary');
       const isPop = fileToUse.name.toLowerCase().includes('pop') || fileToUse.name.toLowerCase().includes('olt');
-      const importId = crypto.randomUUID();
+      const importId = crypto.randomUUID?.() ?? crypto.getRandomValues(new Uint32Array(4)).join("-");
       const newLayerId = `import-${importId}`;
 
       // Get region string from KML via Reverse Geocoding
@@ -716,43 +716,43 @@ export default function Home() {
         } else {
           const groupsMap = new Map<string, { hasBoundary: boolean, hasPop: boolean, name: string }>();
           prev.forEach(l => {
-             if (l.groupId) {
-               if (!groupsMap.has(l.groupId)) groupsMap.set(l.groupId, { hasBoundary: false, hasPop: false, name: l.groupName || 'Batch Design' });
-               const g = groupsMap.get(l.groupId)!;
-               if (l.name.toLowerCase().includes('boundary') || l.id === 'boundary') g.hasBoundary = true;
-               if (l.name.toLowerCase().includes('pop') || l.name.toLowerCase().includes('olt')) g.hasPop = true;
-             }
+            if (l.groupId) {
+              if (!groupsMap.has(l.groupId)) groupsMap.set(l.groupId, { hasBoundary: false, hasPop: false, name: l.groupName || 'Batch Design' });
+              const g = groupsMap.get(l.groupId)!;
+              if (l.name.toLowerCase().includes('boundary') || l.id === 'boundary') g.hasBoundary = true;
+              if (l.name.toLowerCase().includes('pop') || l.name.toLowerCase().includes('olt')) g.hasPop = true;
+            }
           });
 
           let latestGroupId = null;
           for (let i = prev.length - 1; i >= 0; i--) {
-             if (prev[i].groupId) {
-                latestGroupId = prev[i].groupId;
-                break;
-             }
+            if (prev[i].groupId) {
+              latestGroupId = prev[i].groupId;
+              break;
+            }
           }
 
           if (latestGroupId) {
-             const g = groupsMap.get(latestGroupId);
-             if (g) {
-                if (isBoundary && !g.hasBoundary) {
-                   newGroupId = latestGroupId;
-                   boundaryGroupName = g.name;
-                } else if (isPop && !g.hasPop) {
-                   newGroupId = latestGroupId;
-                   boundaryGroupName = g.name;
-                }
-             }
+            const g = groupsMap.get(latestGroupId);
+            if (g) {
+              if (isBoundary && !g.hasBoundary) {
+                newGroupId = latestGroupId;
+                boundaryGroupName = g.name;
+              } else if (isPop && !g.hasPop) {
+                newGroupId = latestGroupId;
+                boundaryGroupName = g.name;
+              }
+            }
           }
 
           if (!newGroupId) {
-             const batchCount = groupsMap.size + 1;
-             newGroupId = `boundary:batch-${batchCount}-${importId}`;
-             if (regionStr) {
-               boundaryGroupName = `Area ${regionStr}${batchCount > 1 ? ` (${batchCount})` : ''}`;
-             } else {
-               boundaryGroupName = `Batch Design ${batchCount}`;
-             }
+            const batchCount = groupsMap.size + 1;
+            newGroupId = `boundary:batch-${batchCount}-${importId}`;
+            if (regionStr) {
+              boundaryGroupName = `Area ${regionStr}${batchCount > 1 ? ` (${batchCount})` : ''}`;
+            } else {
+              boundaryGroupName = `Batch Design ${batchCount}`;
+            }
           }
         }
 
@@ -838,24 +838,24 @@ export default function Home() {
           }
           setLayers(prev => {
             const newLayers: LayerConfig[] = jobs.flatMap(job => {
-                if (job.status !== "COMPLETED" || !job.result?.url) return [];
-                const matchedBoundary = prev.find(l => l.name === job.boundary_name && l.groupId);
-                const targetGroupId = matchedBoundary?.groupId || boundaryGroupKey(job.boundary_name);
-                const targetGroupName = matchedBoundary?.groupName || job.boundary_name;
+              if (job.status !== "COMPLETED" || !job.result?.url) return [];
+              const matchedBoundary = prev.find(l => l.name === job.boundary_name && l.groupId);
+              const targetGroupId = matchedBoundary?.groupId || boundaryGroupKey(job.boundary_name);
+              const targetGroupName = matchedBoundary?.groupName || job.boundary_name;
 
-                return [{
-                  id: `design:batch:${batchId}:${job.item_id}`,
-                  name: job.design_name,
-                  url: toProxyApiUrl(job.result.url),
-                  csvUrl: job.result.csv_url ? toProxyApiUrl(job.result.csv_url) : undefined,
-                  visible: true,
-                  color: "#22c55e",
-                  groupId: targetGroupId,
-                  groupName: targetGroupName,
-                  designName: job.design_name,
-                  boundaryName: job.boundary_name,
-                } as LayerConfig];
-              });
+              return [{
+                id: `design:batch:${batchId}:${job.item_id}`,
+                name: job.design_name,
+                url: toProxyApiUrl(job.result.url),
+                csvUrl: job.result.csv_url ? toProxyApiUrl(job.result.csv_url) : undefined,
+                visible: true,
+                color: "#22c55e",
+                groupId: targetGroupId,
+                groupName: targetGroupName,
+                designName: job.design_name,
+                boundaryName: job.boundary_name,
+              } as LayerConfig];
+            });
             const merged = [...prev, ...newLayers.filter(layer => !prev.some(existing => existing.id === layer.id))];
             saveProject(projectName || "Untitled Project", merged).catch(console.error);
             return merged;
@@ -1203,8 +1203,8 @@ export default function Home() {
               return newLayers;
             });
 
-              if (result.kmz_url) setKmzUrl(toProxyApiUrl(result.kmz_url));
-              if (result.csv_url) setCsvUrl(toProxyApiUrl(result.csv_url));
+            if (result.kmz_url) setKmzUrl(toProxyApiUrl(result.kmz_url));
+            if (result.csv_url) setCsvUrl(toProxyApiUrl(result.csv_url));
             if (result.stats) setDesignStats(result.stats);
             if (result.validation) setValidationResult(result.validation);
             addToast("Regenerate kabel berhasil!", "success");
@@ -1276,7 +1276,7 @@ export default function Home() {
           setIsGeneratingHomepass(false);
           if (pData.result) {
             const result = pData.result;
-              const newDesign: LayerConfig = { id: selectedDesign?.id || "design", name: selectedDesign ? `${selectedDesign.name} + Homepass` : "FTTH Design + Homepass", url: toProxyApiUrl(result.url), csvUrl: result.csv_url ? toProxyApiUrl(result.csv_url) : undefined, visible: true, color: "#22c55e", groupId: selectedDesign?.groupId, groupName: selectedDesign?.groupName, boundaryName: selectedDesign?.boundaryName, status: "COMPLETED" };
+            const newDesign: LayerConfig = { id: selectedDesign?.id || "design", name: selectedDesign ? `${selectedDesign.name} + Homepass` : "FTTH Design + Homepass", url: toProxyApiUrl(result.url), csvUrl: result.csv_url ? toProxyApiUrl(result.csv_url) : undefined, visible: true, color: "#22c55e", groupId: selectedDesign?.groupId, groupName: selectedDesign?.groupName, boundaryName: selectedDesign?.boundaryName, status: "COMPLETED" };
             setLayers(prev => {
               const newLayers = selectedDesign
                 ? prev.map(layer => layer.id === selectedDesign.id ? newDesign : layer)
@@ -1466,11 +1466,11 @@ export default function Home() {
         onImportLayer={handleImportLayer}
         onSmartGenerate={batchFiles.length > 0 || visibleLayers.some((l: LayerConfig) => l.name.toLowerCase().includes('boundary') || l.name.toLowerCase().includes('pop') || l.name.toLowerCase().includes('olt')) ? handleSmartGenerate : undefined}
         isGenerating={isGenerating}
-      onRegenerateCables={visibleLayers.some((l: LayerConfig) =>
-        l.id === "design" ||
-        l.id.startsWith("design:single:") ||
-        l.id.startsWith("design:batch:")
-      ) ? handleRegenerateCables : undefined}
+        onRegenerateCables={visibleLayers.some((l: LayerConfig) =>
+          l.id === "design" ||
+          l.id.startsWith("design:single:") ||
+          l.id.startsWith("design:batch:")
+        ) ? handleRegenerateCables : undefined}
         isRegeneratingCables={isRegeneratingCables}
         hasDesign={layers.some(l =>
           l.visible && (

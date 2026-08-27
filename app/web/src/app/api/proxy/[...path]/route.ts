@@ -111,6 +111,10 @@ async function proxy(req: NextRequest) {
     resHeaders.delete('content-encoding');
     resHeaders.delete('content-length');
 
+    if (resHeaders.get('content-type')?.includes('text/event-stream')) {
+      resHeaders.set('content-encoding', 'none');
+    }
+
     const responseBody = Readable.toWeb(res) as ReadableStream<Uint8Array>;
     return new NextResponse(responseBody, {
       status: res.statusCode || 502,

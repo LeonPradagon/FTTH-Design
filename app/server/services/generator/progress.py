@@ -85,12 +85,12 @@ class ProgressManager:
         value = self.redis.get(f"batch_progress:{batch_id}")
         return json.loads(value) if value else None
 
-    def update_batch_job(self, batch_id: str, job_id: str, **updates):
+    def update_batch_job(self, batch_id: str, target_job_id: str, **updates):
         state = self.get_batch(batch_id)
         if not state:
             return
         for job in state.get("jobs", []):
-            if job.get("job_id") == job_id:
+            if job.get("job_id") == target_job_id:
                 job.update(updates)
                 break
         jobs = state.get("jobs", [])

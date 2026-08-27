@@ -590,8 +590,12 @@ async def generate_progress(job_id: str, current_user: dict = Depends(get_curren
             # polling modest so many concurrent jobs do not create a second
             # source of request/Redis pressure.
             await asyncio.sleep(1)
-
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    headers = {
+        "Cache-Control": "no-cache, no-transform",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+    return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
 
 
 @router.get("/generate/status/{job_id}")
