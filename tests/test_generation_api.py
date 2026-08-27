@@ -311,7 +311,7 @@ def test_generation_audit_includes_previous_config(tmp_path):
             create=AsyncMock(return_value=new_version),
         ),
         auditlog=SimpleNamespace(create=AsyncMock()),
-        query_raw=AsyncMock(),
+        execute_raw=AsyncMock(),
     )
     transaction_manager = SimpleNamespace(
         start=AsyncMock(return_value=transaction),
@@ -358,7 +358,7 @@ def test_generation_audit_includes_previous_config(tmp_path):
     details = transaction.auditlog.create.await_args.kwargs["data"]["details"].data
     assert details["old"] == {"version": 1, "config": {"odp_capacity": 10}}
     assert details["new"]["config"]["odp_capacity"] == 8
-    transaction.query_raw.assert_awaited_once_with(
+    transaction.execute_raw.assert_awaited_once_with(
         "SELECT pg_advisory_xact_lock(hashtext($1))",
         "project-1",
     )

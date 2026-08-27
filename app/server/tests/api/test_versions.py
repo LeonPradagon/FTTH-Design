@@ -132,7 +132,6 @@ def test_version_copy_copies_spatial_records_in_the_same_transaction(
             create=AsyncMock(return_value=duplicate),
         ),
         execute_raw=AsyncMock(),
-        query_raw=AsyncMock(),
         auditlog=SimpleNamespace(create=AsyncMock()),
     )
     transaction_context = MagicMock()
@@ -150,8 +149,8 @@ def test_version_copy_copies_spatial_records_in_the_same_transaction(
         response = client.post(f"/api/projects/project-1/versions/1/{operation}")
 
     assert response.status_code == 200
-    assert transaction.execute_raw.await_count == 3
-    transaction.query_raw.assert_awaited_once_with(
+    assert transaction.execute_raw.await_count == 4
+    transaction.execute_raw.assert_any_await(
         "SELECT pg_advisory_xact_lock(hashtext($1))",
         "project-1",
     )
