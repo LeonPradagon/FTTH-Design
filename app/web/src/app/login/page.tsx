@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -131,11 +130,6 @@ export default function LoginPage() {
           <CardTitle id="auth-title" className="text-[28px] leading-tight font-bold tracking-[-0.035em] text-slate-950 sm:text-[32px]">
             {isLogin ? "Selamat datang kembali" : "Buat akun Anda"}
           </CardTitle>
-          <CardDescription className="mt-2 max-w-sm text-sm leading-6 text-slate-500 dark:text-slate-500">
-            {isLogin
-              ? "Masuk untuk melanjutkan desain jaringan fiber Anda."
-              : "Mulai merancang jaringan fiber yang lebih terukur."}
-          </CardDescription>
         </CardHeader>
 
         <CardContent className="px-6 pt-7 sm:px-10">
@@ -238,9 +232,6 @@ export default function LoginPage() {
         </CardFooter>
       </Card>
 
-      <p className="fixed right-4 bottom-5 left-4 text-center text-[11px] tracking-wide text-slate-400">
-        Perencanaan FTTH yang presisi, dari peta hingga kabel.
-      </p>
     </main>
   );
 }

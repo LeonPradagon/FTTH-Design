@@ -177,6 +177,27 @@ def test_distribution_tree_does_not_fabricate_unroutable_or_long_edges():
     assert segments["ODP-B"]["coords"] == []
 
 
+def test_distribution_tree_preserves_unroutable_odp_position():
+    odp = ODP(id="ODP-A", lat=0.001, lon=0.0)
+    odc = ODC(
+        id="ODC-001",
+        lat=0.0,
+        lon=0.0,
+        odps=[odp],
+        splitter=Splitter(ratio="1:4", location="ODC"),
+    )
+
+    with patch(
+        "server.services.generator.routing.route_with_connectivity_fallback",
+        return_value=None,
+    ), patch("server.services.generator.routing.walk_along_road") as walk:
+        segments = build_distribution_tree(odc, object())
+
+    assert (odp.lat, odp.lon) == (0.001, 0.0)
+    assert segments[odp.id]["connected"] is False
+    walk.assert_not_called()
+
+
 def test_rebalance_assigns_full_cluster_to_road_nearest_odc():
     odc_a = ODC(
         id="ODC-001",

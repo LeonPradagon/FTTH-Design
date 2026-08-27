@@ -12,7 +12,7 @@ from server.services.generator.core_logic import (
     generate_homepass_from_state,
 )
 from server.services.generator.validation import validate_design, compute_design_stats
-from server.database import db
+from server.database import db, lock_project_version_sequence
 from server.services.user_storage import upload_file, user_file_url, user_object_key
 from server.storage.dependencies import get_object_storage
 from prisma import Json
@@ -23,6 +23,8 @@ async def _update_generation_job(job_id: str, **data) -> None:
 
 
 async def _record_job_failure(job_id: str, error: Exception) -> None:
+    logger.exception("Job %s failed", job_id)
+    progress_manager.error(job_id, str(error))
     try:
         await _update_generation_job(
             job_id,
@@ -33,6 +35,31 @@ async def _record_job_failure(job_id: str, error: Exception) -> None:
         )
     except Exception:
         logger.exception("Failed to persist failure state for job %s", job_id)
+
+
+async def _publish_generation_artifacts(
+    job_id: str,
+    user_id: str,
+    output_kmz_path: str,
+    output_csv_path: str,
+) -> None:
+    output_kmz_name = Path(output_kmz_path).name
+    output_csv_name = Path(output_csv_path).name
+    await asyncio.to_thread(upload_file, user_id, output_kmz_name, Path(output_kmz_path))
+    await asyncio.to_thread(upload_file, user_id, output_csv_name, Path(output_csv_path))
+    result = {
+        "url": user_file_url(output_kmz_name),
+        "kmz_url": user_file_url(output_kmz_name),
+        "csv_url": user_file_url(output_csv_name),
+    }
+    await _update_generation_job(
+        job_id,
+        status="COMPLETED",
+        stage="COMPLETED",
+        progress=100,
+        result=Json(result),
+    )
+    progress_manager.complete(job_id, result=result)
 
 
 async def generate_task(
@@ -47,7 +74,6 @@ async def generate_task(
     job_id: str,
     project_id: str | None,
     user_id: str,
-    output_kml_name: str,
     output_kmz_name: str,
     output_csv_name: str,
     batch_id: str | None = None,
@@ -121,6 +147,7 @@ async def generate_task(
             transaction_manager = db.tx(timeout=timedelta(minutes=5))
             transaction = await transaction_manager.start()
             try:
+                await lock_project_version_sequence(transaction, project_id)
                 last_version = await transaction.designversion.find_first(
                     where={"projectId": project_id},
                     order={"version": "desc"}
@@ -290,8 +317,6 @@ async def generate_task(
             )
 
     except Exception as e:
-        logger.exception("Job %s failed", job_id)
-        progress_manager.error(job_id, str(e))
         await _record_job_failure(job_id, e)
         if batch_id:
             progress_manager.update_batch_job(batch_id, job_id, status="FAILED", error=str(e))
@@ -322,27 +347,8 @@ async def regenerate_cables_task(
             feature_colors,
         )
 
-        output_kmz_name = Path(output_path).name
-        output_csv_name = Path(output_csv).name
-        await asyncio.to_thread(upload_file, user_id, output_kmz_name, Path(output_path))
-        await asyncio.to_thread(upload_file, user_id, output_csv_name, Path(output_csv))
-
-        result_dict = {
-            "url": user_file_url(output_kmz_name),
-            "kmz_url": user_file_url(output_kmz_name),
-            "csv_url": user_file_url(output_csv_name)
-        }
-        await _update_generation_job(
-            job_id,
-            status="COMPLETED",
-            stage="COMPLETED",
-            progress=100,
-            result=Json(result_dict),
-        )
-        progress_manager.complete(job_id, result=result_dict)
+        await _publish_generation_artifacts(job_id, user_id, output_path, output_csv)
     except Exception as e:
-        logger.exception("Job %s failed", job_id)
-        progress_manager.error(job_id, str(e))
         await _record_job_failure(job_id, e)
         raise
 
@@ -373,27 +379,8 @@ async def generate_custom_task(
             feature_colors,
         )
 
-        output_kmz_name = Path(output_kmz_path).name
-        output_csv_name = Path(output_csv).name
-        await asyncio.to_thread(upload_file, user_id, output_kmz_name, Path(output_kmz_path))
-        await asyncio.to_thread(upload_file, user_id, output_csv_name, Path(output_csv))
-
-        result_dict = {
-            "url": user_file_url(output_kmz_name),
-            "kmz_url": user_file_url(output_kmz_name),
-            "csv_url": user_file_url(output_csv_name)
-        }
-        await _update_generation_job(
-            job_id,
-            status="COMPLETED",
-            stage="COMPLETED",
-            progress=100,
-            result=Json(result_dict),
-        )
-        progress_manager.complete(job_id, result=result_dict)
+        await _publish_generation_artifacts(job_id, user_id, output_kmz_path, output_csv)
     except Exception as e:
-        logger.exception("Job %s failed", job_id)
-        progress_manager.error(job_id, str(e))
         await _record_job_failure(job_id, e)
         raise
 
@@ -421,27 +408,13 @@ async def generate_homepass_task(
             job_id,
             feature_colors,
         )
-        output_kmz_name = Path(output_kmz_path).name
-        output_csv_name = Path(output_csv_path).name
-        await asyncio.to_thread(upload_file, user_id, output_kmz_name, Path(output_kmz_path))
-        await asyncio.to_thread(upload_file, user_id, output_csv_name, Path(output_csv_path))
-
-        result_dict = {
-            "url": user_file_url(output_kmz_name),
-            "kmz_url": user_file_url(output_kmz_name),
-            "csv_url": user_file_url(output_csv_name),
-        }
-        await _update_generation_job(
+        await _publish_generation_artifacts(
             job_id,
-            status="COMPLETED",
-            stage="COMPLETED",
-            progress=100,
-            result=Json(result_dict),
+            user_id,
+            output_kmz_path,
+            output_csv_path,
         )
-        progress_manager.complete(job_id, result=result_dict)
     except Exception as e:
-        logger.exception("Homepass job %s failed", job_id)
-        progress_manager.error(job_id, str(e))
         await _record_job_failure(job_id, e)
         raise
 

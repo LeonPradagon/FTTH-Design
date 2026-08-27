@@ -25,7 +25,12 @@ from server.core.errors import (
     DesignStateNotFoundError,
 )
 from server.core.response import success_response
-from server.api.deps import get_current_user, get_generation_user
+from server.api.deps import (
+    get_current_user,
+    get_generation_user,
+    get_rate_limited_generation_user,
+)
+from server.api.upload_validation import validate_design_upload
 from server.database import db
 from server.services.user_storage import (
     create_user_filename,
@@ -223,7 +228,7 @@ async def generate_design(
     feature_colors: Optional[str] = Form(None),
     job_id: Optional[str] = Form(None),
     project_id: Optional[str] = Form(None),
-    current_user: dict = Depends(get_generation_user),
+    current_user: dict = Depends(get_rate_limited_generation_user),
 ):
     """Generate a full FTTH network design asynchronously."""
     if not job_id:
@@ -233,12 +238,16 @@ async def generate_design(
     progress_manager.create_job(job_id, user_id=current_user["id"])
 
     try:
+        if not boundaryFile or not boundaryFile.filename:
+            raise InvalidFileError(message="Boundary KML/KMZ wajib diunggah.")
+        if not project_id:
+            raise HTTPException(status_code=400, detail="Project wajib disimpan sebelum generation.")
         await _require_project_access(project_id, current_user)
         user_dir = get_generation_cache_dir(current_user["id"], project_id)
         cleanup_old_files(user_dir)
-
-        if not boundaryFile or not boundaryFile.filename:
-            raise InvalidFileError(message="Boundary KML/KMZ wajib diunggah.")
+        validate_design_upload(boundaryFile)
+        if popFile and popFile.filename:
+            validate_design_upload(popFile)
 
         gen_config = _parse_config_from_form(config)
         parsed_feature_colors = _parse_feature_colors_from_form(feature_colors)
@@ -264,7 +273,6 @@ async def generate_design(
             has_custom_pop = True
 
         output_kmz_name = create_user_filename("design_ftth", "kmz")
-        output_kml_name = create_user_filename("design_ftth", "kml")
         output_csv_name = create_user_filename("design_ftth", "csv")
 
         output_kmz_path = user_dir / output_kmz_name
@@ -284,7 +292,6 @@ async def generate_design(
             has_custom_pop=has_custom_pop,
             cache_dir=str(user_dir),
             gen_config_dict=gen_config.model_dump(),
-            output_kml_name=output_kml_name,
             output_kmz_name=output_kmz_name,
             output_csv_name=output_csv_name,
             feature_colors=parsed_feature_colors,
@@ -308,11 +315,13 @@ async def generate_batch(
     config: Optional[str] = Form(None),
     force_refresh: bool = Form(False),
     feature_colors: Optional[str] = Form(None),
-    current_user: dict = Depends(get_generation_user),
+    current_user: dict = Depends(get_rate_limited_generation_user),
 ):
     """Create one isolated generation job per boundary/POP pair."""
     if not files:
         raise InvalidFileError(message="Minimal satu file boundary wajib diunggah.")
+    if not project_id:
+        raise HTTPException(status_code=400, detail="Project wajib disimpan sebelum generation.")
     max_files = int(os.getenv("MAX_BATCH_FILES", "100"))
     max_file_bytes = int(os.getenv("MAX_BATCH_FILE_BYTES", str(50 * 1024 * 1024)))
     if len(files) > max_files:
@@ -331,13 +340,10 @@ async def generate_batch(
     input_dir.mkdir(parents=True, exist_ok=True)
     saved_files: list[tuple[str, Path]] = []
     for upload in files:
-        filename = Path(upload.filename or "upload.kml").name
+        filename = validate_design_upload(upload, max_file_bytes)
         destination = input_dir / f"{uuid.uuid4().hex[:10]}_{filename}"
         with open(destination, "wb") as output:
             shutil.copyfileobj(upload.file, output)
-        if destination.stat().st_size > max_file_bytes:
-            destination.unlink(missing_ok=True)
-            raise HTTPException(status_code=413, detail=f"Ukuran file maksimal {max_file_bytes // (1024 * 1024)} MB.")
         upload_file(current_user["id"], destination.name, destination)
         saved_files.append((filename, destination))
 
@@ -412,14 +418,13 @@ async def generate_batch(
             "pop_path": str(pop_item),
             "cache_dir": str(item_dir),
             "output_kmz_name": f"{prefix}_core.kmz",
-            "output_kml_name": f"{prefix}_core.kml",
             "output_csv_name": f"{prefix}_core.csv",
         })
 
     progress_manager.create_batch(batch_id, jobs, project_id=project_id, user_id=current_user["id"])
     with open(batch_root / "manifest.json", "w") as manifest_file:
         json.dump(
-            {"project_id": project_id, "feature_colors": parsed_feature_colors, "jobs": jobs},
+            {"project_id": project_id, "config": gen_config.model_dump(mode="json"), "feature_colors": parsed_feature_colors, "jobs": jobs},
             manifest_file,
             indent=2,
         )
@@ -445,7 +450,6 @@ async def generate_batch(
             has_custom_pop=True,
             cache_dir=job["cache_dir"],
             gen_config_dict=gen_config.model_dump(),
-            output_kml_name=job["output_kml_name"],
             output_kmz_name=job["output_kmz_name"],
             output_csv_name=job["output_csv_name"],
             batch_item_id=job["item_id"],
@@ -505,7 +509,7 @@ async def get_batch_progress(batch_id: str, current_user: dict = Depends(get_cur
 
 
 @router.post("/generate/batch/{batch_id}/retry/{item_id}")
-async def retry_batch_item(batch_id: str, item_id: str, current_user: dict = Depends(get_generation_user)):
+async def retry_batch_item(batch_id: str, item_id: str, current_user: dict = Depends(get_rate_limited_generation_user)):
     state = progress_manager.get_batch(batch_id)
     if not state:
         raise HTTPException(status_code=404, detail="Batch tidak ditemukan.")
@@ -537,8 +541,10 @@ async def retry_batch_item(batch_id: str, item_id: str, current_user: dict = Dep
         output_csv_path=str(output_dir / job["output_csv_name"]),
         has_custom_pop=True,
         cache_dir=job["cache_dir"],
-        gen_config_dict=GenerationConfig(include_homepass=False).model_dump(),
-        output_kml_name=job["output_kml_name"],
+        gen_config_dict=manifest.get(
+            "config",
+            GenerationConfig(include_homepass=False).model_dump(mode="json"),
+        ),
         output_kmz_name=job["output_kmz_name"],
         output_csv_name=job["output_csv_name"],
         batch_item_id=item_id,
@@ -645,7 +651,7 @@ async def generate_homepass(
     batch_id: Optional[str] = Form(None),
     item_id: Optional[str] = Form(None),
     feature_colors: Optional[str] = Form(None),
-    current_user: dict = Depends(get_generation_user),
+    current_user: dict = Depends(get_rate_limited_generation_user),
 ):
     """Generate HC and direct ODP-to-house lines from the last core cache."""
     await _require_project_access(project_id, current_user)
@@ -698,7 +704,7 @@ async def regenerate_cables(
     batch_id: Optional[str] = Form(None),
     item_id: Optional[str] = Form(None),
     feature_colors: Optional[str] = Form(None),
-    current_user: dict = Depends(get_generation_user)
+    current_user: dict = Depends(get_rate_limited_generation_user)
 ):
     await _require_project_access(project_id, current_user)
     if not job_id:
@@ -749,7 +755,7 @@ async def generate_custom(
     customFile: UploadFile = File(...),
     job_id: Optional[str] = Form(None),
     feature_colors: Optional[str] = Form(None),
-    current_user: dict = Depends(get_generation_user),
+    current_user: dict = Depends(get_rate_limited_generation_user),
 ):
     if not job_id:
         import uuid
@@ -757,6 +763,7 @@ async def generate_custom(
     progress_manager.create_job(job_id, user_id=current_user["id"])
 
     try:
+        validate_design_upload(customFile)
         parsed_feature_colors = _parse_feature_colors_from_form(feature_colors)
         user_dir = get_user_cache_dir(current_user["id"])
         cleanup_old_files(user_dir)

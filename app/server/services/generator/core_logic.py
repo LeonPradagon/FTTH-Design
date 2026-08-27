@@ -816,15 +816,6 @@ def regenerate_cables_only(
     feeder_segments, odcs = build_feeder_segments_preserving_order(
         pop, odcs, road_graph=road_graph
     )
-    # Older designs placed one ODP exactly on top of its ODC. A cable between
-    # coincident endpoints is invisible and looks disconnected, so repair only
-    # those legacy groups before rebuilding the cable geometry.
-    for odc in odcs:
-        if any(
-            haversine_m(odc.lat, odc.lon, odp.lat, odp.lon) < 1.0
-            for odp in odc.odps
-        ):
-            arrange_odps_around_odc(odc, offset_m=40.0, road_graph=road_graph)
     # Re-evaluate the ODC parent from the road graph on every cable
     # regeneration. The cached parent was originally selected by geographic
     # proximity and may be separated from its ODP by a river, railway, or

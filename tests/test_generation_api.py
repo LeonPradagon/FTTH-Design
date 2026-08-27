@@ -5,7 +5,11 @@ from fastapi.testclient import TestClient
 from types import SimpleNamespace
 from unittest.mock import patch, AsyncMock, MagicMock
 from server.main import app
-from server.api.deps import get_current_user, get_generation_user
+from server.api.deps import (
+    get_current_user,
+    get_generation_user,
+    get_rate_limited_generation_user,
+)
 from server.services.generator.generation_config import GenerationConfig
 
 # Override dependency
@@ -14,6 +18,7 @@ def override_get_current_user():
 
 app.dependency_overrides[get_current_user] = override_get_current_user
 app.dependency_overrides[get_generation_user] = override_get_current_user
+app.dependency_overrides[get_rate_limited_generation_user] = override_get_current_user
 
 client = TestClient(app)
 
@@ -25,6 +30,9 @@ def mock_generation_jobs():
         jobs.create = AsyncMock()
         jobs.update = AsyncMock()
         jobs.find_unique = AsyncMock(return_value=None)
+        mock_db.project.find_unique = AsyncMock(
+            return_value=SimpleNamespace(userId="test_user_id")
+        )
         yield jobs
 
 
@@ -56,7 +64,11 @@ def test_generate_design_success(tmp_path, mock_redis_pool, mock_progress_manage
     boundary_file.write_text("<kml></kml>")
 
     with open(boundary_file, "rb") as f:
-        response = client.post("/generate", files={"boundaryFile": ("boundary.kml", f)})
+        response = client.post(
+            "/generate",
+            data={"project_id": "project-1"},
+            files={"boundaryFile": ("boundary.kml", f)},
+        )
 
     assert response.status_code == 200
     assert response.json()["success"] is True
@@ -67,7 +79,21 @@ def test_generate_design_success(tmp_path, mock_redis_pool, mock_progress_manage
     assert args[0] == "generate_task"
     assert kwargs["job_id"] == response.json()["data"]["job_id"]
     assert kwargs["user_id"] == "test_user_id"
-    assert kwargs["project_id"] is None
+    assert kwargs["project_id"] == "project-1"
+
+
+def test_generate_design_requires_project(tmp_path, mock_redis_pool, mock_progress_manager):
+    boundary_file = tmp_path / "boundary.kml"
+    boundary_file.write_text("<kml></kml>")
+
+    with open(boundary_file, "rb") as boundary:
+        response = client.post(
+            "/generate",
+            files={"boundaryFile": ("boundary.kml", boundary)},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Project wajib disimpan sebelum generation."
 
 
 def test_generate_design_forwards_feature_colors(tmp_path, mock_redis_pool, mock_progress_manager, mock_storage_upload):
@@ -159,6 +185,7 @@ def test_generate_batch_pairs_boundary_and_pop(tmp_path, mock_redis_pool, mock_p
     pop = """<kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark><name>POP A</name><Point><coordinates>106.15,-6.11</coordinates></Point></Placemark></Document></kml>"""
     response = client.post(
         "/generate/batch",
+        data={"project_id": "project-1"},
         files=[
             ("files", ("area_a_boundary.kml", boundary, "application/vnd.google-earth.kml+xml")),
             ("files", ("area_a_pop.kml", pop, "application/vnd.google-earth.kml+xml")),
@@ -176,6 +203,53 @@ def test_generate_batch_pairs_boundary_and_pop(tmp_path, mock_redis_pool, mock_p
         user_id="test_user_id",
         batch_id=data["batch_id"],
     )
+
+
+def test_generate_batch_requires_project(mock_redis_pool, mock_progress_manager):
+    response = client.post(
+        "/generate/batch",
+        files=[("files", ("boundary.kml", "<kml></kml>", "application/vnd.google-earth.kml+xml"))],
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Project wajib disimpan sebelum generation."
+
+
+def test_batch_retry_reuses_original_config(tmp_path, mock_redis_pool, mock_progress_manager, mock_storage_upload):
+    boundary = """<kml xmlns="http://www.opengis.net/kml/2.2"><Placemark><Polygon><outerBoundaryIs><LinearRing><coordinates>106.14,-6.12 106.16,-6.12 106.16,-6.10 106.14,-6.10 106.14,-6.12</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark></kml>"""
+    pop = """<kml xmlns="http://www.opengis.net/kml/2.2"><Placemark><name>POP A</name><Point><coordinates>106.15,-6.11</coordinates></Point></Placemark></kml>"""
+
+    def cache_dir(_user_id, _project_id=None, batch_id=None, item_id=None):
+        path = tmp_path
+        if batch_id:
+            path /= batch_id
+        if item_id:
+            path /= item_id
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    with patch("server.api.routes.generation.get_generation_cache_dir", side_effect=cache_dir):
+        response = client.post(
+            "/generate/batch",
+            data={"project_id": "project-1", "config": json.dumps({"odp_capacity": 8})},
+            files=[
+                ("files", ("area_a_boundary.kml", boundary, "application/vnd.google-earth.kml+xml")),
+                ("files", ("area_a_pop.kml", pop, "application/vnd.google-earth.kml+xml")),
+            ],
+        )
+        batch = response.json()["data"]
+        item = batch["jobs"][0]
+        mock_progress_manager.get_batch.return_value = {
+            "user_id": "test_user_id",
+            "project_id": "project-1",
+            "jobs": batch["jobs"],
+        }
+        mock_redis_pool.enqueue_job.reset_mock()
+
+        retry = client.post(f"/generate/batch/{batch['batch_id']}/retry/{item['item_id']}")
+
+    assert retry.status_code == 200
+    assert mock_redis_pool.enqueue_job.call_args.kwargs["gen_config_dict"]["odp_capacity"] == 8
 
 
 def test_cancel_owned_job(mock_redis_pool, mock_progress_manager, mock_generation_jobs):
@@ -237,6 +311,7 @@ def test_generation_audit_includes_previous_config(tmp_path):
             create=AsyncMock(return_value=new_version),
         ),
         auditlog=SimpleNamespace(create=AsyncMock()),
+        query_raw=AsyncMock(),
     )
     transaction_manager = SimpleNamespace(
         start=AsyncMock(return_value=transaction),
@@ -275,7 +350,6 @@ def test_generation_audit_includes_previous_config(tmp_path):
                 job_id="job-2",
                 project_id="project-1",
                 user_id="engineer-1",
-                output_kml_name="design.kml",
                 output_kmz_name=output_kmz.name,
                 output_csv_name=output_csv.name,
             )
@@ -284,3 +358,7 @@ def test_generation_audit_includes_previous_config(tmp_path):
     details = transaction.auditlog.create.await_args.kwargs["data"]["details"].data
     assert details["old"] == {"version": 1, "config": {"odp_capacity": 10}}
     assert details["new"]["config"]["odp_capacity"] == 8
+    transaction.query_raw.assert_awaited_once_with(
+        "SELECT pg_advisory_xact_lock(hashtext($1))",
+        "project-1",
+    )

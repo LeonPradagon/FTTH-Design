@@ -1146,88 +1146,21 @@ def build_distribution_tree(odc, road_graph, max_distance_m=500.0):
 
     for odp in odps:
         if odp.id not in segments:
-            # The ODP has no valid road route. Try to reposition it to a
-            # point on the road network that IS reachable from the ODC.
-            # This rescues ODPs that were placed on a disconnected road
-            # component or snapped to the wrong edge.
-            repositioned = False
-            for direction in (1, -1):
-                for branch_choice in range(6):
-                    for dist_m in (40.0, 80.0, 120.0):
-                        try:
-                            candidate = walk_along_road(
-                                road_graph, odc.lat, odc.lon, dist_m,
-                                direction=direction, branch_choice=branch_choice,
-                            )
-                        except Exception:
-                            candidate = None
-                        if candidate is None:
-                            continue
-                        # Verify a road route actually exists to this candidate.
-                        try:
-                            result = route_with_connectivity_fallback(
-                                road_graph,
-                                (odc.lat, odc.lon),
-                                candidate,
-                                route_cache=route_cache,
-                                return_metadata=True,
-                            )
-                        except Exception:
-                            result = None
-                        if not result or result["length_m"] > max_distance_m:
-                            continue
-                        # Check that this candidate is not too close to an
-                        # existing ODP to avoid overlapping markers.
-                        if all(
-                            haversine_m(*candidate, o.lat, o.lon) > 5.0
-                            for o in odps if o.id != odp.id
-                        ):
-                            old_lat, old_lon = odp.lat, odp.lon
-                            odp.lat, odp.lon = candidate
-                            coords = result["coords"]
-                            if coords:
-                                coords[0] = (odc.lat, odc.lon)
-                                coords[-1] = (odp.lat, odp.lon)
-                            odp.upstream_id = odc.id
-                            segments[odp.id] = {
-                                "source_id": odc.id,
-                                "target_id": odp.id,
-                                "source_label": odc.id,
-                                "target_label": odp.id,
-                                "coords": coords,
-                                "length_m": result["length_m"],
-                                "routing_cost": result["routing_cost"],
-                                "connected": True,
-                            }
-                            repositioned = True
-                            logger.info(
-                                "ODP %s reposisi dari (%.6f,%.6f) ke (%.6f,%.6f) "
-                                "agar tersambung ke ODC %s via jalan (%.0fm).",
-                                odp.id, old_lat, old_lon,
-                                odp.lat, odp.lon, odc.id, result["length_m"],
-                            )
-                            break
-                    if repositioned:
-                        break
-                if repositioned:
-                    break
-
-            if not repositioned:
-                segments[odp.id] = {
-                    "source_id": None,
-                    "target_id": odp.id,
-                    "source_label": None,
-                    "target_label": odp.id,
-                    "coords": [],
-                    "length_m": None,
-                    "routing_cost": None,
-                    "connected": False,
-                }
-                logger.warning(
-                    "ODP %s tidak punya rute jalan ke tree ODC %s; kabel distribusi tidak dibuat.",
-                    odp.id,
-                    odc.id,
-                )
+            segments[odp.id] = {
+                "source_id": None,
+                "target_id": odp.id,
+                "source_label": None,
+                "target_label": odp.id,
+                "coords": [],
+                "length_m": None,
+                "routing_cost": None,
+                "connected": False,
+            }
+            logger.warning(
+                "ODP %s tidak punya rute jalan ke tree ODC %s; kabel distribusi tidak dibuat.",
+                odp.id,
+                odc.id,
+            )
 
     return segments
 

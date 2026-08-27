@@ -58,6 +58,7 @@ temp_*.xml
 temp_osm.xml
 
 # Server-generated data outputs
+*.log
 app/server/data/**/*.csv
 app/server/data/**/*.kml
 app/server/data/**/*.kmz
