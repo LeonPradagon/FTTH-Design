@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 
 from server.database import db
 from server.core.response import success_response, error_response
-from server.api.deps import get_current_user
+from server.api.deps import can_access_project, get_current_user
 
 router = APIRouter(prefix="/api")
 
@@ -10,10 +10,7 @@ router = APIRouter(prefix="/api")
 async def get_project_audit(project_id: str, current_user: dict = Depends(get_current_user)):
     """Get audit logs for a specific project."""
     project = await db.project.find_unique(where={"id": project_id})
-    if not project or (
-        current_user.get("role") not in {"admin", "viewer"}
-        and project.userId != current_user["id"]
-    ):
+    if not can_access_project(project, current_user):
         return error_response("PROJECT_NOT_FOUND", "Project not found or access denied", http_status=404)
 
     logs = await db.auditlog.find_many(
@@ -26,11 +23,12 @@ async def get_project_audit(project_id: str, current_user: dict = Depends(get_cu
 
 @router.get("/audit")
 async def get_all_audit(current_user: dict = Depends(get_current_user)):
-    """Get all audit logs (Admin only)."""
+    """Get this admin account's audit logs."""
     if current_user.get("role") != "admin":
         return error_response("UNAUTHORIZED", "Admin access required", http_status=403)
 
     logs = await db.auditlog.find_many(
+        where={"userId": current_user["id"]},
         order={"createdAt": "desc"},
         take=100 # limit to 100 for performance
     )

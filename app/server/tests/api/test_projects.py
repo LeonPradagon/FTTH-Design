@@ -32,6 +32,36 @@ def test_viewer_can_list_projects_without_mutation_access() -> None:
     assert fake_db.project.find_many.await_args.kwargs["where"] == {}
 
 
+def test_admin_lists_only_projects_owned_by_current_account() -> None:
+    fake_db = SimpleNamespace(
+        project=SimpleNamespace(find_many=AsyncMock(return_value=[])),
+    )
+
+    with patch("server.api.routes.projects.db", fake_db):
+        response = _client({"id": "admin-2", "role": "admin"}).get(
+            "/api/projects"
+        )
+
+    assert response.status_code == 200
+    assert fake_db.project.find_many.await_args.kwargs["where"] == {
+        "userId": "admin-2"
+    }
+
+
+def test_admin_cannot_read_another_admins_project() -> None:
+    foreign_project = SimpleNamespace(userId="admin-1")
+    fake_db = SimpleNamespace(
+        project=SimpleNamespace(find_unique=AsyncMock(return_value=foreign_project)),
+    )
+
+    with patch("server.api.routes.projects.db", fake_db):
+        response = _client({"id": "admin-2", "role": "admin"}).get(
+            "/api/projects/project-1"
+        )
+
+    assert response.status_code == 403
+
+
 def test_project_update_audits_old_and_new_values() -> None:
     old_project = SimpleNamespace(
         id="project-1",
@@ -114,5 +144,19 @@ def test_engineer_cannot_delete_project() -> None:
     response = _client({"id": "engineer-1", "role": "engineer"}).delete(
         "/api/projects/project-1"
     )
+
+    assert response.status_code == 403
+
+
+def test_admin_cannot_delete_another_admins_project() -> None:
+    foreign_project = SimpleNamespace(userId="admin-1")
+    fake_db = SimpleNamespace(
+        project=SimpleNamespace(find_unique=AsyncMock(return_value=foreign_project)),
+    )
+
+    with patch("server.api.routes.projects.db", fake_db):
+        response = _client({"id": "admin-2", "role": "admin"}).delete(
+            "/api/projects/project-1"
+        )
 
     assert response.status_code == 403

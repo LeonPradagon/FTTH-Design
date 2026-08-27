@@ -26,6 +26,7 @@ from server.core.errors import (
 )
 from server.core.response import success_response
 from server.api.deps import (
+    can_access_project,
     get_current_user,
     get_generation_user,
     get_rate_limited_generation_user,
@@ -59,7 +60,7 @@ async def _require_project_access(project_id: str | None, current_user: dict) ->
     project = await db.project.find_unique(where={"id": project_id})
     if not project:
         raise HTTPException(status_code=404, detail="Project tidak ditemukan.")
-    if current_user.get("role") != "admin" and project.userId != current_user["id"]:
+    if not can_access_project(project, current_user):
         raise HTTPException(status_code=403, detail="Project tidak dapat diakses.")
 
 
@@ -138,10 +139,7 @@ def _is_pop_file(filename: str) -> bool:
 
 
 def _can_access_job(state: dict, current_user: dict) -> bool:
-    return (
-        current_user.get("role") == "admin"
-        or state.get("user_id") == current_user["id"]
-    )
+    return state.get("user_id") == current_user["id"]
 
 
 async def _get_job_state(job_id: str) -> dict | None:

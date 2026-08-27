@@ -62,6 +62,23 @@ async def get_current_user(user: dict = Depends(get_optional_user)):
     return user
 
 
+def can_access_project(project, current_user: dict) -> bool:
+    """Return whether a user may access a project record.
+
+    Viewer access is intentionally read-only and cross-project. Every other
+    role, including admin, is scoped to projects owned by that account.
+    Keeping this rule in one place prevents privileged-role checks from
+    accidentally turning into cross-account project access.
+    """
+    return bool(
+        project
+        and (
+            current_user.get("role") == "viewer"
+            or project.userId == current_user["id"]
+        )
+    )
+
+
 async def get_generation_user(user: dict = Depends(get_optional_user)):
     """Require an authenticated role that may change generation data."""
     if user["id"] == "anonymous":

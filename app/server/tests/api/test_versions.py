@@ -48,7 +48,7 @@ def test_engineer_cannot_delete_version() -> None:
     assert response.status_code == 403
 
 
-def test_admin_can_list_another_users_versions_with_validation() -> None:
+def test_admin_cannot_list_another_users_versions() -> None:
     version = MagicMock(version=1)
     version.model_dump.return_value = {
         "id": "version-1",
@@ -60,9 +60,10 @@ def test_admin_can_list_another_users_versions_with_validation() -> None:
         "validation": {"status": "PASS"},
         "stats": {"odc_count": 2},
     }
+    foreign_project = SimpleNamespace(userId="owner-1")
     fake_db = SimpleNamespace(
         project=SimpleNamespace(
-            find_unique=AsyncMock(return_value=SimpleNamespace(userId="owner-1"))
+            find_unique=AsyncMock(return_value=foreign_project)
         ),
         designversion=SimpleNamespace(find_many=AsyncMock(return_value=[version])),
     )
@@ -71,12 +72,8 @@ def test_admin_can_list_another_users_versions_with_validation() -> None:
     with patch("server.api.routes.versions.db", fake_db):
         response = client.get("/api/projects/project-1/versions")
 
-    assert response.status_code == 200
-    assert response.json()["data"][0]["validation"] == {"status": "PASS"}
-    assert "metadata" not in response.json()["data"][0]
-    assert response.json()["data"][0]["artifacts"]["kmz"].endswith(
-        "/versions/1/export/kmz"
-    )
+    assert response.status_code == 404
+    fake_db.designversion.find_many.assert_not_awaited()
 
 
 def test_compare_route_is_not_shadowed_by_integer_version_route() -> None:
@@ -180,7 +177,7 @@ def test_version_artifact_can_be_exported_from_object_storage() -> None:
     assert response.content == b"saved-version"
 
 
-def test_admin_can_read_another_users_project_audit() -> None:
+def test_admin_cannot_read_another_users_project_audit() -> None:
     log = MagicMock()
     log.model_dump.return_value = {"action": "GENERATE"}
     fake_db = SimpleNamespace(
@@ -194,5 +191,20 @@ def test_admin_can_read_another_users_project_audit() -> None:
     with patch("server.api.routes.audit.db", fake_db):
         response = client.get("/api/projects/project-1/audit")
 
+    assert response.status_code == 404
+    fake_db.auditlog.find_many.assert_not_awaited()
+
+
+def test_admin_audit_list_is_scoped_to_current_account() -> None:
+    fake_db = SimpleNamespace(
+        auditlog=SimpleNamespace(find_many=AsyncMock(return_value=[])),
+    )
+    client = _client({"id": "admin-2", "role": "admin"}, audit_router)
+
+    with patch("server.api.routes.audit.db", fake_db):
+        response = client.get("/api/audit")
+
     assert response.status_code == 200
-    assert response.json()["data"] == [{"action": "GENERATE"}]
+    assert fake_db.auditlog.find_many.await_args.kwargs["where"] == {
+        "userId": "admin-2"
+    }

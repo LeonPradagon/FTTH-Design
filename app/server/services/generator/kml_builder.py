@@ -321,6 +321,16 @@ def _route_coords(coords, label):
     return converted
 
 
+def _normalize_route_endpoints(coords, start=None, end=None):
+    """Snap only the displayed endpoints to their connected devices."""
+    normalized = list(coords)
+    if start is not None and normalized:
+        normalized[0] = start
+    if end is not None and normalized:
+        normalized[-1] = end
+    return normalized
+
+
 def export_kmz(
     pop,
     odcs,
@@ -461,17 +471,39 @@ def export_kmz(
 
     # -- Feeder Route --
     fol_feeder = fol_routes.newfolder(name="Feeder Route")
+    feeder_coords = []
+    feeder_name_parts = []
+    previous_feeder_end = None
     for seg in feeder_segments:
         seg_name = f"{seg['from_label']}-{seg['to_label']}"
-        feeder = fol_feeder.newlinestring(
-            name=seg_name,
-            coords=_route_coords(seg["coords"], seg_name),
+        route_coords = _route_coords(seg["coords"], seg_name)
+        # Make adjacent segments share exactly the same coordinate before
+        # appending them to the single feeder cable placemark.
+        route_coords = _normalize_route_endpoints(
+            route_coords,
+            start=previous_feeder_end,
         )
+        previous_feeder_end = route_coords[-1] if route_coords else previous_feeder_end
+        if not route_coords:
+            continue
+        if not feeder_coords:
+            feeder_coords.extend(route_coords)
+            feeder_name_parts.append(seg["from_label"])
+        elif feeder_coords[-1] == route_coords[0]:
+            feeder_coords.extend(route_coords[1:])
+        else:
+            feeder_coords.extend(route_coords)
+        feeder_name_parts.append(seg["to_label"])
+
+    if feeder_coords:
+        feeder_name = "-".join(feeder_name_parts) or "Feeder Route"
+        feeder = fol_feeder.newlinestring(name=feeder_name, coords=feeder_coords)
         feeder.style = style_feeder
-        _add_extended_data(feeder, seg_name)
+        _add_extended_data(feeder, feeder_name)
 
     # -- Distribution Route --
     fol_dist = fol_routes.newfolder(name="Distribution Route")
+    distribution_route = None
 
     # -- Drop Route (optional) --
     fol_drop = None
@@ -502,6 +534,15 @@ def export_kmz(
         for j, odp in enumerate(odc.odps, start=1)
     }
     odc_labels = {odc.id: f"ODC{i:03d}" for i, odc in enumerate(odcs, start=1)}
+    device_points = {
+        odc.id: (odc.lon, odc.lat)
+        for odc in odcs
+    }
+    device_points.update({
+        odp.id: (odp.lon, odp.lat)
+        for odc in odcs
+        for odp in odc.odps
+    })
 
     def report_progress(message):
         if progress_callback:
@@ -589,12 +630,30 @@ def export_kmz(
                     odp_label,
                 )
 
-            # -- Distribution linestring (into flat Routes > Distribution Route) --
+            # Distribution is a branched network, so keep each physical branch
+            # as a LineString inside one MultiGeometry placemark. This gives
+            # Google Earth one selectable distribution cable without drawing
+            # false lines between unrelated branches.
             if distribution_connected:
                 dist_name = f"{distribution_source_label}-{odp_label}"
-                dist = fol_dist.newlinestring(name=dist_name, coords=coords)
+                source_id = (
+                    cached_distribution.get("source_id")
+                    if isinstance(cached_distribution, dict)
+                    else None
+                )
+                source_point = device_points.get(source_id)
+                if source_point is None:
+                    source_point = (odc.lon, odc.lat)
+                target_point = device_points.get(odp.id, (odp.lon, odp.lat))
+                coords = _normalize_route_endpoints(coords, source_point, target_point)
+                if distribution_route is None:
+                    distribution_route = fol_dist.newmultigeometry(
+                        name="Distribution Route"
+                    )
+                    distribution_route.style = style_dist
+                    _add_extended_data(distribution_route, "Distribution Route")
+                dist = distribution_route.newlinestring(name=dist_name, coords=coords)
                 dist.style = style_dist
-                _add_extended_data(dist, dist_name)
                 processed_items += 1
                 if processed_items == total_items or processed_items % max(1, total_items // 100) == 0:
                     report_progress(f"Membuat kabel distribusi dan HC ({processed_items}/{total_items})...")

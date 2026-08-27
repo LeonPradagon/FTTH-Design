@@ -10,7 +10,7 @@ from typing import Optional
 from prisma import Json
 
 from ...database import db
-from ..deps import get_admin_user, get_current_user, get_generation_user
+from ..deps import can_access_project, get_admin_user, get_current_user, get_generation_user
 from server.core.response import success_response
 
 router = APIRouter(prefix="/api")
@@ -126,7 +126,7 @@ async def create_project(project: ProjectCreate, current_user: dict = Depends(ge
 async def read_projects(skip: int = 0, limit: int = 100, current_user: dict = Depends(get_current_user)):
     where = (
         {}
-        if current_user.get("role") in {"admin", "viewer"}
+        if current_user.get("role") == "viewer"
         else {"userId": current_user["id"]}
     )
     projects = await db.project.find_many(
@@ -143,10 +143,7 @@ async def read_project(project_id: str, current_user: dict = Depends(get_current
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    if (
-        current_user.get("role") not in {"admin", "viewer"}
-        and project.userId != current_user["id"]
-    ):
+    if not can_access_project(project, current_user):
         raise HTTPException(status_code=403, detail="Forbidden")
 
     return success_response(data=_serialize_project(project))
@@ -157,7 +154,7 @@ async def update_project(project_id: str, project_update: ProjectUpdate, current
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    if current_user.get("role") != "admin" and project.userId != current_user["id"]:
+    if not can_access_project(project, current_user):
         raise HTTPException(status_code=403, detail="Forbidden")
 
     old_project = _serialize_project(project)
@@ -207,6 +204,8 @@ async def delete_project(project_id: str, current_user: dict = Depends(get_admin
     project = await db.project.find_unique(where={"id": project_id})
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
+    if project.userId != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Forbidden")
 
     async with db.tx() as transaction:
         await transaction.auditlog.create(

@@ -100,25 +100,61 @@ def test_export_kmz_uses_distribution_tree_labels(tmp_path):
 
     with zipfile.ZipFile(str(output), "r") as archive:
         document = archive.read("doc.kml").decode("utf-8")
-    assert "ODC001-ODC001.ODP001" in document
-    assert "ODC001.ODP001-ODC001.ODP002" in document
+    assert "<name>Distribution Route</name>" in document
 
     root = ET.fromstring(document)
     namespace = {"kml": "http://www.opengis.net/kml/2.2"}
 
-    def route_coordinates(name):
-        placemark = next(
-            item for item in root.findall(".//kml:Placemark", namespace)
-            if item.findtext("kml:name", namespaces=namespace) == name
-        )
-        values = placemark.findtext("kml:LineString/kml:coordinates", namespaces=namespace)
+    distribution = next(
+        item for item in root.findall(".//kml:Placemark", namespace)
+        if item.findtext("kml:name", namespaces=namespace) == "Distribution Route"
+    )
+    line_strings = distribution.findall("kml:MultiGeometry/kml:LineString", namespace)
+    assert len(line_strings) == 2
+
+    def route_coordinates(line_string):
+        values = line_string.findtext("kml:coordinates", namespaces=namespace)
         return [tuple(float(value) for value in item.split(",")[:2]) for item in values.split()]
 
-    assert route_coordinates("ODC001-ODC001.ODP001") == [
+    assert route_coordinates(line_strings[0]) == [
         (106.802, -6.202), (106.801, -6.201)
     ]
-    assert route_coordinates("ODC001.ODP001-ODC001.ODP002") == [
+    assert route_coordinates(line_strings[1]) == [
         (106.801, -6.201), (106.8015, -6.2015)
+    ]
+
+
+def test_export_kmz_combines_feeder_segments_and_stitches_join(tmp_path, sample_data):
+    pop, odcs, _ = sample_data
+    output = tmp_path / "continuous-feeder.kmz"
+    feeder_segments = [
+        {
+            "coords": [(pop["lat"], pop["lon"]), (-6.202, 106.802)],
+            "from_label": "POP_1",
+            "to_label": "ODC-1",
+        },
+        {
+            # Simulate a tiny gap in a legacy route cache at ODC-1.
+            "coords": [(-6.202001, 106.802001), (-6.203, 106.803)],
+            "from_label": "ODC-1",
+            "to_label": "ODC-2",
+        },
+    ]
+
+    export_kmz(pop, odcs, feeder_segments, str(output))
+
+    with zipfile.ZipFile(str(output), "r") as archive:
+        document = archive.read("doc.kml").decode("utf-8")
+    root = ET.fromstring(document)
+    namespace = {"kml": "http://www.opengis.net/kml/2.2"}
+    feeder = next(
+        item for item in root.findall(".//kml:Placemark", namespace)
+        if item.findtext("kml:name", namespaces=namespace) == "POP_1-ODC-1-ODC-2"
+    )
+    values = feeder.findtext("kml:LineString/kml:coordinates", namespaces=namespace)
+    coordinates = [tuple(float(value) for value in item.split(",")[:2]) for item in values.split()]
+    assert coordinates == [
+        (106.8, -6.2), (106.802, -6.202), (106.803, -6.203)
     ]
 
 
@@ -163,10 +199,10 @@ def test_export_kmz_matches_reference_google_earth_palette(tmp_path, sample_data
     assert placemark_styles["POP_1-ODC 01"].findtext(
         "kml:LineStyle/kml:width", namespaces=namespace
     ) == "4"
-    assert placemark_styles["ODC001-ODC001.ODP001"].findtext(
+    assert placemark_styles["Distribution Route"].findtext(
         "kml:LineStyle/kml:color", namespaces=namespace
     ) == "ffff00aa"
-    assert placemark_styles["ODC001-ODC001.ODP001"].findtext(
+    assert placemark_styles["Distribution Route"].findtext(
         "kml:LineStyle/kml:width", namespaces=namespace
     ) == "4"
 
@@ -234,7 +270,7 @@ def test_export_kmz_uses_configured_feature_colors(tmp_path, sample_data):
                 icon_colors[name] = icon_color
 
     assert line_colors["POP_1-ODC 01"] == "ff332211"
-    assert line_colors["ODC001-ODC001.ODP001"] == "ff665544"
+    assert line_colors["Distribution Route"] == "ff665544"
     assert line_colors["ODP ODC001.ODP001 TO HC ODC001.ODP001-01"] == "ff030201"
     assert line_widths["ODP ODC001.ODP001 TO HC ODC001.ODP001-01"] == "3"
     assert icon_hrefs["ODC001"] == "http://maps.google.com/mapfiles/kml/shapes/triangle.png"

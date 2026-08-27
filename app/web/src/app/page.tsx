@@ -43,6 +43,7 @@ export type LayerConfig = {
   groupName?: string;
   designName?: string;
   boundaryName?: string;
+  sourceName?: string;
   status?: string;
 };
 
@@ -84,6 +85,34 @@ const isGeneratedDesignLayer = (layer: LayerConfig) => (
   || layer.id.startsWith("design:single:")
   || layer.id.startsWith("design:batch:")
 );
+
+const GENERATED_DESIGN_NAME = "boundary_design";
+const GENERATED_HOMEPASS_NAME = "boundary_design_homepass";
+const GENERATED_CUSTOM_NAME = "boundary_custom_design";
+
+const boundaryAreaSuffix = (name: string) => {
+  const suffix = String(name || "")
+    .trim()
+    .replace(/\.[^/.]+$/, "")
+    .replace(/^ftth\s*design[_ -]*/i, "")
+    .replace(/\s*\+\s*homepass$/i, "")
+    .replace(/^boundary[_ -]*/i, "")
+    .replace(/^(?:custom[_ -]*design|design)[_ -]*/i, "")
+    .replace(/^homepass[_ -]*/i, "")
+    .replace(/[_ -]+design$/i, "")
+    .trim();
+  return suffix;
+};
+
+const generatedDesignLayerName = (areaName: string) => {
+  const suffix = boundaryAreaSuffix(areaName);
+  return suffix ? `${GENERATED_DESIGN_NAME}_${suffix}` : GENERATED_DESIGN_NAME;
+};
+
+const generatedHomepassLayerName = (areaName: string) => {
+  const suffix = boundaryAreaSuffix(areaName);
+  return suffix ? `${GENERATED_HOMEPASS_NAME}_${suffix}` : GENERATED_HOMEPASS_NAME;
+};
 
 export default function Home() {
   const { data: session, isPending } = useSession();
@@ -145,10 +174,14 @@ export default function Home() {
   const projectNameRef = useRef("");
   const projectSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const projectContextRef = useRef(0);
+  const projectFetchVersionRef = useRef(0);
   const generationConfigRef = useRef<GenerationConfig>(DEFAULT_CONFIG);
   const sessionUserId = (session?.user as { id?: string } | undefined)?.id;
   const generationConfigStorageKey = sessionUserId
     ? `ftth_generation_config:${sessionUserId}`
+    : null;
+  const activeJobsStorageKey = sessionUserId
+    ? `ftth_active_jobs:${sessionUserId}`
     : null;
 
   useEffect(() => {
@@ -205,19 +238,20 @@ export default function Home() {
   };
 
   const rememberJob = (jobId: string) => {
-    if (typeof window === "undefined") return;
-    const jobs = JSON.parse(window.localStorage.getItem("ftth_active_jobs") || "[]") as string[];
-    if (!jobs.includes(jobId)) window.localStorage.setItem("ftth_active_jobs", JSON.stringify([...jobs, jobId]));
+    if (typeof window === "undefined" || !activeJobsStorageKey) return;
+    const jobs = JSON.parse(window.localStorage.getItem(activeJobsStorageKey) || "[]") as string[];
+    if (!jobs.includes(jobId)) window.localStorage.setItem(activeJobsStorageKey, JSON.stringify([...jobs, jobId]));
   };
 
   useEffect(() => {
     // Active jobs already have an SSE connection (or the batch poller).
     // Polling them again here only duplicates traffic and Redis reads.
     if (isGenerating || isGeneratingHomepass) return;
+    if (!sessionUserId || !activeJobsStorageKey) return;
     let cancelled = false;
     const restore = async () => {
       if (typeof window === "undefined") return;
-      const jobs = JSON.parse(window.localStorage.getItem("ftth_active_jobs") || "[]") as string[];
+      const jobs = JSON.parse(window.localStorage.getItem(activeJobsStorageKey) || "[]") as string[];
       const activeJobs: string[] = [];
       for (const jobId of jobs) {
         try {
@@ -243,12 +277,12 @@ export default function Home() {
           }
         } catch { /* A refresh must not prevent the map from loading. */ }
       }
-      if (!cancelled) window.localStorage.setItem("ftth_active_jobs", JSON.stringify(activeJobs));
+      if (!cancelled) window.localStorage.setItem(activeJobsStorageKey, JSON.stringify(activeJobs));
     };
     void restore();
     const timer = window.setInterval(() => { void restore(); }, 5000);
     return () => { cancelled = true; window.clearInterval(timer); };
-  }, [isGenerating, isGeneratingHomepass]);
+  }, [activeJobsStorageKey, isGenerating, isGeneratingHomepass, sessionUserId]);
 
   const toggleLayer = (id: string) => {
     setLayers(prev => {
@@ -283,10 +317,12 @@ export default function Home() {
   // via the HttpOnly cookie.
 
   const fetchProjects = useCallback(async () => {
+    const requestVersion = projectFetchVersionRef.current;
     try {
       const res = await fetch('/api/proxy/api/projects');
       if (!res.ok) throw new Error('Failed to fetch projects');
       const data = await res.json();
+      if (requestVersion !== projectFetchVersionRef.current) return;
       setSavedProjects(data.data || data);
     } catch {
       // Ignore initial fetch errors if not logged in
@@ -294,12 +330,58 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    // Wrap to prevent synchronous setState warning from linter
-    const load = async () => {
-      await fetchProjects();
-    };
-    load();
-  }, [fetchProjects]);
+    // A session can change without the page process being recreated (for
+    // example when two admin accounts use the same browser). Clear all
+    // project state before loading the new account's projects so the old
+    // account's data cannot remain visible while the request is in flight.
+    let cancelled = false;
+    projectFetchVersionRef.current += 1;
+    projectContextRef.current += 1;
+    currentProjectIdRef.current = null;
+    projectNameRef.current = "";
+    projectSaveQueueRef.current = Promise.resolve();
+
+    // Defer React state updates by one microtask to avoid cascading renders
+    // from the session synchronization effect.
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setSavedProjects([]);
+      setCurrentProjectId(null);
+      setProjectName("");
+      setLayers([]);
+      setHasNetworkCore(false);
+      setKmzUrl(null);
+      setCsvUrl(null);
+      setFilters({ ...defaultFeatureFilters });
+      setFeatureColors({ ...DEFAULT_FEATURE_COLORS });
+      setDesignStats(null);
+      setValidationResult(null);
+      setCompareVersions(null);
+      setShowVersionHistory(false);
+      setKmlTrees({});
+
+      if (sessionUserId && typeof window !== "undefined") {
+        try {
+          const storedConfig = JSON.parse(
+            window.localStorage.getItem(`ftth_generation_config:${sessionUserId}`) || "null",
+          );
+          const nextConfig = storedConfig && typeof storedConfig === "object"
+            ? ({ ...DEFAULT_CONFIG, ...storedConfig } as GenerationConfig)
+            : DEFAULT_CONFIG;
+          generationConfigRef.current = nextConfig;
+          setGenerationConfig(nextConfig);
+        } catch {
+          generationConfigRef.current = DEFAULT_CONFIG;
+          setGenerationConfig(DEFAULT_CONFIG);
+        }
+      }
+    });
+
+    queueMicrotask(() => {
+      if (!cancelled && sessionUserId) void fetchProjects();
+    });
+    return () => { cancelled = true; };
+  }, [fetchProjects, sessionUserId]);
 
   const saveProject = async (
     name: string,
@@ -374,11 +456,16 @@ export default function Home() {
 
       const resp = await res.json();
       const data = resp.data || resp;
+      const rawProjectName = String(data.name || "").trim();
+      const restoredProjectName = (/^boundary(?:\.kml)?$/i.test(rawProjectName)
+        || /^boundary_design(?:_design)+$/i.test(rawProjectName))
+        ? GENERATED_DESIGN_NAME
+        : rawProjectName;
       projectContextRef.current += 1;
       currentProjectIdRef.current = data.id;
-      projectNameRef.current = data.name;
+      projectNameRef.current = restoredProjectName;
       setCurrentProjectId(data.id);
-      setProjectName(data.name);
+      setProjectName(restoredProjectName);
 
       const parseJson = <T,>(val: unknown, fallback: T): T => {
         if (typeof val === 'string') {
@@ -432,6 +519,31 @@ export default function Home() {
       const normalizedLayers = uniqueLayers.map((rawLayer: LayerConfig) => {
         const layer: LayerConfig = { ...rawLayer, url: toProxyApiUrl(rawLayer.url) };
         const isBoundary = layer.name.toLowerCase().includes('boundary') || layer.id === 'boundary';
+        const migratedBoundaryName = /^boundary\.kml$/i.test(layer.name)
+          ? GENERATED_DESIGN_NAME
+          : layer.name;
+        const migratedGeneratedName = isGeneratedDesignLayer(layer)
+          && /homepass/i.test(layer.name)
+          ? generatedHomepassLayerName(layer.name)
+          : isGeneratedDesignLayer(layer)
+            && (/ftth\s*design/i.test(layer.name)
+              || /boundary\.kml/i.test(layer.name)
+              || /^boundary_design(?:_design)+/i.test(layer.name))
+            ? generatedDesignLayerName(layer.name)
+            : layer.name;
+        if (isBoundary && migratedBoundaryName !== layer.name) {
+          return {
+            ...layer,
+            name: migratedBoundaryName,
+            groupName: /^boundary\.kml$/i.test(layer.groupName || "")
+              ? migratedBoundaryName
+              : layer.groupName,
+            boundaryName: migratedBoundaryName,
+          };
+        }
+        if (migratedGeneratedName !== layer.name) {
+          return { ...layer, name: migratedGeneratedName };
+        }
         if (isBoundary && !layer.groupId) {
           return {
             ...layer,
@@ -459,6 +571,12 @@ export default function Home() {
         }
         return layer;
       });
+      const layersWereMigrated = normalizedLayers.some((layer, index) => {
+        const original = uniqueLayers[index];
+        return layer.name !== original.name
+          || layer.groupName !== original.groupName
+          || layer.boundaryName !== original.boundaryName;
+      });
 
       const generatedDesignLayer = [...normalizedLayers].reverse().find((layer: LayerConfig) =>
         isGeneratedDesignLayer(layer) && layer.visible
@@ -481,6 +599,21 @@ export default function Home() {
       // expand control while the new project's tree is being restored.
       setKmlTrees({});
       setLayers(normalizedLayers);
+      if (restoredProjectName !== rawProjectName || layersWereMigrated) {
+        setSavedProjects(prev => prev.map(project => project.id === data.id
+          ? { ...project, name: restoredProjectName }
+          : project));
+        if (canChangeProjects) {
+          fetch(`/api/proxy/api/projects/${data.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: restoredProjectName,
+              ...(layersWereMigrated ? { layers: normalizedLayers } : {}),
+            }),
+          }).catch(() => undefined);
+        }
+      }
       // Project yang sudah memiliki layer FTTH Design dianggap memiliki
       // kandidat Network Core. Endpoint Homepass tetap memvalidasi cache
       // versi terbaru sebelum job benar-benar dijalankan.
@@ -657,8 +790,10 @@ export default function Home() {
       const resp = await res.json();
       const uploadData = resp.data || resp;
       const url = toProxyApiUrl(uploadData.url);
-      const isBoundary = fileToUse.name.toLowerCase().includes('boundary');
-      const isPop = fileToUse.name.toLowerCase().includes('pop') || fileToUse.name.toLowerCase().includes('olt');
+      const fileNameLower = fileToUse.name.toLowerCase();
+      const isBoundary = ['boundary', 'polygon', 'area'].some(token => fileNameLower.includes(token));
+      const isPop = ['pop', 'olt', 'sentral'].some(token => fileNameLower.includes(token));
+      const inputStem = fileToUse.name.replace(/\.[^/.]+$/, '').trim();
       const importId = crypto.randomUUID?.() ?? crypto.getRandomValues(new Uint32Array(4)).join("-");
       const newLayerId = `import-${importId}`;
 
@@ -691,12 +826,20 @@ export default function Home() {
         console.error("Reverse geocoding failed", e);
       }
 
+      // Use the detected region as the stable boundary label shown in the
+      // sidebar and attached to the generated design. Keep the original file
+      // name as a fallback when reverse geocoding is unavailable.
+      const fallbackBoundaryName = isBoundary
+        ? `boundary_${inputStem.replace(/^(boundary|polygon)[_ -]*/i, '').trim() || 'design'}`
+        : "";
+      const detectedBoundaryName = regionStr ? `boundary_${regionStr}` : fallbackBoundaryName;
+
       // An imported file belongs to the project currently open. Only the
       // first import after explicitly creating a new project gets a name.
       let prjName = projectNameRef.current || fileToUse.name.replace(/\.[^/.]+$/, "");
       if (!projectNameRef.current) {
         if (regionStr) {
-          prjName = `Area ${regionStr}`;
+          prjName = detectedBoundaryName;
         }
         projectNameRef.current = prjName;
         setProjectName(prjName);
@@ -712,7 +855,7 @@ export default function Home() {
 
         if (stem && stem !== 'kml') {
           newGroupId = `boundary:${stem}`;
-          boundaryGroupName = fileToUse.name.replace(/\.[^.]+$/, '').replace(/(pop|olt|sentral)/ig, '').trim();
+          boundaryGroupName = detectedBoundaryName || fileToUse.name.replace(/\.[^.]+$/, '').replace(/(pop|olt|sentral)/ig, '').trim();
         } else {
           const groupsMap = new Map<string, { hasBoundary: boolean, hasPop: boolean, name: string }>();
           prev.forEach(l => {
@@ -749,22 +892,27 @@ export default function Home() {
             const batchCount = groupsMap.size + 1;
             newGroupId = `boundary:batch-${batchCount}-${importId}`;
             if (regionStr) {
-              boundaryGroupName = `Area ${regionStr}${batchCount > 1 ? ` (${batchCount})` : ''}`;
+              boundaryGroupName = `${detectedBoundaryName}${batchCount > 1 ? ` (${batchCount})` : ''}`;
             } else {
               boundaryGroupName = `Batch Design ${batchCount}`;
             }
           }
         }
 
+        const importedLayerName = isBoundary && detectedBoundaryName
+          ? detectedBoundaryName
+          : fileToUse.name;
+
         const newLayer: LayerConfig = {
           id: newLayerId,
-          name: fileToUse.name,
+          name: importedLayerName,
           url,
           visible: true,
           color: "#3b82f6", // Default blue color
           groupId: newGroupId,
-          groupName: boundaryGroupName || fileToUse.name.replace(/\.[^.]+$/, '').replace(/(pop|olt|sentral)/ig, '').trim(),
-          boundaryName: isBoundary ? fileToUse.name : undefined,
+          groupName: boundaryGroupName || detectedBoundaryName || fileToUse.name.replace(/\.[^.]+$/, '').replace(/(pop|olt|sentral)/ig, '').trim(),
+          boundaryName: isBoundary ? importedLayerName : undefined,
+          sourceName: fileToUse.name,
         };
 
         const updatedLayers = [
@@ -845,13 +993,17 @@ export default function Home() {
           setLayers(prev => {
             const newLayers: LayerConfig[] = jobs.flatMap(job => {
               if (job.status !== "COMPLETED" || !job.result?.url) return [];
-              const matchedBoundary = prev.find(l => l.name === job.boundary_name && l.groupId);
+              const matchedBoundary = prev.find(l => (
+                l.name === job.boundary_name
+                || l.sourceName === job.boundary_name
+                || l.boundaryName === job.boundary_name
+              ) && l.groupId);
               const targetGroupId = matchedBoundary?.groupId || boundaryGroupKey(job.boundary_name);
               const targetGroupName = matchedBoundary?.groupName || job.boundary_name;
 
               return [{
                 id: `design:batch:${batchId}:${job.item_id}`,
-                name: job.design_name,
+                name: generatedDesignLayerName(matchedBoundary?.groupName || job.design_name),
                 url: toProxyApiUrl(job.result.url),
                 csvUrl: job.result.csv_url ? toProxyApiUrl(job.result.csv_url) : undefined,
                 visible: true,
@@ -971,7 +1123,7 @@ export default function Home() {
 
                 const newDesign: LayerConfig = {
                   id: designId,
-                  name: `FTTH Design - ${latestBoundary.name}`,
+                  name: generatedDesignLayerName(latestBoundary.name),
                   url: toProxyApiUrl(result.url),
                   csvUrl: result.csv_url ? toProxyApiUrl(result.csv_url) : undefined,
                   visible: true,
@@ -1097,7 +1249,7 @@ export default function Home() {
 
             if (pData.result) {
               const result = pData.result;
-              const newDesign: LayerConfig = { id: "design", name: "FTTH Design", url: toProxyApiUrl(result.url), csvUrl: result.csv_url ? toProxyApiUrl(result.csv_url) : undefined, visible: true, color: "#22c55e" };
+              const newDesign: LayerConfig = { id: "design", name: GENERATED_CUSTOM_NAME, url: toProxyApiUrl(result.url), csvUrl: result.csv_url ? toProxyApiUrl(result.csv_url) : undefined, visible: true, color: "#22c55e" };
               setLayers(prev => {
                 const newLayers = [...prev.filter(l => l.id !== 'design'), newDesign];
                 setFilters(prevFilters => {
@@ -1192,7 +1344,7 @@ export default function Home() {
             const newDesign: LayerConfig = {
               ...(selectedDesign || {}),
               id: selectedDesign?.id || "design",
-              name: selectedDesign?.name || "FTTH Design",
+              name: generatedDesignLayerName(selectedDesign?.name || projectNameRef.current),
               url: toProxyApiUrl(result.url),
               csvUrl: result.csv_url ? toProxyApiUrl(result.csv_url) : undefined,
               visible: true,
@@ -1288,7 +1440,7 @@ export default function Home() {
           setIsGeneratingHomepass(false);
           if (pData.result) {
             const result = pData.result;
-            const newDesign: LayerConfig = { id: selectedDesign?.id || "design", name: selectedDesign ? `${selectedDesign.name} + Homepass` : "FTTH Design + Homepass", url: toProxyApiUrl(result.url), csvUrl: result.csv_url ? toProxyApiUrl(result.csv_url) : undefined, visible: true, color: "#22c55e", groupId: selectedDesign?.groupId, groupName: selectedDesign?.groupName, boundaryName: selectedDesign?.boundaryName, status: "COMPLETED" };
+            const newDesign: LayerConfig = { id: selectedDesign?.id || "design", name: generatedHomepassLayerName(selectedDesign?.name || projectNameRef.current), url: toProxyApiUrl(result.url), csvUrl: result.csv_url ? toProxyApiUrl(result.csv_url) : undefined, visible: true, color: "#22c55e", groupId: selectedDesign?.groupId, groupName: selectedDesign?.groupName, boundaryName: selectedDesign?.boundaryName, status: "COMPLETED" };
             setLayers(prev => {
               const newLayers = selectedDesign
                 ? prev.map(layer => layer.id === selectedDesign.id ? newDesign : layer)

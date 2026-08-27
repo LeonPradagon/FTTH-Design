@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from prisma import Json
 
-from server.api.deps import get_admin_user, get_current_user, get_generation_user
+from server.api.deps import can_access_project, get_admin_user, get_current_user, get_generation_user
 from server.api.routes.files import _download_object
 from server.core.response import error_response, success_response
 from server.database import db, lock_project_version_sequence
@@ -13,13 +13,7 @@ router = APIRouter(prefix="/api/projects/{project_id}/versions")
 
 async def _can_access_project(project_id: str, current_user: dict) -> bool:
     project = await db.project.find_unique(where={"id": project_id})
-    return bool(
-        project
-        and (
-            current_user.get("role") in {"admin", "viewer"}
-            or project.userId == current_user["id"]
-        )
-    )
+    return can_access_project(project, current_user)
 
 
 @router.get("")
