@@ -75,6 +75,16 @@ type FeatureClassification = {
   isHouseCable: boolean;
 };
 
+const geometryContainsLine = (geometry: any): boolean => {
+  if (!geometry) return false;
+  if (geometry.type === "LineString" || geometry.type === "MultiLineString") {
+    return true;
+  }
+  return geometry.type === "GeometryCollection"
+    && Array.isArray(geometry.geometries)
+    && geometry.geometries.some(geometryContainsLine);
+};
+
 const classifyFeature = (feature: any, layer: LayerConfig): FeatureClassification => {
   const name = String(feature.properties?.name || "").trim();
   const compactName = name.replace(/\s+/g, "");
@@ -92,7 +102,7 @@ const classifyFeature = (feature: any, layer: LayerConfig): FeatureClassificatio
   const folderParts = folderPathUpper.split("/").map((part) => part.trim());
   const layerNameUpper = layer.name.toUpperCase();
   const geometryType = feature.geometry?.type;
-  const isLine = geometryType === "LineString" || geometryType === "MultiLineString";
+  const isLine = geometryContainsLine(feature.geometry);
   const isPoint = geometryType === "Point" || geometryType === "MultiPoint";
   const isFtthDesignLayer = layer.id.includes("design") || layerNameUpper.includes("FTTH");
   const hasPopContext = folderPathUpper
@@ -119,18 +129,21 @@ const classifyFeature = (feature: any, layer: LayerConfig): FeatureClassificatio
   const isOdc = isPoint && !isClosure && !isOdpLabel && (
     nameUpper.startsWith("ODC") || descriptionUpper.includes("JUMLAH ODP:")
   );
-  const isOdp = isPoint && !isOdc && (
+  // HC labels include their parent ODP, for example
+  // "ODC001.ODP001-01". Detect the house marker before checking whether a
+  // name contains "ODP", otherwise the house is rendered as a triangle.
+  const isHouse = isPoint && (
+    /^\d{1,2}\/\d{1,2}-\d{1,2}$/.test(name)
+    || descriptionUpper.includes("INDUK ODP:")
+    || (isFtthDesignLayer && !isPop && !isOdc && !isClosure && !isOdpLabel)
+  );
+  const isOdp = isPoint && !isOdc && !isHouse && (
     /^\d{1,2}\/\d{1,2}$/.test(name)
     || /^\d{1,3}\/\d{1,3}$/.test(compactName)
     || descriptionUpper.includes("INDUK: ODC")
     || isOdpLabel
     || hasOdpContext
     || (iconUrl.includes("triangle") && !isClosure)
-  );
-  const isHouse = isPoint && (
-    /^\d{1,2}\/\d{1,2}-\d{1,2}$/.test(name)
-    || descriptionUpper.includes("INDUK ODP:")
-    || (isFtthDesignLayer && !isPop && !isOdc && !isClosure && !isOdp)
   );
 
   const isFeeder = isLine && (
@@ -146,6 +159,7 @@ const classifyFeature = (feature: any, layer: LayerConfig): FeatureClassificatio
     || nameUpper.includes("KABEL DROP")
     || nameUpper.includes("DROP CABLE")
     || descriptionUpper.includes("KABEL DROP")
+    || folderParts.some((part) => part === "DROP ROUTE")
   );
   const isDistribution = isLine && !isFeeder && !isHouseCable;
 
@@ -474,7 +488,7 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
         }));
 
         const cableFeatures = validFeatures.filter((feature) =>
-          feature.geometry?.type === "LineString" || feature.geometry?.type === "MultiLineString"
+          geometryContainsLine(feature.geometry)
         );
         // Generated KMZ files contain the boundary polygon in the same
         // document as the network. Keep polygons separate so they cannot
@@ -483,8 +497,7 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
           feature.geometry?.type === "Polygon" || feature.geometry?.type === "MultiPolygon"
         );
         const deviceFeatures = validFeatures.filter((feature) =>
-          feature.geometry?.type !== "LineString"
-          && feature.geometry?.type !== "MultiLineString"
+          !geometryContainsLine(feature.geometry)
           && feature.geometry?.type !== "Polygon"
           && feature.geometry?.type !== "MultiPolygon"
         );

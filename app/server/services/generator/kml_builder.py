@@ -507,6 +507,7 @@ def export_kmz(
 
     # -- Drop Route (optional) --
     fol_drop = None
+    drop_route = None
     if include_homepass:
         fol_drop = fol_routes.newfolder(name="Drop Route")
 
@@ -687,12 +688,24 @@ def export_kmz(
                     if not path:
                         raise RuntimeError(f"Tidak ada koneksi jalan untuk kabel drop {odp_label} -> {hc_label}.")
                     drop_coords = _route_coords(path, f"{odp_label} -> {hc_label}")
+                drop_coords = _normalize_route_endpoints(
+                    drop_coords,
+                    start=(odp.lon, odp.lat),
+                    end=(h_lon, h_lat),
+                )
 
-                # -- Drop linestring (into flat Routes > Drop Route) --
+                # Drop cables form a branched network at the ODP, so group
+                # all branches in one placemark just like Distribution Route.
+                # Each branch remains its own LineString to avoid drawing
+                # false connections between houses.
                 drop_name = f"ODP {odp_label} TO HC {hc_label}"
-                drop = fol_drop.newlinestring(name=drop_name, coords=drop_coords)
+                if drop_route is None:
+                    drop_route = fol_drop.newmultigeometry(name="Drop Route")
+                    drop_route.style = style_drop
+                    drop_route.description = "KABEL DROP ODP KE HC"
+                    _add_extended_data(drop_route, "Drop Route")
+                drop = drop_route.newlinestring(name=drop_name, coords=drop_coords)
                 drop.style = style_drop
-                _add_extended_data(drop, drop_name)
                 processed_items += 1
                 if processed_items == total_items or processed_items % max(1, total_items // 100) == 0:
                     report_progress(f"Membuat kabel distribusi dan HC ({processed_items}/{total_items})...")

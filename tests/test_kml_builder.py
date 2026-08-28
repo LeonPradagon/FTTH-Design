@@ -61,6 +61,61 @@ def test_export_kmz(tmp_path, sample_data):
         assert "ODC001.ODP001" in doc
 
 
+def test_export_kmz_groups_homepass_drop_cables(tmp_path):
+    pop = {"name": "POP_1", "lat": -6.2, "lon": 106.8}
+    odp = ODP(
+        id="ODP-1",
+        lat=-6.201,
+        lon=106.801,
+        houses=[(-6.2011, 106.8011), (-6.2012, 106.8012)],
+        splitter=Splitter("1:8", "ODP"),
+    )
+    odc = ODC(
+        id="ODC-1",
+        lat=-6.202,
+        lon=106.802,
+        odps=[odp],
+        closure_id="CL-001",
+        splitter=Splitter("1:4", "ODC"),
+    )
+    output = tmp_path / "grouped-homepass.kmz"
+
+    export_kmz(
+        pop,
+        [odc],
+        [{"coords": [(pop["lat"], pop["lon"]), (odc.lat, odc.lon)],
+          "from_label": "POP_1", "to_label": "ODC-1"}],
+        str(output),
+        include_homepass=True,
+    )
+
+    with zipfile.ZipFile(str(output), "r") as archive:
+        document = archive.read("doc.kml").decode("utf-8")
+    root = ET.fromstring(document)
+    namespace = {"kml": "http://www.opengis.net/kml/2.2"}
+    drop_routes = [
+        item for item in root.findall(".//kml:Placemark", namespace)
+        if item.findtext("kml:name", namespaces=namespace) == "Drop Route"
+    ]
+    assert len(drop_routes) == 1
+    assert drop_routes[0].findtext("kml:description", namespaces=namespace) == "KABEL DROP ODP KE HC"
+    line_strings = drop_routes[0].findall("kml:MultiGeometry/kml:LineString", namespace)
+    assert len(line_strings) == 2
+
+    def endpoints(line_string):
+        values = line_string.findtext("kml:coordinates", namespaces=namespace)
+        coordinates = [
+            tuple(float(value) for value in item.split(",")[:2])
+            for item in values.split()
+        ]
+        return coordinates[0], coordinates[-1]
+
+    assert [endpoints(line) for line in line_strings] == [
+        ((106.801, -6.201), (106.8011, -6.2011)),
+        ((106.801, -6.201), (106.8012, -6.2012)),
+    ]
+
+
 def test_export_kmz_uses_distribution_tree_labels(tmp_path):
     pop = {"name": "POP_1", "lat": -6.2, "lon": 106.8}
     odps = [
@@ -271,8 +326,8 @@ def test_export_kmz_uses_configured_feature_colors(tmp_path, sample_data):
 
     assert line_colors["POP_1-ODC 01"] == "ff332211"
     assert line_colors["Distribution Route"] == "ff665544"
-    assert line_colors["ODP ODC001.ODP001 TO HC ODC001.ODP001-01"] == "ff030201"
-    assert line_widths["ODP ODC001.ODP001 TO HC ODC001.ODP001-01"] == "3"
+    assert line_colors["Drop Route"] == "ff030201"
+    assert line_widths["Drop Route"] == "3"
     assert icon_hrefs["ODC001"] == "http://maps.google.com/mapfiles/kml/shapes/triangle.png"
     assert icon_hrefs["ODC001.ODP001"] == "http://maps.google.com/mapfiles/kml/shapes/triangle.png"
     assert icon_hrefs["OLT001"] == "http://maps.google.com/mapfiles/kml/shapes/electronics.png"
