@@ -24,8 +24,8 @@ class RoutingStrategy(str, Enum):
 # Bump when clustering, parent assignment, or routing behavior changes. This
 # invalidates reusable Network Core caches so a new generate runs the updated
 # placement/routing logic.
-ALGORITHM_VERSION = "1.7.0"
-GENERATOR_VERSION = "1.7.0"
+ALGORITHM_VERSION = "1.8.0"
+GENERATOR_VERSION = "1.8.0"
 
 
 class GenerationConfig(BaseModel):

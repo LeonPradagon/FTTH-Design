@@ -35,7 +35,7 @@ os.makedirs(REGION_CACHE_DIR, exist_ok=True)
 # Grid size for region caching (in degrees)
 # 0.05° ≈ 5.5 km — cukup besar untuk mencakup boundary + buffer
 GRID_SIZE = 0.05
-ROAD_CACHE_VERSION = "v3"
+ROAD_CACHE_VERSION = "v4"
 OSM_CACHE_MAX_AGE_SECONDS = int(os.getenv("OSM_CACHE_MAX_AGE_SECONDS", str(24 * 60 * 60)))
 
 # Overpass API endpoints for fallback
@@ -230,8 +230,6 @@ def _get_road_graph_cached(polygon, force_refresh=False):
     rhash = _region_hash(polygon)
     cache_paths = [
         os.path.join(REGION_CACHE_DIR, f"roads_{ROAD_CACHE_VERSION}_{rhash}.graphml"),
-        os.path.join(REGION_CACHE_DIR, f"roads_v2_{rhash}.graphml"),
-        os.path.join(REGION_CACHE_DIR, f"roads_{rhash}.graphml"),
     ]
 
     for cache_path in cache_paths:
@@ -241,8 +239,6 @@ def _get_road_graph_cached(polygon, force_refresh=False):
         try:
             G = ox.load_graphml(cache_path)
             G = prepare_road_graph(G)
-            if f"roads_{ROAD_CACHE_VERSION}_" not in os.path.basename(cache_path):
-                _save_road_graph_cache(polygon, G)
             return G
         except Exception as e:
             logger.warning(f"Failed to read road graph cache: {e}")
@@ -299,6 +295,36 @@ def _save_pois_cache(polygon, gdf, tag_key, tag_value):
 # PUBLIC API — Pengganti fungsi-fungsi di osm_client.py
 # =============================================================
 
+def _building_points_in_boundary(gdf, polygon):
+    """Convert buildings that touch a boundary into stable house points.
+
+    Using only a building centroid misses buildings at the edge of a
+    hand-drawn boundary when the centroid falls just outside the polygon.
+    For those buildings use a representative point from the clipped footprint
+    instead. ``covers`` also keeps points that lie exactly on the boundary.
+    """
+    houses = []
+    seen = set()
+    for _, row in gdf.iterrows():
+        geom = row.geometry
+        if geom is None or geom.is_empty or not geom.intersects(polygon):
+            continue
+
+        candidate = geom if geom.geom_type == "Point" else geom.centroid
+        if not polygon.covers(candidate):
+            clipped = geom.intersection(polygon)
+            if clipped.is_empty:
+                continue
+            candidate = clipped.representative_point()
+        if not polygon.covers(candidate):
+            continue
+
+        key = (round(candidate.y, 7), round(candidate.x, 7))
+        if key not in seen:
+            seen.add(key)
+            houses.append(key)
+    return houses
+
 def fetch_houses_in_boundary(polygon, force_refresh=False):
     """Ambil titik centroid tiap bangunan di dalam boundary.
     Cache-first: baca dari disk jika tersedia, lalu Overpass API."""
@@ -312,14 +338,7 @@ def fetch_houses_in_boundary(polygon, force_refresh=False):
     
     if cached is not None and not cached.empty:
         # Filter ke polygon aktual
-        houses = []
-        for _, row in cached.iterrows():
-            geom = row.geometry
-            if geom is None:
-                continue
-            centroid = geom if geom.geom_type == "Point" else geom.centroid
-            if polygon.contains(centroid):
-                houses.append((centroid.y, centroid.x))
+        houses = _building_points_in_boundary(cached, polygon)
         
         if houses:
             elapsed = time.time() - start
@@ -335,12 +354,7 @@ def fetch_houses_in_boundary(polygon, force_refresh=False):
         # Simpan ke cache
         _save_buildings_cache(region, gdf)
         
-        houses = []
-        for _, row in gdf.iterrows():
-            geom = row.geometry
-            centroid = geom if geom.geom_type == "Point" else geom.centroid
-            if polygon.contains(centroid):
-                houses.append((centroid.y, centroid.x))
+        houses = _building_points_in_boundary(gdf, polygon)
         
         elapsed = time.time() - start
         print(f"Ditemukan {len(houses)} bangunan di dalam boundary. ({elapsed:.1f}s, dari Overpass API)")
@@ -471,7 +485,6 @@ def fetch_road_graph(boundary, pop=None, buffer_deg=0.002, force_refresh=False, 
     cached_graph = _get_road_graph_cached(region, force_refresh=force_refresh)
     if cached_graph is not None:
         G = prepare_road_graph(cached_graph)
-        G = ox.truncate.largest_component(G, strongly=False)
         G = ox.convert.to_undirected(G)
         elapsed = time.time() - start
         print(f"  Graf jalan: {len(G.nodes)} node, {len(G.edges)} edge. ({elapsed:.1f}s, dari cache lokal)")
@@ -482,7 +495,6 @@ def fetch_road_graph(boundary, pop=None, buffer_deg=0.002, force_refresh=False, 
     try:
         G = _safe_native_graph(query_area, network_type="drive")
         G = prepare_road_graph(G)
-        G = ox.truncate.largest_component(G, strongly=False)
         G_undirected = ox.convert.to_undirected(G)
         
         # Simpan ke cache (simpan versi directed agar bisa di-load ulang oleh OSMnx)

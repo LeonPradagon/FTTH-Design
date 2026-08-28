@@ -22,7 +22,11 @@ from server.core.errors import (
     ExportFailedError,
 )
 from server.services.generator.models import Splitter, ODP, ODC
-from server.services.generator.osm_local import fetch_road_graph, fetch_houses_in_boundary
+from server.services.generator.osm_local import (
+    ROAD_CACHE_VERSION,
+    fetch_road_graph,
+    fetch_houses_in_boundary,
+)
 from server.services.generator.routing import (
     build_feeder_segments_preserving_order,
     build_feeder_chain,
@@ -212,7 +216,8 @@ def _fetch_osm_tiled(boundary, pop, force_refresh=False, job_id=None, cache_dir=
         # design just because both polygons share the same grid cell.
         boundary_fingerprint = hashlib.sha256(boundary.wkb).hexdigest()[:16]
         checkpoint_dir = os.path.join(
-            os.path.abspath(cache_dir), "checkpoints", "osm_tiles", boundary_fingerprint
+            os.path.abspath(cache_dir), "checkpoints", "osm_tiles",
+            f"{ROAD_CACHE_VERSION}-{boundary_fingerprint}",
         )
         os.makedirs(checkpoint_dir, exist_ok=True)
     if job_id:
@@ -299,7 +304,7 @@ def _fetch_osm_tiled(boundary, pop, force_refresh=False, job_id=None, cache_dir=
     unique_houses = list({
         (round(lat, 7), round(lon, 7))
         for lat, lon in houses
-        if boundary.contains(Point(lon, lat))
+        if boundary.covers(Point(lon, lat))
     })
     return unique_houses, prepare_road_graph(road_graph)
 

@@ -425,6 +425,93 @@ button:disabled {
   z-index: 1;
 }
 
+.map-edit-toolbar {
+  position: absolute;
+  top: 24px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 324px);
+  min-height: 48px;
+  padding: 4px 6px;
+  overflow-x: auto;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 26px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.map-edit-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.map-edit-tool {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.map-edit-tool:hover {
+  color: #2563eb;
+  background: #f8fafc;
+}
+
+.map-edit-tool.active {
+  color: #0369a1;
+  background: #eff8ff;
+  border-color: #d7efff;
+  box-shadow: inset 0 0 0 2px #f8fcff;
+}
+
+.map-edit-tool-danger {
+  color: #64748b;
+}
+
+.map-edit-tool-danger:hover {
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.map-edit-toolbar-divider {
+  width: 1px;
+  height: 40px;
+  flex: 0 0 1px;
+  background: #e2e8f0;
+}
+
+@media (max-width: 720px) {
+  .map-edit-toolbar {
+    left: 12px !important;
+    right: 12px;
+    max-width: none;
+    min-height: 48px;
+    padding: 4px 6px;
+  }
+
+  .map-edit-tool {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+  }
+
+  .map-edit-toolbar-divider {
+    height: 40px;
+  }
+}
+
 .leaflet-container {
   width: 100%;
   height: 100%;

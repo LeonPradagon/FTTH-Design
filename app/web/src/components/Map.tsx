@@ -11,7 +11,20 @@ import JSZip from "jszip";
 import { LayerConfig, KmlNode } from "../app/page";
 import { DEFAULT_FEATURE_COLORS } from "@/lib/feature-colors";
 
-import { Plus, Minus, Compass, ArrowUp, PersonStanding, X } from "lucide-react";
+import {
+  Plus,
+  Minus,
+  Compass,
+  ArrowUp,
+  PersonStanding,
+  X,
+  MousePointer2,
+  MapPin,
+  Pentagon,
+  Waypoints,
+  Ruler,
+  Trash2,
+} from "lucide-react";
 
 const getPinColorArray = (hex?: string): [number, number, number, number] => {
   if (!hex) return [156, 163, 175, 255]; // Gray fallback
@@ -101,6 +114,10 @@ const classifyFeature = (feature: any, layer: LayerConfig): FeatureClassificatio
   const folderPathUpper = folderPath.toUpperCase();
   const folderParts = folderPathUpper.split("/").map((part) => part.trim());
   const layerNameUpper = layer.name.toUpperCase();
+  const layerSourceNameUpper = String(layer.sourceName || "").toUpperCase();
+  const featureTypeUpper = String(
+    feature.properties?.featureType || feature.properties?.assetType || "",
+  ).trim().toUpperCase();
   const geometryType = feature.geometry?.type;
   const isLine = geometryContainsLine(feature.geometry);
   const isPoint = geometryType === "Point" || geometryType === "MultiPoint";
@@ -114,8 +131,12 @@ const classifyFeature = (feature: any, layer: LayerConfig): FeatureClassificatio
     layer.id === "pop"
     || layerNameUpper.includes("POP")
     || layerNameUpper.includes("OLT")
+    || layerSourceNameUpper.includes("POP")
+    || layerSourceNameUpper.includes("OLT")
     || hasPopContext
     || descriptionUpper.includes("SERVER OLT")
+    || featureTypeUpper === "POP"
+    || featureTypeUpper === "OLT"
     || nameUpper.includes("POP")
     || nameUpper.includes("OLT")
   );
@@ -272,6 +293,7 @@ const buildTreeVisibilityIndex = (trees: Record<string, KmlNode[]> | undefined) 
 interface MapProps {
   layers: LayerConfig[];
   onShowMessage?: (msg: string, type: 'success' | 'error' | 'info') => void;
+  onDrawFile?: (file: File) => void | Promise<void>;
   filters?: {
     showPop: boolean;
     showOdc: boolean;
@@ -286,11 +308,13 @@ interface MapProps {
   featureColors?: Record<string, string>;
 }
 
-export default function MapComponent({ layers, onShowMessage, filters, kmlTrees, onTreeLoaded, isSidebarCollapsed, featureColors }: MapProps) {
+export default function MapComponent({ layers, onShowMessage, onDrawFile, filters, kmlTrees, onTreeLoaded, isSidebarCollapsed, featureColors }: MapProps) {
   const [geoDataMap, setGeoDataMap] = useState<Record<string, any>>({});
   const [hoverInfo, setHoverInfo] = useState<any>(null);
   const [streetViewCoords, setStreetViewCoords] = useState<[number, number] | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<any>(null);
+  const [activeMapTool, setActiveMapTool] = useState("select");
+  const [drawingPoints, setDrawingPoints] = useState<[number, number][]>([]);
   const coordsRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   // Prevent duplicate requests while React re-renders during a layer update.
@@ -325,12 +349,201 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
     }
   };
 
+  const resetDrawing = () => {
+    setDrawingPoints([]);
+    setActiveMapTool("select");
+  };
+
+  const buildKmlFile = (filename: string, placemark: string) => new File(
+    [`<?xml version="1.0" encoding="UTF-8"?>
+      <kml xmlns="http://www.opengis.net/kml/2.2">
+        <Document>${placemark}</Document>
+      </kml>`],
+    filename,
+    { type: "application/vnd.google-earth.kml+xml" },
+  );
+
+  const saveBoundary = (points: [number, number][]) => {
+    const ring = [...points, points[0]];
+    const coordinates = ring.map(([lon, lat]) => `${lon},${lat},0`).join(" ");
+    const file = buildKmlFile(
+      "boundary-drawn.kml",
+      `<Placemark>
+        <name>Boundary</name>
+        <Polygon><outerBoundaryIs><LinearRing>
+          <coordinates>${coordinates}</coordinates>
+        </LinearRing></outerBoundaryIs></Polygon>
+      </Placemark>`,
+    );
+    if (onDrawFile) {
+      void onDrawFile(file);
+    } else {
+      onShowMessage?.("Boundary berhasil dibuat.", "success");
+    }
+    resetDrawing();
+  };
+
+  const finishDrawing = () => {
+    if (activeMapTool === "polygon" && drawingPoints.length >= 3) {
+      saveBoundary(drawingPoints);
+      return;
+    }
+
+    if (activeMapTool === "line" && drawingPoints.length >= 2) {
+      const coordinates = drawingPoints.map(([lon, lat]) => `${lon},${lat},0`).join(" ");
+      const file = buildKmlFile(
+        "cable-drawn.kml",
+        `<Placemark>
+          <name>Custom Cable</name>
+          <LineString><tessellate>1</tessellate>
+            <coordinates>${coordinates}</coordinates>
+          </LineString>
+        </Placemark>`,
+      );
+      if (onDrawFile) {
+        void onDrawFile(file);
+      } else {
+        onShowMessage?.("Jalur kabel berhasil dibuat.", "success");
+      }
+      resetDrawing();
+      return;
+    }
+
+    if (activeMapTool === "measure" && drawingPoints.length >= 2) {
+      const distanceMeters = drawingPoints.slice(1).reduce((total, [lon, lat], index) => {
+        const [previousLon, previousLat] = drawingPoints[index];
+        const earthRadius = 6371008.8;
+        const toRadians = (value: number) => value * Math.PI / 180;
+        const deltaLat = toRadians(lat - previousLat);
+        const deltaLon = toRadians(lon - previousLon);
+        const a = Math.sin(deltaLat / 2) ** 2
+          + Math.cos(toRadians(previousLat)) * Math.cos(toRadians(lat))
+          * Math.sin(deltaLon / 2) ** 2;
+        return total + 2 * earthRadius * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      }, 0);
+      const label = distanceMeters >= 1000
+        ? `${(distanceMeters / 1000).toFixed(2)} km`
+        : `${Math.round(distanceMeters)} m`;
+      onShowMessage?.(`Jarak terukur: ${label}.`, "info");
+      resetDrawing();
+    }
+  };
+
+  const isNearFirstDrawingPoint = (info: any) => {
+    if (drawingPoints.length < 3) return false;
+
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (rect && typeof info.x === "number" && typeof info.y === "number") {
+      const viewport = new WebMercatorViewport({
+        width: rect.width,
+        height: rect.height,
+        ...viewState,
+      });
+      const [firstX, firstY] = viewport.project(drawingPoints[0]);
+      return Math.hypot(info.x - firstX, info.y - firstY) <= 18;
+    }
+
+    const [firstLongitude, firstLatitude] = drawingPoints[0];
+    return Math.abs(info.coordinate[0] - firstLongitude) <= 0.00015
+      && Math.abs(info.coordinate[1] - firstLatitude) <= 0.00015;
+  };
+
+  const handleMapToolSelect = (toolId: string) => {
+    if (toolId === "select") {
+      resetDrawing();
+      return;
+    }
+    if (activeMapTool === toolId && drawingPoints.length > 0) {
+      finishDrawing();
+      return;
+    }
+    setActiveMapTool(toolId);
+    setDrawingPoints([]);
+  };
+
+  const handleMapClick = (info: any) => {
+    const [longitude, latitude] = info.coordinate || [];
+    if (typeof longitude !== "number" || typeof latitude !== "number") return;
+
+    if (activeMapTool === "point") {
+      const file = buildKmlFile(
+        "pop-drawn.kml",
+        `<Placemark>
+          <name>POP</name>
+          <description>SERVER OLT</description>
+          <ExtendedData><Data name="featureType"><value>POP</value></Data></ExtendedData>
+          <Point><coordinates>${longitude},${latitude},0</coordinates></Point>
+        </Placemark>`,
+      );
+      if (onDrawFile) {
+        void onDrawFile(file);
+      } else {
+        onShowMessage?.("Titik POP berhasil dibuat.", "success");
+      }
+      resetDrawing();
+      return;
+    }
+
+    if (activeMapTool === "line" && isNearFirstDrawingPoint(info)) {
+      saveBoundary(drawingPoints);
+      return;
+    }
+
+    if (activeMapTool === "polygon" || activeMapTool === "line" || activeMapTool === "measure") {
+      setDrawingPoints((previous) => [...previous, [longitude, latitude]]);
+      return;
+    }
+
+    if (!info.object) setSelectedFeature(null);
+  };
+
+  const mapTools = [
+    { id: "select", label: "Pilih objek", icon: MousePointer2 },
+    { id: "point", label: "Tambah titik", icon: MapPin },
+    { id: "polygon", label: "Gambar area", icon: Pentagon },
+    { id: "line", label: "Gambar jalur", icon: Waypoints },
+    { id: "measure", label: "Ukur jarak", icon: Ruler },
+  ];
+  const renderMapTool = (tool: (typeof mapTools)[number]) => {
+    const Icon = tool.icon;
+    const isActive = activeMapTool === tool.id;
+    const label = isActive && drawingPoints.length > 0
+      ? tool.id === "line"
+        ? `${tool.label} (klik titik awal untuk boundary, atau ikon untuk kabel)`
+        : `${tool.label} (klik lagi untuk selesai)`
+      : tool.label;
+    return (
+      <button
+        key={tool.id}
+        type="button"
+        className={`map-edit-tool ${isActive ? 'active' : ''}`}
+        onClick={() => handleMapToolSelect(tool.id)}
+        aria-label={label}
+        aria-pressed={isActive}
+        title={label}
+      >
+        <Icon size={20} strokeWidth={2} />
+      </button>
+    );
+  };
+
   // Project records created before the proxy was introduced contain raw
   // /api/files URLs. Normalize them at the map boundary so every protected
   // file request carries the browser session through Next.js.
   const resolveLayerUrl = (url: string) => {
-    if (url.startsWith('/api/') && !url.startsWith('/api/proxy/')) {
+    if (!url || url.startsWith('/api/proxy/')) {
+      return url;
+    }
+    if (url.startsWith('/api/') || url.startsWith('/data/')) {
       return `/api/proxy${url}`;
+    }
+    try {
+      const parsed = new URL(url);
+      if (parsed.pathname.startsWith('/api/') || parsed.pathname.startsWith('/data/')) {
+        return `/api/proxy${parsed.pathname}${parsed.search}`;
+      }
+    } catch {
+      // Leave non-URL values unchanged so the existing error is preserved.
     }
     return url;
   };
@@ -613,6 +826,47 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
       .filter(Boolean);
   }, [layers, geoDataMap, filters, treeVisibility, featureColors]);
 
+  const drawingPreviewLayer = useMemo(() => {
+    if (drawingPoints.length === 0) return null;
+    const features: GeoJSON.Feature[] = drawingPoints.map((coordinates, index) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates },
+      properties: { name: `Titik gambar ${index + 1}` },
+    }));
+
+    if (activeMapTool === "polygon" && drawingPoints.length >= 3) {
+      features.push({
+        type: "Feature",
+        geometry: {
+          type: "Polygon",
+          coordinates: [[...drawingPoints, drawingPoints[0]]],
+        },
+        properties: { name: "Preview boundary" },
+      });
+    } else if (drawingPoints.length >= 2) {
+      features.push({
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: drawingPoints },
+        properties: { name: "Preview gambar" },
+      });
+    }
+
+    return new GeoJsonLayer({
+      id: "map-drawing-preview",
+      data: { type: "FeatureCollection", features },
+      pickable: false,
+      pointType: "circle",
+      stroked: true,
+      filled: true,
+      getFillColor: [3, 105, 161, 230],
+      getLineColor: [3, 105, 161, 230],
+      getLineWidth: 3,
+      getPointRadius: 5,
+      pointRadiusUnits: "pixels",
+      lineWidthUnits: "pixels",
+    });
+  }, [activeMapTool, drawingPoints]);
+
   const baseTileLayer = new TileLayer({
     id: 'osm-tile-layer',
     data: 'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -662,12 +916,8 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
       <DeckGL
         viewState={viewState}
         controller={true}
-        layers={[baseTileLayer, ...deckLayers]}
-        onClick={(info) => {
-          if (!info.object) {
-            setSelectedFeature(null);
-          }
-        }}
+        layers={[baseTileLayer, ...deckLayers, ...(drawingPreviewLayer ? [drawingPreviewLayer] : [])]}
+        onClick={handleMapClick}
         onViewStateChange={({ viewState: newViewState }) => {
           setViewState(newViewState as any);
           currentZoomRef.current = (newViewState as any).zoom;
@@ -821,6 +1071,38 @@ export default function MapComponent({ layers, onShowMessage, filters, kmlTrees,
           </div>
         </div>
       )}
+
+      {/* Map Editing Toolbar */}
+      <div
+        className="map-edit-toolbar"
+        style={{
+          left: isSidebarCollapsed ? '64px' : '300px',
+        }}
+        role="toolbar"
+        aria-label="Alat peta"
+      >
+        <div className="map-edit-toolbar-group">
+          {renderMapTool(mapTools[0])}
+        </div>
+        <div className="map-edit-toolbar-divider" aria-hidden="true" />
+        <div className="map-edit-toolbar-group">
+          {mapTools.slice(1).map(renderMapTool)}
+        </div>
+        <div className="map-edit-toolbar-divider" aria-hidden="true" />
+        <button
+          type="button"
+          className="map-edit-tool map-edit-tool-danger"
+          onClick={() => {
+            resetDrawing();
+            setSelectedFeature(null);
+            setHoverInfo(null);
+          }}
+          aria-label="Bersihkan pilihan"
+          title="Bersihkan pilihan"
+        >
+          <Trash2 size={20} strokeWidth={2} />
+        </button>
+      </div>
 
       {/* Map Navigation Controls */}
       <div 

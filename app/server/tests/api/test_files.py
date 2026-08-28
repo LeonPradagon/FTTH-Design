@@ -1,3 +1,5 @@
+from io import BytesIO
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -61,3 +63,33 @@ def test_legacy_data_url_cannot_cross_user_namespaces() -> None:
     response = client.get("/data/users/another-user/private.kmz")
 
     assert response.status_code == 404
+
+
+def test_legacy_import_data_url_remains_available_for_saved_projects() -> None:
+    storage = InMemoryObjectStorage()
+    storage.upload(
+        "imports/old-project/boundary.kml",
+        BytesIO(b"<kml>boundary</kml>"),
+        content_type="application/vnd.google-earth.kml+xml",
+    )
+    client = create_test_client(storage)
+
+    response = client.get("/data/imports/old-project/boundary.kml")
+
+    assert response.status_code == 200
+    assert response.content == b"<kml>boundary</kml>"
+
+
+def test_file_endpoint_falls_back_to_legacy_raw_user_namespace() -> None:
+    storage = InMemoryObjectStorage()
+    storage.upload(
+        "test-user/old-design.kmz",
+        BytesIO(b"legacy-design"),
+        content_type="application/vnd.google-earth.kmz",
+    )
+    client = create_test_client(storage)
+
+    response = client.get("/api/files/old-design.kmz")
+
+    assert response.status_code == 200
+    assert response.content == b"legacy-design"

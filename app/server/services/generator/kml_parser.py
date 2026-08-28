@@ -59,7 +59,13 @@ def read_boundary(path):
     for pair in poly_el.text.strip().split():
         lon, lat, *_ = pair.split(",")
         coords.append((float(lon), float(lat)))
-    return Polygon(coords)
+    boundary = Polygon(coords)
+    if not boundary.is_valid:
+        repaired = boundary.buffer(0)
+        if repaired.is_empty:
+            raise ValueError(f"Boundary pada {path} tidak valid dan tidak dapat diperbaiki.")
+        boundary = repaired
+    return boundary
 
 
 def read_points(path):
@@ -139,7 +145,7 @@ def read_houses_from_file(path, boundary=None):
     pts = read_points(path)
     houses = [(p["lat"], p["lon"]) for p in pts]
     if boundary is not None:
-        inside = [(lat, lon) for lat, lon in houses if boundary.contains(Point(lon, lat))]
+        inside = [(lat, lon) for lat, lon in houses if boundary.covers(Point(lon, lat))]
         dropped = len(houses) - len(inside)
         if dropped:
             print(f"  Peringatan: {dropped} titik rumah di luar boundary, diabaikan.")

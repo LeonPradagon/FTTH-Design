@@ -2,6 +2,7 @@ import osmnx as ox
 import time
 from shapely.geometry import Point
 from shapely.ops import unary_union
+from server.services.generator.osm_local import _building_points_in_boundary
 
 ox.settings.timeout = 20
 
@@ -53,12 +54,7 @@ def fetch_houses_in_boundary(polygon):
         print(f"OSMnx error saat mengambil bangunan: {e}")
         return []
 
-    houses = []
-    for _, row in gdf.iterrows():
-        geom = row.geometry
-        centroid = geom if geom.geom_type == "Point" else geom.centroid
-        if polygon.contains(centroid):
-            houses.append((centroid.y, centroid.x))  # simpan sebagai (lat, lon)
+    houses = _building_points_in_boundary(gdf, polygon)
 
     print(f"Ditemukan {len(houses)} bangunan di dalam boundary.")
     return houses
@@ -129,7 +125,6 @@ def fetch_road_graph(boundary, pop, buffer_deg=0.002):
     
     try:
         G = safe_graph_from_polygon(query_area, network_type="all")
-        G = ox.truncate.largest_component(G, strongly=False)
         G = ox.convert.to_undirected(G)
         print(f"  Graf jalan (Smart Routing): {len(G.nodes)} node, {len(G.edges)} edge.")
         return G

@@ -88,10 +88,21 @@ async def download_user_file(
     current_user: dict = Depends(get_generation_user),
     storage: ObjectStorage = Depends(get_object_storage),
 ):
-    return await _download_object(
-        user_object_key(current_user["id"], filename),
-        storage,
-    )
+    object_keys = [user_object_key(current_user["id"], filename)]
+    # Projects created before the hashed user namespace was introduced used
+    # the raw account id as the object prefix. Try that key after the current
+    # namespace so old projects remain readable without being re-uploaded.
+    legacy_key = f"{current_user['id']}/{filename}"
+    if legacy_key not in object_keys:
+        object_keys.append(legacy_key)
+
+    for object_key in object_keys:
+        try:
+            return await _download_object(object_key, storage)
+        except HTTPException as exc:
+            if exc.status_code != 404:
+                raise
+    raise HTTPException(status_code=404, detail="File not found")
 
 
 @router.get("/data/{object_key:path}")
@@ -101,6 +112,10 @@ async def download_file(
     storage: ObjectStorage = Depends(get_object_storage),
 ):
     user_prefix = user_object_key(current_user["id"], "file").rsplit("/", 1)[0] + "/"
-    if not object_key.startswith(user_prefix):
+    # Keep the old imports/generated routes readable for authenticated users.
+    # These keys predate per-user namespaces and are retained only for
+    # backwards compatibility with projects that still reference them.
+    is_legacy_object = object_key.startswith(("imports/", "generated/"))
+    if not object_key.startswith(user_prefix) and not is_legacy_object:
         raise HTTPException(status_code=404, detail="File not found")
     return await _download_object(object_key, storage)

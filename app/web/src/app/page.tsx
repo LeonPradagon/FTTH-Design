@@ -23,6 +23,7 @@ const MapComponent = dynamic(() => import('../components/Map'), {
 }) as React.ComponentType<{
   layers: LayerConfig[],
   onShowMessage?: (msg: string, type: 'success' | 'error' | 'info') => void,
+  onDrawFile?: (file: File) => void | Promise<void>,
   filters: FeatureFilters,
   kmlTrees?: Record<string, KmlNode[]>,
   onTreeLoaded?: (layerId: string, tree: KmlNode[]) => void,
@@ -74,8 +75,22 @@ const boundaryGroupKey = (name: string) => {
 };
 
 const toProxyApiUrl = (url: string) => {
-  if (url.startsWith('/api/') && !url.startsWith('/api/proxy/')) {
+  if (!url || url.startsWith('/api/proxy/')) {
+    return url;
+  }
+  if (url.startsWith('/api/') || url.startsWith('/data/')) {
     return `/api/proxy${url}`;
+  }
+  // Projects created before the proxy was introduced may contain an
+  // absolute backend URL. Keep only its API path so the browser uses the
+  // current authenticated proxy and does not depend on an old host/port.
+  try {
+    const parsed = new URL(url);
+    if (parsed.pathname.startsWith('/api/') || parsed.pathname.startsWith('/data/')) {
+      return `/api/proxy${parsed.pathname}${parsed.search}`;
+    }
+  } catch {
+    // Keep non-URL values unchanged; validation will report a useful error.
   }
   return url;
 };
@@ -485,6 +500,8 @@ export default function Home() {
       projectNameRef.current = restoredProjectName;
       setCurrentProjectId(data.id);
       setProjectName(restoredProjectName);
+      setDesignStats(null);
+      setValidationResult(null);
 
       const parseJson = <T,>(val: unknown, fallback: T): T => {
         if (typeof val === 'string') {
@@ -610,6 +627,8 @@ export default function Home() {
         : latestVersion?.artifacts?.csv
           ? toProxyApiUrl(latestVersion.artifacts.csv)
           : null;
+      if (latestVersion?.stats) setDesignStats(latestVersion.stats);
+      if (latestVersion?.validation) setValidationResult(latestVersion.validation);
       setKmzUrl(restoredKmzUrl);
       setCsvUrl(restoredCsvUrl);
 
@@ -872,10 +891,20 @@ export default function Home() {
           .replace(/(boundary|polygon|pop|olt|sentral)/g, ' ')
           .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-        if (stem && stem !== 'kml') {
+        // A POP created from the map belongs to the currently active
+        // boundary/design group. Without this, "pop-drawn.kml" would create
+        // a new group and hide the boundary that the user is working on.
+        const activeGroupLayer = prev.find(layer => layer.visible && layer.groupId);
+        const isMapDrawnCable = /^cable-drawn\.kml$/i.test(fileToUse.name);
+        if ((isPop || isMapDrawnCable) && activeGroupLayer?.groupId) {
+          newGroupId = activeGroupLayer.groupId;
+          boundaryGroupName = activeGroupLayer.groupName || detectedBoundaryName;
+        }
+
+        if (!newGroupId && stem && stem !== 'kml') {
           newGroupId = `boundary:${stem}`;
           boundaryGroupName = detectedBoundaryName || fileToUse.name.replace(/\.[^.]+$/, '').replace(/(pop|olt|sentral)/ig, '').trim();
-        } else {
+        } else if (!newGroupId) {
           const groupsMap = new Map<string, { hasBoundary: boolean, hasPop: boolean, name: string }>();
           prev.forEach(l => {
             if (l.groupId) {
@@ -1481,6 +1510,8 @@ export default function Home() {
             });
             if (result.kmz_url) setKmzUrl(toProxyApiUrl(result.kmz_url));
             if (result.csv_url) setCsvUrl(toProxyApiUrl(result.csv_url));
+            if (result.stats) setDesignStats(result.stats);
+            if (result.validation) setValidationResult(result.validation);
             addToast("Homepass berhasil ditambahkan tanpa mengulang routing utama.", "success");
           }
         }
@@ -1710,6 +1741,7 @@ export default function Home() {
         <MapComponent
           layers={layers}
           onShowMessage={addToast}
+          onDrawFile={(file) => { void handleImportLayer([file]); }}
           filters={filters}
           kmlTrees={kmlTrees}
           onTreeLoaded={handleTreeLoaded}

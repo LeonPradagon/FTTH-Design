@@ -5,7 +5,7 @@ import os
 import json
 import tempfile
 import networkx as nx
-from shapely.geometry import box
+from shapely.geometry import Point, Polygon, box
 from server.services.generator.core_logic import (
     save_design_state,
     load_design_state,
@@ -14,6 +14,7 @@ from server.services.generator.core_logic import (
     _fetch_osm_tiled,
     _require_distribution_connectivity,
 )
+from server.services.generator.osm_local import _building_points_in_boundary
 from server.core.errors import RoutingFailedError
 from unittest.mock import patch
 from server.services.generator.models import ODC, ODP, Splitter
@@ -177,3 +178,18 @@ def test_tiled_osm_normalizes_mixed_graph_types(tmp_path):
     assert isinstance(graph, nx.MultiDiGraph)
     assert graph.is_directed()
     assert graph.number_of_edges() == 3
+
+
+def test_buildings_intersecting_boundary_are_not_lost_when_centroid_is_outside():
+    boundary = box(0, 0, 1, 1)
+    building = Polygon([(0.9, 0.4), (1.1, 0.4), (1.1, 0.6), (0.9, 0.6)])
+
+    class Rows:
+        def iterrows(self):
+            return iter([(0, type("Row", (), {"geometry": building})())])
+
+    houses = _building_points_in_boundary(Rows(), boundary)
+
+    assert len(houses) == 1
+    assert boundary.covers(Point(houses[0][1], houses[0][0]))
+    assert 0.9 <= houses[0][1] <= 1

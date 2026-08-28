@@ -10,6 +10,7 @@ from server.services.generator.core_logic import (
     _run_generator_logic,
     _compute_input_hash,
     generate_homepass_from_state,
+    load_network_state,
 )
 from server.services.generator.validation import validate_design, compute_design_stats
 from server.database import db, lock_project_version_sequence
@@ -42,6 +43,7 @@ async def _publish_generation_artifacts(
     user_id: str,
     output_kmz_path: str,
     output_csv_path: str,
+    cache_dir: str | None = None,
 ) -> None:
     output_kmz_name = Path(output_kmz_path).name
     output_csv_name = Path(output_csv_path).name
@@ -52,6 +54,23 @@ async def _publish_generation_artifacts(
         "kmz_url": user_file_url(output_kmz_name),
         "csv_url": user_file_url(output_csv_name),
     }
+    if cache_dir:
+        try:
+            pop, odcs, state = await asyncio.to_thread(
+                load_network_state,
+                cache_dir=cache_dir,
+            )
+            result["stats"] = await asyncio.to_thread(
+                compute_design_stats,
+                pop,
+                odcs,
+                feeder_segments=state.get("feeder_segments"),
+                distribution_segments=state.get("distribution_segments"),
+            )
+        except Exception as exc:
+            # Artifact generation remains successful even if an old/custom
+            # cache cannot provide optional summary metadata.
+            logger.warning("Could not build generation summary: %s", exc)
     await _update_generation_job(
         job_id,
         status="COMPLETED",
@@ -347,7 +366,9 @@ async def regenerate_cables_task(
             feature_colors,
         )
 
-        await _publish_generation_artifacts(job_id, user_id, output_path, output_csv)
+        await _publish_generation_artifacts(
+            job_id, user_id, output_path, output_csv, cache_dir=cache_dir
+        )
     except Exception as e:
         await _record_job_failure(job_id, e)
         raise
@@ -379,7 +400,9 @@ async def generate_custom_task(
             feature_colors,
         )
 
-        await _publish_generation_artifacts(job_id, user_id, output_kmz_path, output_csv)
+        await _publish_generation_artifacts(
+            job_id, user_id, output_kmz_path, output_csv, cache_dir=cache_dir
+        )
     except Exception as e:
         await _record_job_failure(job_id, e)
         raise
@@ -413,6 +436,7 @@ async def generate_homepass_task(
             user_id,
             output_kmz_path,
             output_csv_path,
+            cache_dir=cache_dir,
         )
     except Exception as e:
         await _record_job_failure(job_id, e)

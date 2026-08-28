@@ -31,7 +31,9 @@ interface ValidationStatsPanelProps {
 
 export default function ValidationStatsPanel({ stats, validation, onClose, inline = false }: ValidationStatsPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
-  const [activeTab, setActiveTab] = useState<'stats' | 'validation'>(validation?.status !== 'PASS' ? 'validation' : 'stats');
+  const [activeTab, setActiveTab] = useState<'stats' | 'validation'>(
+    validation && validation.status !== 'PASS' ? 'validation' : 'stats',
+  );
 
   if (!stats && !validation) return null;
 
