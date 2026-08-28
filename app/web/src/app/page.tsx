@@ -80,6 +80,25 @@ const toProxyApiUrl = (url: string) => {
   return url;
 };
 
+const uploadFilenameForLayer = (layer: LayerConfig, fallback: string) => {
+  // Boundary layers use a friendly region name (for example
+  // "boundary_Jakarta") in the sidebar, which is not a valid upload
+  // filename. Prefer the original filename and fall back to the stored URL
+  // so re-generating after loading an older project still passes validation.
+  for (const value of [layer.sourceName, layer.url, layer.name]) {
+    if (!value) continue;
+    let candidate = value.split(/[?#]/, 1)[0].split(/[\\/]/).pop() || "";
+    try {
+      candidate = decodeURIComponent(candidate);
+    } catch {
+      // Keep the undecoded candidate when a legacy URL contains malformed
+      // percent-encoding; only the extension is needed below.
+    }
+    if (/\.(?:kml|kmz)$/i.test(candidate)) return candidate;
+  }
+  return `${fallback}.kml`;
+};
+
 const isGeneratedDesignLayer = (layer: LayerConfig) => (
   layer.id === "design"
   || layer.id.startsWith("design:single:")
@@ -1071,13 +1090,21 @@ export default function Home() {
         const boundaryBlob = await boundaryRes.blob();
 
         const formData = new FormData();
-        formData.append("boundaryFile", boundaryBlob, boundaryLayer.name);
+        formData.append(
+          "boundaryFile",
+          boundaryBlob,
+          uploadFilenameForLayer(boundaryLayer, "boundary"),
+        );
 
         if (popLayer) {
           const popRes = await fetch(popLayer.url);
           if (!popRes.ok) throw new Error(`Gagal mengambil file POP: ${popRes.statusText}`);
           const popBlob = await popRes.blob();
-          formData.append("popFile", popBlob, popLayer.name);
+          formData.append(
+            "popFile",
+            popBlob,
+            uploadFilenameForLayer(popLayer, "pop"),
+          );
         }
 
         // The primary UI flow is Network Core. The legacy config field is
