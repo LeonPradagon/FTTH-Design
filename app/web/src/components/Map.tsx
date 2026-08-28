@@ -500,9 +500,9 @@ export default function MapComponent({ layers, onShowMessage, onDrawFile, filter
   const mapTools = [
     { id: "select", label: "Pilih objek", icon: MousePointer2 },
     { id: "point", label: "Tambah titik", icon: MapPin },
-    { id: "polygon", label: "Gambar area", icon: Pentagon },
+    // { id: "polygon", label: "Gambar area", icon: Pentagon },
     { id: "line", label: "Gambar jalur", icon: Waypoints },
-    { id: "measure", label: "Ukur jarak", icon: Ruler },
+    // { id: "measure", label: "Ukur jarak", icon: Ruler },
   ];
   const renderMapTool = (tool: (typeof mapTools)[number]) => {
     const Icon = tool.icon;
