@@ -139,6 +139,7 @@ const classifyFeature = (feature: any, layer: LayerConfig): FeatureClassificatio
     || featureTypeUpper === "OLT"
     || nameUpper.includes("POP")
     || nameUpper.includes("OLT")
+    || /^RBS(?:$|[\s_-])/.test(nameUpper)
   );
   const isClosure = isPoint && (
     nameUpper.includes("JOIN CLOSURE") || nameUpper.includes("CLOSURE")

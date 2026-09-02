@@ -1,10 +1,18 @@
 import os
 import re
+import copy
 import xml.etree.ElementTree as ET
 import zipfile
+from pathlib import Path
 from shapely.geometry import Polygon, Point
+from shapely.ops import unary_union
 
 KML_NS = {"kml": "http://www.opengis.net/kml/2.2"}
+KML_NAMESPACE = KML_NS["kml"]
+POP_MARKER_RE = re.compile(
+    r"(?<![A-Z0-9])(?:POP|OLT|SENTRAL|RBS)(?:\s*[-_ ]?\s*\d+)?(?![A-Z0-9])",
+    re.IGNORECASE,
+)
 
 
 def _mapping_group_key(name, kind):
@@ -48,24 +56,66 @@ def _extract_kml_bytes(path):
         return f.read()
 
 
-def read_boundary(path):
-    """Baca Polygon pertama dari file boundary KML/KMZ -> shapely Polygon."""
+def _polygon_from_element(polygon_el):
+    outer_el = polygon_el.find(
+        "kml:outerBoundaryIs/kml:LinearRing/kml:coordinates", KML_NS
+    )
+    if outer_el is None or not outer_el.text:
+        return None
+
+    def parse_ring(ring_el):
+        return [
+            tuple(float(value) for value in pair.split(",")[:2])
+            for pair in ring_el.text.strip().split()
+        ]
+
+    outer = parse_ring(outer_el)
+    holes = []
+    for inner_el in polygon_el.findall(
+        "kml:innerBoundaryIs/kml:LinearRing/kml:coordinates", KML_NS
+    ):
+        if inner_el.text:
+            holes.append(parse_ring(inner_el))
+    polygon = Polygon(outer, holes)
+    if not polygon.is_valid:
+        polygon = polygon.buffer(0)
+    return polygon if not polygon.is_empty else None
+
+
+def read_boundary_geometry(path):
+    """Read and union every Polygon in a KML/KMZ into one geometry.
+
+    Disconnected service areas intentionally remain a ``MultiPolygon``. The
+    generator can query, cluster, route, and export one design for that
+    geometry; it must not silently discard all but the first area.
+    """
     root = ET.fromstring(_extract_kml_bytes(path))
-    poly_el = root.find(".//kml:Polygon//kml:coordinates", KML_NS)
-    if poly_el is None:
+    polygons = [
+        polygon
+        for polygon_el in root.findall(".//kml:Polygon", KML_NS)
+        if (polygon := _polygon_from_element(polygon_el)) is not None
+    ]
+    if not polygons:
         raise ValueError(f"Tidak ditemukan elemen <Polygon> di {path}. "
                           f"Pastikan boundary digambar sebagai Polygon, bukan LineString.")
-    coords = []
-    for pair in poly_el.text.strip().split():
-        lon, lat, *_ = pair.split(",")
-        coords.append((float(lon), float(lat)))
-    boundary = Polygon(coords)
+    boundary = unary_union(polygons)
     if not boundary.is_valid:
         repaired = boundary.buffer(0)
         if repaired.is_empty:
             raise ValueError(f"Boundary pada {path} tidak valid dan tidak dapat diperbaiki.")
         boundary = repaired
     return boundary
+
+
+def read_boundary(path):
+    """Read all boundary polygons, preserving disconnected areas."""
+    return read_boundary_geometry(path)
+
+
+def count_boundary_polygons(path):
+    """Count all Polygon geometries in a KML/KMZ input."""
+    root = ET.fromstring(_extract_kml_bytes(path))
+    return len(root.findall(".//kml:Polygon", KML_NS))
 
 
 def read_points(path):
@@ -83,6 +133,130 @@ def read_points(path):
     if not points:
         raise ValueError(f"Tidak ditemukan Placemark berupa Point di {path}.")
     return points
+
+
+def _new_kml_document():
+    root = ET.Element(f"{{{KML_NAMESPACE}}}kml")
+    return root, ET.SubElement(root, f"{{{KML_NAMESPACE}}}Document")
+
+
+def _placemark_name(placemark, fallback):
+    name_el = placemark.find("kml:name", KML_NS)
+    return name_el.text.strip() if name_el is not None and name_el.text else fallback
+
+
+def split_boundary_file(path, output_dir):
+    """Split every boundary Polygon in a KML/KMZ into its own KML file.
+
+    The generator operates on one boundary per job. Keeping the split at the
+    input boundary makes the existing batch pipeline reusable and avoids
+    accidentally merging disconnected service areas into one design. Some
+    exporters put each Polygon in its own Placemark while others put several
+    Polygons inside one MultiGeometry, so the split must happen at Polygon
+    level rather than Placemark level.
+    """
+    root = ET.fromstring(_extract_kml_bytes(path))
+    polygon_entries = []
+    for placemark in root.findall(".//kml:Placemark", KML_NS):
+        polygons = placemark.findall(".//kml:Polygon", KML_NS)
+        for polygon_index, polygon in enumerate(polygons, start=1):
+            polygon_entries.append((placemark, polygon, polygon_index, len(polygons)))
+    if not polygon_entries:
+        raise ValueError(f"Tidak ditemukan Placemark berupa Polygon di {path}.")
+    if len(polygon_entries) == 1:
+        placemark, _, _, _ = polygon_entries[0]
+        return [(_placemark_name(placemark, "boundary"), Path(path))]
+
+    destination_dir = Path(output_dir)
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    parts = []
+    for index, (placemark, _, polygon_index, polygons_in_placemark) in enumerate(
+        polygon_entries, start=1
+    ):
+        placemark_copy = copy.deepcopy(placemark)
+        copied_polygons = placemark_copy.findall(".//kml:Polygon", KML_NS)
+        selected_polygon = copied_polygons[polygon_index - 1]
+        for parent in placemark_copy.iter():
+            for child in list(parent):
+                if child.tag == selected_polygon.tag and child is not selected_polygon:
+                    parent.remove(child)
+
+        base_name = _placemark_name(placemark, f"boundary_{index}")
+        name = (
+            f"{base_name}_{polygon_index}"
+            if polygons_in_placemark > 1
+            else base_name
+        )
+        destination = destination_dir / f"boundary_{index:03d}.kml"
+        root_part, document = _new_kml_document()
+        document.append(placemark_copy)
+        ET.ElementTree(root_part).write(
+            destination,
+            encoding="utf-8",
+            xml_declaration=True,
+        )
+        parts.append((name, destination))
+    return parts
+
+
+def merge_boundary_files(paths, destination):
+    """Create one KML containing every Polygon from multiple boundary files."""
+    root, document = _new_kml_document()
+    for path in paths:
+        source_root = ET.fromstring(_extract_kml_bytes(path))
+        for placemark in source_root.findall(".//kml:Placemark", KML_NS):
+            if placemark.find(".//kml:Polygon", KML_NS) is not None:
+                document.append(copy.deepcopy(placemark))
+    if not list(document):
+        raise ValueError("Tidak ditemukan Polygon pada file boundary.")
+    destination = Path(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    ET.ElementTree(root).write(destination, encoding="utf-8", xml_declaration=True)
+    return destination
+
+
+def write_points_file(path, destination, pop_only=False):
+    """Write Point placemarks from a KML/KMZ into a standalone KML."""
+    root = ET.fromstring(_extract_kml_bytes(path))
+    point_entries = []
+
+    def walk(element, folders=()):
+        tag = element.tag.rsplit("}", 1)[-1]
+        current_folders = folders
+        if tag == "Folder":
+            current_folders = folders + (
+                _placemark_name(element, ""),
+            )
+        if tag == "Placemark" and element.find(".//kml:Point", KML_NS) is not None:
+            name = _placemark_name(element, "")
+            description = element.findtext("kml:description", default="", namespaces=KML_NS)
+            folder_text = " ".join(folder for folder in current_folders if folder)
+            point_entries.append((element, f"{name} {description or ''} {folder_text}"))
+        for child in element:
+            walk(child, current_folders)
+
+    walk(root)
+    if pop_only:
+        point_entries = [
+            (placemark, text)
+            for placemark, text in point_entries
+            if POP_MARKER_RE.search(text)
+        ]
+    point_placemarks = [placemark for placemark, _ in point_entries]
+    if not point_placemarks:
+        raise ValueError(f"Tidak ditemukan Placemark berupa Point di {path}.")
+
+    destination = Path(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    root_points, document = _new_kml_document()
+    for placemark in point_placemarks:
+        document.append(copy.deepcopy(placemark))
+    ET.ElementTree(root_points).write(
+        destination,
+        encoding="utf-8",
+        xml_declaration=True,
+    )
+    return destination
 
 
 def _point_from_placemark(placemark):
@@ -110,7 +284,7 @@ def read_pop_point(path):
             if folder_name_el is not None and folder_name_el.text
             else ""
         )
-        if "pop" not in folder_name and "olt" not in folder_name:
+        if not POP_MARKER_RE.search(folder_name):
             continue
         for placemark in folder.findall(".//kml:Placemark", KML_NS):
             point = _point_from_placemark(placemark)
@@ -128,7 +302,7 @@ def read_pop_point(path):
             )
             if text
         )
-        if "pop" not in searchable_text and "olt" not in searchable_text:
+        if not POP_MARKER_RE.search(searchable_text):
             continue
         point = _point_from_placemark(placemark)
         if point:

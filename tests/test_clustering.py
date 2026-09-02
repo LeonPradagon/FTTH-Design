@@ -6,8 +6,10 @@ from server.services.generator.clustering import (
     capacitated_clustering,
     centroid_of,
     build_design,
+    snap_centroid_to_road,
 )
 from server.services.generator.generation_config import GenerationConfig
+from unittest.mock import patch
 
 
 class TestCapacitatedClustering:
@@ -126,3 +128,19 @@ class TestBuildDesign:
             assert o1.id == o2.id
             assert o1.lat == o2.lat
             assert o1.lon == o2.lon
+
+
+def test_snap_centroid_retries_with_bounded_fallback_for_sparse_osm_roads():
+    calls = []
+
+    def fake_snap(_graph, lat, lon, max_distance_m=None):
+        calls.append(max_distance_m)
+        if max_distance_m == 100.0:
+            raise ValueError("Nearest road is 113m away, beyond the 100m snapping limit.")
+        return lat + 0.001, lon + 0.001
+
+    with patch("server.services.generator.clustering.snap_to_road", side_effect=fake_snap):
+        result = snap_centroid_to_road((1.0, 2.0), object(), max_distance_m=100.0)
+
+    assert result == (1.001, 2.001)
+    assert calls == [100.0, 1500.0]

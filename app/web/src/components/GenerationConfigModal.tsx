@@ -192,7 +192,7 @@ export default function GenerationConfigModal({ isOpen, onClose, config, onSave 
 
                 <div>
                   <label className="block text-sm font-medium mb-1">Snapping Distance (m)</label>
-                  <input type="number" step="0.1" name="snapping_distance_m" value={formData.snapping_distance_m} onChange={handleChange} min={5} max={500} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none" />
+                  <input type="number" step="0.1" name="snapping_distance_m" value={formData.snapping_distance_m} onChange={handleChange} min={5} max={1500} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none" />
                   <p className="text-xs text-gray-500 mt-1">Toleransi max snap perangkat ke jalan OSM</p>
                 </div>
 

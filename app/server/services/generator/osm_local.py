@@ -35,7 +35,7 @@ os.makedirs(REGION_CACHE_DIR, exist_ok=True)
 # Grid size for region caching (in degrees)
 # 0.05° ≈ 5.5 km — cukup besar untuk mencakup boundary + buffer
 GRID_SIZE = 0.05
-ROAD_CACHE_VERSION = "v4"
+ROAD_CACHE_VERSION = "v6"
 OSM_CACHE_MAX_AGE_SECONDS = int(os.getenv("OSM_CACHE_MAX_AGE_SECONDS", str(24 * 60 * 60)))
 
 # Overpass API endpoints for fallback
@@ -46,7 +46,17 @@ OVERPASS_ENDPOINTS = [
     "https://overpass.osm.ch/api",
 ]
 
-ox.settings.timeout = 15
+# OSMnx uses ``requests_timeout`` for both the HTTP request and the timeout
+# embedded in Overpass queries.  ``settings.timeout`` is not a supported
+# setting in current OSMnx releases, so assigning it would silently leave the
+# default timeout at 180 seconds for every fallback endpoint.
+try:
+    OSM_REQUEST_TIMEOUT_SECONDS = max(
+        1, int(os.getenv("OSM_REQUEST_TIMEOUT_SECONDS", "15"))
+    )
+except ValueError:
+    OSM_REQUEST_TIMEOUT_SECONDS = 15
+ox.settings.requests_timeout = OSM_REQUEST_TIMEOUT_SECONDS
 ox.settings.use_cache = True
 ox.settings.cache_folder = CACHE_DIR
 
@@ -68,6 +78,11 @@ def _region_hash(polygon):
     """Hash singkat untuk region tile."""
     key = _region_key(polygon)
     return hashlib.md5(str(key).encode()).hexdigest()[:10]
+
+
+def _geometry_cache_hash(polygon):
+    """Hash the exact query geometry, not only its coarse region grid."""
+    return hashlib.sha256(polygon.wkb).hexdigest()[:12]
 
 
 def _region_bbox(polygon):
@@ -192,7 +207,8 @@ def _safe_native_graph(polygon, network_type="all"):
 def _get_buildings_cached(polygon, force_refresh=False):
     """Ambil bangunan dari cache lokal. Return GeoDataFrame atau None."""
     rhash = _region_hash(polygon)
-    cache_path = os.path.join(REGION_CACHE_DIR, f"buildings_{rhash}.gpkg")
+    ghash = _geometry_cache_hash(polygon)
+    cache_path = os.path.join(REGION_CACHE_DIR, f"buildings_{rhash}_{ghash}.gpkg")
     
     if os.path.exists(cache_path) and _cache_is_fresh(cache_path, force_refresh):
         logger.info(f"Loading buildings from local cache: {cache_path}")
@@ -210,7 +226,8 @@ def _get_buildings_cached(polygon, force_refresh=False):
 def _save_buildings_cache(polygon, gdf):
     """Simpan bangunan ke cache lokal."""
     rhash = _region_hash(polygon)
-    cache_path = os.path.join(REGION_CACHE_DIR, f"buildings_{rhash}.gpkg")
+    ghash = _geometry_cache_hash(polygon)
+    cache_path = os.path.join(REGION_CACHE_DIR, f"buildings_{rhash}_{ghash}.gpkg")
     try:
         # Simpan hanya kolom yang diperlukan
         cols = [c for c in ['building', 'name', 'geometry'] if c in gdf.columns]
@@ -228,8 +245,12 @@ def _save_buildings_cache(polygon, gdf):
 def _get_road_graph_cached(polygon, force_refresh=False):
     """Ambil road graph dari cache GraphML lokal. Return nx.Graph atau None."""
     rhash = _region_hash(polygon)
+    ghash = _geometry_cache_hash(polygon)
     cache_paths = [
-        os.path.join(REGION_CACHE_DIR, f"roads_{ROAD_CACHE_VERSION}_{rhash}.graphml"),
+        os.path.join(
+            REGION_CACHE_DIR,
+            f"roads_{ROAD_CACHE_VERSION}_{rhash}_{ghash}.graphml",
+        ),
     ]
 
     for cache_path in cache_paths:
@@ -249,7 +270,11 @@ def _get_road_graph_cached(polygon, force_refresh=False):
 def _save_road_graph_cache(polygon, G):
     """Simpan road graph ke cache GraphML lokal."""
     rhash = _region_hash(polygon)
-    cache_path = os.path.join(REGION_CACHE_DIR, f"roads_{ROAD_CACHE_VERSION}_{rhash}.graphml")
+    ghash = _geometry_cache_hash(polygon)
+    cache_path = os.path.join(
+        REGION_CACHE_DIR,
+        f"roads_{ROAD_CACHE_VERSION}_{rhash}_{ghash}.graphml",
+    )
     try:
         ox.save_graphml(G, cache_path)
         _write_cache_metadata(cache_path, polygon, len(G.nodes), "osm")
@@ -333,8 +358,7 @@ def fetch_houses_in_boundary(polygon, force_refresh=False):
     start = time.time()
     
     # 1. Cek cache lokal
-    region = _region_bbox(polygon)
-    cached = _get_buildings_cached(region, force_refresh=force_refresh)
+    cached = _get_buildings_cached(polygon, force_refresh=force_refresh)
     
     if cached is not None and not cached.empty:
         # Filter ke polygon aktual
@@ -352,7 +376,7 @@ def fetch_houses_in_boundary(polygon, force_refresh=False):
         gdf = gdf[gdf.geometry.type.isin(["Polygon", "MultiPolygon", "Point"])]
         
         # Simpan ke cache
-        _save_buildings_cache(region, gdf)
+        _save_buildings_cache(polygon, gdf)
         
         houses = _building_points_in_boundary(gdf, polygon)
         
@@ -479,10 +503,8 @@ def fetch_road_graph(boundary, pop=None, buffer_deg=0.002, force_refresh=False, 
         geometries.append(Point(pop["lon"], pop["lat"]))
     combined = unary_union(geometries)
     query_area = combined.convex_hull.buffer(buffer_deg)
-    region = _region_bbox(query_area)
-    
     # 1. Cek cache lokal (GraphML)
-    cached_graph = _get_road_graph_cached(region, force_refresh=force_refresh)
+    cached_graph = _get_road_graph_cached(query_area, force_refresh=force_refresh)
     if cached_graph is not None:
         G = prepare_road_graph(cached_graph)
         G = ox.convert.to_undirected(G)
@@ -498,7 +520,7 @@ def fetch_road_graph(boundary, pop=None, buffer_deg=0.002, force_refresh=False, 
         G_undirected = ox.convert.to_undirected(G)
         
         # Simpan ke cache (simpan versi directed agar bisa di-load ulang oleh OSMnx)
-        _save_road_graph_cache(region, G)
+        _save_road_graph_cache(query_area, G)
         
         elapsed = time.time() - start
         print(f"  Graf jalan: {len(G_undirected.nodes)} node, {len(G_undirected.edges)} edge. ({elapsed:.1f}s, dari Overpass API)")

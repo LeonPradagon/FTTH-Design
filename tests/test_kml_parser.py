@@ -1,7 +1,16 @@
 """Tests for KML parsing."""
 
 import pytest
-from server.services.generator.kml_parser import read_pop_point, read_boundary, read_custom_mapped_kml
+from server.services.generator.kml_parser import (
+    read_pop_point,
+    read_boundary,
+    read_boundary_geometry,
+    count_boundary_polygons,
+    merge_boundary_files,
+    read_custom_mapped_kml,
+    split_boundary_file,
+    write_points_file,
+)
 import tempfile
 import os
 
@@ -94,3 +103,82 @@ def test_read_custom_mapped_kml_keeps_compound_odp_names_as_odp():
         assert points["odp"][0]["mapping_group"] == "004"
     finally:
         os.unlink(temp_path)
+
+
+def test_combined_boundaries_split_and_rbs_is_detected_as_pop(tmp_path):
+    kml_content = """<?xml version="1.0" encoding="UTF-8"?>
+    <kml xmlns="http://www.opengis.net/kml/2.2">
+      <Document>
+        <Placemark><name>boundary_a</name><Polygon><outerBoundaryIs><LinearRing>
+          <coordinates>106.0,-6.0 106.01,-6.0 106.01,-6.01 106.0,-6.01 106.0,-6.0</coordinates>
+        </LinearRing></outerBoundaryIs></Polygon></Placemark>
+        <Placemark><name>boundary_b</name><Polygon><outerBoundaryIs><LinearRing>
+          <coordinates>106.02,-6.0 106.03,-6.0 106.03,-6.01 106.02,-6.01 106.02,-6.0</coordinates>
+        </LinearRing></outerBoundaryIs></Polygon></Placemark>
+        <Placemark><name>house_001</name><Point><coordinates>106.005,-6.005,0</coordinates></Point></Placemark>
+        <Placemark><name>RBS</name><Point><coordinates>106.015,-6.005,0</coordinates></Point></Placemark>
+      </Document>
+    </kml>
+    """
+    source = tmp_path / "boundary.kml"
+    source.write_text(kml_content)
+
+    assert read_pop_point(source)["name"] == "RBS"
+    parts = split_boundary_file(source, tmp_path / "parts")
+    assert [name for name, _ in parts] == ["boundary_a", "boundary_b"]
+    assert all(read_boundary(path).geom_type == "Polygon" for _, path in parts)
+
+    pop_path = tmp_path / "pop.kml"
+    write_points_file(source, pop_path, pop_only=True)
+    assert read_pop_point(pop_path)["name"] == "RBS"
+
+
+def test_multi_geometry_boundaries_split_into_independent_jobs(tmp_path):
+    kml_content = """<?xml version="1.0" encoding="UTF-8"?>
+    <kml xmlns="http://www.opengis.net/kml/2.2">
+      <Document>
+        <Placemark><name>boundary_group</name><MultiGeometry>
+          <Polygon><outerBoundaryIs><LinearRing>
+            <coordinates>106.0,-6.0 106.01,-6.0 106.01,-6.01 106.0,-6.01 106.0,-6.0</coordinates>
+          </LinearRing></outerBoundaryIs></Polygon>
+          <Polygon><outerBoundaryIs><LinearRing>
+            <coordinates>106.02,-6.0 106.03,-6.0 106.03,-6.01 106.02,-6.01 106.02,-6.0</coordinates>
+          </LinearRing></outerBoundaryIs></Polygon>
+          <Polygon><outerBoundaryIs><LinearRing>
+            <coordinates>106.04,-6.0 106.05,-6.0 106.05,-6.01 106.04,-6.01 106.04,-6.0</coordinates>
+          </LinearRing></outerBoundaryIs></Polygon>
+        </MultiGeometry></Placemark>
+        <Placemark><name>RBS</name><Point><coordinates>106.015,-6.005,0</coordinates></Point></Placemark>
+      </Document>
+    </kml>"""
+    source = tmp_path / "boundary_multi_geometry.kml"
+    source.write_text(kml_content)
+
+    parts = split_boundary_file(source, tmp_path / "parts")
+    assert len(parts) == 3
+    assert count_boundary_polygons(source) == 3
+    assert [name for name, _ in parts] == [
+        "boundary_group_1",
+        "boundary_group_2",
+        "boundary_group_3",
+    ]
+    assert all(read_boundary(path).geom_type == "Polygon" for _, path in parts)
+
+
+def test_read_boundary_geometry_preserves_all_disconnected_polygons(tmp_path):
+    source = tmp_path / "boundary_multi.kml"
+    source.write_text("""<kml xmlns="http://www.opengis.net/kml/2.2"><Document>
+      <Placemark><Polygon><outerBoundaryIs><LinearRing><coordinates>
+        106.0,-6.0 106.01,-6.0 106.01,-6.01 106.0,-6.01 106.0,-6.0
+      </coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>
+      <Placemark><Polygon><outerBoundaryIs><LinearRing><coordinates>
+        106.02,-6.0 106.03,-6.0 106.03,-6.01 106.02,-6.01 106.02,-6.0
+      </coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>
+    </Document></kml>""")
+
+    geometry = read_boundary_geometry(source)
+    assert geometry.geom_type == "MultiPolygon"
+    assert len(geometry.geoms) == 2
+
+    merged = merge_boundary_files([source], tmp_path / "merged.kml")
+    assert read_boundary_geometry(merged).geom_type == "MultiPolygon"

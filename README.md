@@ -81,6 +81,12 @@ Untuk beberapa file, sistem akan:
 4. Menandai boundary tanpa POP sebagai `SKIPPED`.
 5. Mengirim satu job untuk setiap pasangan yang valid.
 
+Satu file KML juga boleh berisi beberapa `Polygon` yang terpisah. Dashboard
+akan mengirimnya sebagai batch dan backend memecahnya menjadi satu design per
+boundary, bukan menggabungkannya atau hanya memakai polygon pertama. Titik POP
+dapat dikenali dari nama `POP`, `OLT`, `SENTRAL`, atau `RBS`, termasuk ketika
+titik tersebut berada di file boundary yang sama.
+
 Layer preview dapat terlihat sebagai layer gabungan. Setelah generation selesai, setiap pasangan menjadi layer design sendiri di dalam group batch.
 
 ### 2. Generate Network Core
@@ -332,6 +338,7 @@ BACKEND_PROXY_SECRET=secret-proxy-acak-minimal-32-byte
 CORS_ORIGINS=http://localhost:3000
 
 OSM_CACHE_MAX_AGE_SECONDS=86400
+OSM_REQUEST_TIMEOUT_SECONDS=15
 OSM_TILE_WORKERS=4
 CLUSTERING_ODP_WORKERS=15
 CLUSTERING_ODC_WORKERS=10

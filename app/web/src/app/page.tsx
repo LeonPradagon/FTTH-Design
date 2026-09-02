@@ -69,7 +69,7 @@ const defaultFeatureFilters: FeatureFilters = {
 
 const boundaryGroupKey = (name: string) => {
   const stem = name.replace(/\.[^.]+$/, '').toLowerCase()
-    .replace(/(boundary|polygon|pop|olt|sentral)/g, ' ')
+    .replace(/(boundary|polygon|pop|olt|sentral|rbs)/g, ' ')
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   return `boundary:${stem || 'design'}`;
 };
@@ -147,6 +147,11 @@ const generatedHomepassLayerName = (areaName: string) => {
   const suffix = boundaryAreaSuffix(areaName);
   return suffix ? `${GENERATED_HOMEPASS_NAME}_${suffix}` : GENERATED_HOMEPASS_NAME;
 };
+
+const countKmlPolygons = (document: Document) => Math.max(
+  document.getElementsByTagName("Polygon").length,
+  document.getElementsByTagNameNS("*", "Polygon").length,
+);
 
 export default function Home() {
   const { data: session, isPending } = useSession();
@@ -799,7 +804,7 @@ export default function Home() {
     // layer to the map for convenience.
     if (!preserveBatch) setBatchFiles(files.length > 1 ? files : []);
     if (files.length > 1) {
-      addToast(`${files.length} file dipilih. Generate Design akan memprosesnya sebagai batch.`, "info");
+      addToast(`${files.length} file dipilih. Generate Design akan menggabungkannya menjadi 1 design.`, "info");
       // Keep each boundary as its own parent layer. The generation request
       // still uses the original files together, but the sidebar stays clear.
       for (const file of files) await handleImportLayer([file], true);
@@ -830,7 +835,7 @@ export default function Home() {
       const url = toProxyApiUrl(uploadData.url);
       const fileNameLower = fileToUse.name.toLowerCase();
       const isBoundary = ['boundary', 'polygon', 'area'].some(token => fileNameLower.includes(token));
-      const isPop = ['pop', 'olt', 'sentral'].some(token => fileNameLower.includes(token));
+      const isPop = ['pop', 'olt', 'sentral', 'rbs'].some(token => fileNameLower.includes(token));
       const inputStem = fileToUse.name.replace(/\.[^/.]+$/, '').trim();
       const importId = crypto.randomUUID?.() ?? crypto.getRandomValues(new Uint32Array(4)).join("-");
       const newLayerId = `import-${importId}`;
@@ -840,6 +845,13 @@ export default function Home() {
       try {
         const kmlText = await fileToUse.text();
         const doc = new DOMParser().parseFromString(kmlText, "text/xml");
+        const polygonCount = countKmlPolygons(doc);
+        if (!preserveBatch && polygonCount > 1) {
+          // Keep the original KML/KMZ so every Polygon and embedded POP/RBS
+          // remains available for the single combined network core.
+          setBatchFiles(files);
+          addToast(`${polygonCount} boundary terdeteksi. Generate Design akan membuat 1 design gabungan.`, "info");
+        }
         const coords = doc.getElementsByTagName("coordinates");
         if (coords.length > 0 && coords[0].textContent) {
           const firstCoordStr = coords[0].textContent.trim().split(/\s+/)[0];
@@ -888,7 +900,7 @@ export default function Home() {
         let boundaryGroupName = "";
 
         const stem = fileToUse.name.replace(/\.[^.]+$/, '').toLowerCase()
-          .replace(/(boundary|polygon|pop|olt|sentral)/g, ' ')
+          .replace(/(boundary|polygon|pop|olt|sentral|rbs)/g, ' ')
           .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
         // A POP created from the map belongs to the currently active
@@ -903,7 +915,7 @@ export default function Home() {
 
         if (!newGroupId && stem && stem !== 'kml') {
           newGroupId = `boundary:${stem}`;
-          boundaryGroupName = detectedBoundaryName || fileToUse.name.replace(/\.[^.]+$/, '').replace(/(pop|olt|sentral)/ig, '').trim();
+          boundaryGroupName = detectedBoundaryName || fileToUse.name.replace(/\.[^.]+$/, '').replace(/(pop|olt|sentral|rbs)/ig, '').trim();
         } else if (!newGroupId) {
           const groupsMap = new Map<string, { hasBoundary: boolean, hasPop: boolean, name: string }>();
           prev.forEach(l => {
@@ -958,15 +970,17 @@ export default function Home() {
           visible: true,
           color: "#3b82f6", // Default blue color
           groupId: newGroupId,
-          groupName: boundaryGroupName || detectedBoundaryName || fileToUse.name.replace(/\.[^.]+$/, '').replace(/(pop|olt|sentral)/ig, '').trim(),
+          groupName: boundaryGroupName || detectedBoundaryName || fileToUse.name.replace(/\.[^.]+$/, '').replace(/(pop|olt|sentral|rbs)/ig, '').trim(),
           boundaryName: isBoundary ? importedLayerName : undefined,
           sourceName: fileToUse.name,
         };
 
         const updatedLayers = [
-          ...prev.map(layer => layer.groupId !== newGroupId
-            ? { ...layer, visible: false }
-            : layer),
+          ...(preserveBatch
+            ? prev
+            : prev.map(layer => layer.groupId !== newGroupId
+              ? { ...layer, visible: false }
+              : layer)),
           newLayer,
         ];
         saveProject(prjName, updatedLayers).catch(console.error);
@@ -979,8 +993,9 @@ export default function Home() {
     }
   };
 
-  const handleBatchGenerate = async () => {
-    if (!batchFiles.length || isGenerating) return;
+  const handleBatchGenerate = async (filesOverride?: File[]) => {
+    const filesToGenerate = filesOverride || batchFiles;
+    if (!filesToGenerate.length || isGenerating) return;
     setIsGenerating(true);
     setGenerationProgress({ stage: "QUEUED", message: "Menyiapkan batch design...", percent: 1 });
     try {
@@ -991,7 +1006,7 @@ export default function Home() {
       if (!activeProjectId) throw new Error("Project harus tersimpan sebelum generate.");
 
       const formData = new FormData();
-      batchFiles.forEach(file => formData.append("files", file, file.name));
+      filesToGenerate.forEach(file => formData.append("files", file, file.name));
       formData.append("config", JSON.stringify({ ...generationConfig, include_homepass: false }));
       formData.append("feature_colors", JSON.stringify(featureColors));
       formData.append("project_id", activeProjectId);
@@ -1000,7 +1015,7 @@ export default function Home() {
       if (!payload.success) throw new Error(payload.error?.message || payload.detail || "Batch gagal dibuat");
       const batchId = payload.data.batch_id;
       (payload.data.jobs || []).forEach((job: { job_id?: string }) => job.job_id && rememberJob(job.job_id));
-      addToast("Batch generation berjalan maksimal 2 job paralel.", "info");
+      addToast("1 design gabungan sedang diproses.", "info");
 
       const poll = async (): Promise<void> => {
         const result = await fetch(`/api/proxy/generate/batch/${batchId}`, { cache: "no-store" });
@@ -1029,6 +1044,8 @@ export default function Home() {
 
         if (state.status === "COMPLETED") {
           const hasNewDesign = jobs.some(job => job.status === "COMPLETED" && job.result?.url);
+          const completedCount = jobs.filter(job => job.status === "COMPLETED" && job.result?.url).length;
+          const failedJobs = jobs.filter(job => job.status === "FAILED" || job.status === "SKIPPED");
           const latestCompletedJob = [...jobs].reverse().find(job =>
             job.status === "COMPLETED" && job.result?.url
           );
@@ -1062,7 +1079,16 @@ export default function Home() {
                 boundaryName: job.boundary_name,
               } as LayerConfig];
             });
-            const merged = [...prev, ...newLayers.filter(layer => !prev.some(existing => existing.id === layer.id))];
+            // A new generate replaces the visible network core. Keeping old
+            // generated layers visible would overlay stale straight/cable
+            // paths on top of the new road-routed design.
+            const hiddenOldDesigns = prev.map(layer => (
+              isGeneratedDesignLayer(layer) ? { ...layer, visible: false } : layer
+            ));
+            const merged = [
+              ...hiddenOldDesigns,
+              ...newLayers.filter(layer => !prev.some(existing => existing.id === layer.id)),
+            ];
             saveProject(projectName || "Untitled Project", merged).catch(console.error);
             return merged;
           });
@@ -1070,7 +1096,12 @@ export default function Home() {
           setHasNetworkCore(hasNewDesign);
           setIsGenerating(false);
           setTimeout(() => setGenerationProgress(null), 1500);
-          addToast("Batch design berhasil dibuat.", "success");
+          if (failedJobs.length > 0) {
+            const firstError = failedJobs[0].message || "POP pasangan tidak ditemukan atau worker gagal.";
+            addToast(`Design gabungan selesai sebagian (${completedCount}/${state.total}). ${failedJobs.length} gagal: ${firstError}`, "error");
+          } else {
+            addToast("1 design gabungan berhasil dibuat.", "success");
+          }
           return;
         }
         if (state.status === "FAILED") throw new Error("Semua job batch gagal");
@@ -1095,14 +1126,79 @@ export default function Home() {
     const visibleLayers = layers.filter(l => l.visible && l.id !== 'design' && !l.id.startsWith('design:'));
     const boundaryLayers = visibleLayers.filter(l => l.name.toLowerCase().includes('boundary') || l.id === 'boundary');
     const boundaryLayer = boundaryLayers[0];
-    const popLayer = visibleLayers.find(l => l.name.toLowerCase().includes('pop') || l.name.toLowerCase().includes('olt'));
+    const popLayers = visibleLayers.filter(l => {
+      const name = l.name.toLowerCase();
+      return name.includes('pop') || name.includes('olt') || name.includes('sentral') || name.includes('rbs');
+    });
+    const popLayer = popLayers[0];
 
     if (boundaryLayers.length > 1) {
-      addToast("Pilih satu boundary saja sebelum Generate Design.", "error");
+      // Multiple boundary layers form one combined design. This path is used
+      // after a project reload, when the transient batchFiles state is empty.
+      try {
+        const batchInputs: File[] = [];
+        for (const layer of boundaryLayers) {
+          const response = await fetch(layer.url);
+          if (!response.ok) throw new Error(`Gagal mengambil ${layer.name}`);
+          const blob = await response.blob();
+          batchInputs.push(await extractKmlFromFile(new File(
+            [blob],
+            uploadFilenameForLayer(layer, "boundary"),
+            { type: blob.type || "application/octet-stream" },
+          )));
+        }
+        for (const layer of popLayers) {
+          const response = await fetch(layer.url);
+          if (!response.ok) throw new Error(`Gagal mengambil ${layer.name}`);
+          const blob = await response.blob();
+          batchInputs.push(await extractKmlFromFile(new File(
+            [blob],
+            uploadFilenameForLayer(layer, "pop"),
+            { type: blob.type || "application/octet-stream" },
+          )));
+        }
+        await handleBatchGenerate(batchInputs);
+      } catch (error) {
+        console.error("Multi-boundary batch preparation failed:", error);
+        addToast(error instanceof Error ? error.message : "Gagal menyiapkan semua boundary", "error");
+      }
       return;
     }
 
     if (boundaryLayer) {
+      // Re-check the persisted source at click time as well as during import.
+      // This keeps multi-boundary projects working after a page refresh, when
+      // the transient batchFiles state is empty.
+      try {
+        const boundaryRes = await fetch(boundaryLayer.url);
+        if (boundaryRes.ok) {
+          const boundaryBlob = await boundaryRes.blob();
+          const boundaryFile = await extractKmlFromFile(new File(
+            [boundaryBlob],
+            uploadFilenameForLayer(boundaryLayer, "boundary"),
+            { type: boundaryBlob.type || "application/octet-stream" },
+          ));
+          const boundaryDoc = new DOMParser().parseFromString(await boundaryFile.text(), "text/xml");
+          if (countKmlPolygons(boundaryDoc) > 1) {
+            const batchInputs: File[] = [boundaryFile];
+            for (const layer of popLayers) {
+              const popRes = await fetch(layer.url);
+              if (!popRes.ok) throw new Error(`Gagal mengambil file POP: ${popRes.statusText}`);
+              const popBlob = await popRes.blob();
+              batchInputs.push(await extractKmlFromFile(new File(
+                [popBlob],
+                uploadFilenameForLayer(layer, "pop"),
+                { type: popBlob.type || "application/octet-stream" },
+              )));
+            }
+            await handleBatchGenerate(batchInputs);
+            return;
+          }
+        }
+      } catch (error) {
+        console.warn("Multi-boundary preflight failed; continuing with normal generation:", error);
+      }
+
       // FULL GENERATE (POP is optional)
       setIsGenerating(true);
       setHasNetworkCore(false);
@@ -1686,7 +1782,7 @@ export default function Home() {
       />
       <Navbar
         onImportLayer={handleImportLayer}
-        onSmartGenerate={batchFiles.length > 0 || visibleLayers.some((l: LayerConfig) => l.name.toLowerCase().includes('boundary') || l.name.toLowerCase().includes('pop') || l.name.toLowerCase().includes('olt')) ? handleSmartGenerate : undefined}
+        onSmartGenerate={batchFiles.length > 0 || visibleLayers.some((l: LayerConfig) => l.name.toLowerCase().includes('boundary') || l.name.toLowerCase().includes('pop') || l.name.toLowerCase().includes('olt') || l.name.toLowerCase().includes('rbs')) ? handleSmartGenerate : undefined}
         isGenerating={isGenerating}
         onRegenerateCables={visibleLayers.some((l: LayerConfig) =>
           l.id === "design" ||

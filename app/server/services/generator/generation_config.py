@@ -75,7 +75,7 @@ class GenerationConfig(BaseModel):
     max_odp_radius_m: float = Field(
         default=150.0,
         ge=10.0,
-        le=1000.0,
+        le=500.0,
         description="Maximum allowed distance (m) between an ODP and its farthest house.",
     )
     max_odc_radius_m: float = Field(
@@ -103,7 +103,7 @@ class GenerationConfig(BaseModel):
     snapping_distance_m: float = Field(
         default=100.0,
         ge=5.0,
-        le=500.0,
+        le=1500.0,
         description="Maximum distance (m) to snap a generated point to the nearest road.",
     )
 

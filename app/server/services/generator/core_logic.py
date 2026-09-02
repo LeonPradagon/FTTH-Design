@@ -191,19 +191,31 @@ def _fetch_osm_tiled(boundary, pop, force_refresh=False, job_id=None, cache_dir=
     # A tile road query must describe the tile itself. The old implementation
     # passed the global POP into every tile, causing each query to expand to
     # the convex hull between POP and that tile. For a large boundary this
-    # repeatedly downloaded the same long corridor. Add a small set of road
-    # tiles along the POP connector only when POP is outside the boundary.
+    # repeatedly downloaded the same long corridor. Add road tiles along a
+    # POP-to-component connector so one MultiPolygon design has a real road
+    # graph between its disconnected service areas.
     road_tiles = list(tiles)
     pop_point = Point(pop["lon"], pop["lat"])
-    if not boundary.covers(pop_point):
-        nearest_boundary = boundary.boundary.interpolate(
-            boundary.boundary.project(pop_point)
+    components = (
+        list(boundary.geoms)
+        if boundary.geom_type == "MultiPolygon"
+        else [boundary]
+    )
+    connector_geometries = []
+    for component in components:
+        if component.covers(pop_point):
+            continue
+        nearest_boundary = component.boundary.interpolate(
+            component.boundary.project(pop_point)
         )
         connector = LineString([pop_point, nearest_boundary]).buffer(0.002)
-        existing = {
-            tuple(round(value, 6) for value in tile.bounds)
-            for tile in road_tiles
-        }
+        connector_geometries.append(connector)
+
+    existing = {
+        tuple(round(value, 6) for value in tile.bounds)
+        for tile in road_tiles
+    }
+    for connector in connector_geometries:
         for tile in _build_generation_tiles(connector):
             key = tuple(round(value, 6) for value in tile.bounds)
             if key not in existing:
@@ -1233,9 +1245,16 @@ def _run_generator_logic(
         pop_points = read_points(pop_path)
         pop = pop_points[0]
         # Validasi Jarak jika POP custom di-upload
-        dist = haversine_dist(
-            boundary.centroid.x, boundary.centroid.y, pop["lon"], pop["lat"]
-        )
+        pop_point = Point(pop["lon"], pop["lat"])
+        if boundary.covers(pop_point):
+            dist = 0.0
+        else:
+            nearest_boundary = boundary.boundary.interpolate(
+                boundary.boundary.project(pop_point)
+            )
+            dist = haversine_dist(
+                pop["lon"], pop["lat"], nearest_boundary.x, nearest_boundary.y
+            )
         if dist > 3000:  # 3 km
             raise PopTooFarError(
                 message=(
@@ -1252,6 +1271,13 @@ def _run_generator_logic(
         # Jika tidak ada POP yang di-upload, otomatis buat POP di lokasi strategis
         from server.services.generator.osm_local import find_strategic_pop
 
+        if job_id:
+            progress_manager.update(
+                job_id,
+                "PARSING",
+                "POP tidak ditemukan; mencari lokasi POP otomatis dari OSM...",
+                15,
+            )
         pop = find_strategic_pop(boundary)
         logger.info(
             "Auto-generated POP at %s, %s (Location: %s)",

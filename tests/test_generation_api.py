@@ -108,11 +108,33 @@ def test_generate_design_forwards_feature_colors(tmp_path, mock_redis_pool, mock
         response = client.post(
             "/generate",
             files={"boundaryFile": ("boundary.kml", f)},
-            data={"feature_colors": json.dumps(feature_colors)},
+            data={"project_id": "project-1", "feature_colors": json.dumps(feature_colors)},
         )
 
     assert response.status_code == 200
     assert mock_redis_pool.enqueue_job.call_args.kwargs["feature_colors"] == feature_colors
+
+
+def test_single_generation_keeps_multiple_boundaries_in_one_design(
+    tmp_path, mock_redis_pool, mock_progress_manager, mock_storage_upload
+):
+    boundary = """<kml xmlns="http://www.opengis.net/kml/2.2"><Document>
+      <Placemark><Polygon><outerBoundaryIs><LinearRing>
+        <coordinates>106.0,-6.0 106.01,-6.0 106.01,-6.01 106.0,-6.01 106.0,-6.0</coordinates>
+      </LinearRing></outerBoundaryIs></Polygon></Placemark>
+      <Placemark><Polygon><outerBoundaryIs><LinearRing>
+        <coordinates>106.02,-6.0 106.03,-6.0 106.03,-6.01 106.02,-6.01 106.02,-6.0</coordinates>
+      </LinearRing></outerBoundaryIs></Polygon></Placemark>
+    </Document></kml>"""
+    response = client.post(
+        "/generate",
+        data={"project_id": "project-1"},
+        files={"boundaryFile": ("boundary_multi.kml", boundary, "application/vnd.google-earth.kml+xml")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+    mock_redis_pool.enqueue_job.assert_called_once()
 
 def test_regenerate_cables(mock_redis_pool, mock_progress_manager, mock_storage_upload):
     with patch(
@@ -203,6 +225,32 @@ def test_generate_batch_pairs_boundary_and_pop(tmp_path, mock_redis_pool, mock_p
         user_id="test_user_id",
         batch_id=data["batch_id"],
     )
+
+
+def test_generate_batch_merges_multiple_polygons_and_embedded_rbs_pop(
+    tmp_path, mock_redis_pool, mock_progress_manager, mock_storage_upload
+):
+    combined = """<kml xmlns="http://www.opengis.net/kml/2.2"><Document>
+      <Placemark><name>area_a</name><Polygon><outerBoundaryIs><LinearRing>
+        <coordinates>106.0,-6.0 106.01,-6.0 106.01,-6.01 106.0,-6.01 106.0,-6.0</coordinates>
+      </LinearRing></outerBoundaryIs></Polygon></Placemark>
+      <Placemark><name>area_b</name><Polygon><outerBoundaryIs><LinearRing>
+        <coordinates>106.02,-6.0 106.03,-6.0 106.03,-6.01 106.02,-6.01 106.02,-6.0</coordinates>
+      </LinearRing></outerBoundaryIs></Polygon></Placemark>
+      <Placemark><name>RBS</name><Point><coordinates>106.015,-6.005,0</coordinates></Point></Placemark>
+    </Document></kml>"""
+    response = client.post(
+        "/generate/batch",
+        data={"project_id": "project-1"},
+        files=[("files", ("boundary_combined.kml", combined, "application/vnd.google-earth.kml+xml"))],
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 1
+    assert data["jobs"][0]["status"] == "QUEUED"
+    assert mock_redis_pool.enqueue_job.call_count == 1
+    assert mock_redis_pool.enqueue_job.call_args.kwargs["has_custom_pop"] is True
 
 
 def test_generate_batch_requires_project(mock_redis_pool, mock_progress_manager):

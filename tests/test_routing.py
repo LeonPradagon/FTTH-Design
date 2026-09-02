@@ -7,6 +7,7 @@ from server.services.generator.routing import (
     build_feeder_chain,
     build_distribution_tree,
     enforce_min_distance_between_odcs,
+    enforce_min_distance_between_odcs_on_road,
     order_odcs_chain,
     prepare_road_graph,
     rebalance_odps_by_road_connectivity,
@@ -122,6 +123,31 @@ def test_enforce_min_distance_between_odcs(sample_odc):
     # Check if distance is now ~100m
     dist = haversine_m(moved_odcs[0].lat, moved_odcs[0].lon, moved_odcs[1].lat, moved_odcs[1].lon)
     assert 99.0 <= dist <= 101.0
+
+
+def test_enforce_min_distance_on_road_caches_walk_candidates():
+    odcs = [
+        ODC(
+            id=f"ODC-{index:03d}",
+            lat=0.0,
+            lon=0.0,
+            odps=[],
+            splitter=Splitter(ratio="1:4", location="ODC"),
+            closure_id=f"CL-{index:03d}",
+        )
+        for index in range(1, 4)
+    ]
+
+    with patch(
+        "server.services.generator.routing.walk_along_road",
+        return_value=None,
+    ) as walk:
+        enforce_min_distance_between_odcs_on_road(
+            object(), odcs, min_dist_m=40.0, max_passes=2
+        )
+
+    # Two directions × four branches, once for the shared origin.
+    assert walk.call_count == 8
 
 
 def test_distribution_tree_prefers_direct_odc_parent_when_available():

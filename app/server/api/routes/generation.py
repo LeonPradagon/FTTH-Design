@@ -48,8 +48,13 @@ from server.services.generator.core_logic import (
     _parse_config_from_form,
     load_network_state,
 )
-from server.services.generator.kml_parser import read_boundary, read_points
-from shapely.geometry import Point
+from server.services.generator.kml_parser import (
+    read_boundary,
+    read_points,
+    read_pop_point,
+    merge_boundary_files,
+    write_points_file,
+)
 
 router = APIRouter()
 
@@ -135,7 +140,7 @@ def _is_boundary_file(filename: str) -> bool:
 
 
 def _is_pop_file(filename: str) -> bool:
-    return any(token in filename.lower() for token in ("pop", "olt", "sentral"))
+    return any(token in filename.lower() for token in ("pop", "olt", "sentral", "rbs"))
 
 
 def _can_access_job(state: dict, current_user: dict) -> bool:
@@ -315,7 +320,7 @@ async def generate_batch(
     feature_colors: Optional[str] = Form(None),
     current_user: dict = Depends(get_rate_limited_generation_user),
 ):
-    """Create one isolated generation job per boundary/POP pair."""
+    """Create one generation job for the complete boundary/POP network."""
     if not files:
         raise InvalidFileError(message="Minimal satu file boundary wajib diunggah.")
     if not project_id:
@@ -365,46 +370,54 @@ async def generate_batch(
     if not boundary_files:
         raise InvalidFileError(message="Tidak ditemukan file boundary dalam batch.")
 
-    pop_by_slug = {_batch_slug(name): (name, path) for name, path in pop_files}
-    jobs: list[dict] = []
-    for boundary_name, boundary_path in boundary_files:
-        slug = _batch_slug(boundary_name)
-        pop_match = pop_by_slug.get(slug)
-        if not pop_match:
-            # Spatial fallback: accept a single POP file located inside the boundary.
-            try:
-                polygon = read_boundary(str(boundary_path))
-                candidates = []
-                for pop_name, pop_path in pop_files:
-                    points = read_points(str(pop_path))
-                    if any(polygon.covers(Point(p["lon"], p["lat"])) for p in points):
-                        candidates.append((pop_name, pop_path))
-                if len(candidates) == 1:
-                    pop_match = candidates[0]
-            except Exception:
-                pop_match = None
-        if not pop_match:
-            jobs.append({
-                "job_id": f"skipped-{uuid.uuid4().hex[:10]}",
-                "item_id": uuid.uuid4().hex[:12],
-                "boundary_name": boundary_name,
-                "design_name": slug,
-                "status": "SKIPPED",
-                "error": "POP pasangan tidak ditemukan.",
-            })
-            continue
+    # A batch request represents one design area. A single KML may contain
+    # several disconnected polygons, and the UI may also send those polygons
+    # as separate files after a project reload. Merge all of them into one
+    # KML/MultiPolygon instead of creating one design per component.
+    boundary_paths = [path for _, path in boundary_files]
+    merged_boundary_path = input_dir / "merged_boundary.kml"
+    if len(boundary_paths) == 1:
+        merged_boundary_path = boundary_paths[0]
+    else:
+        merge_boundary_files(boundary_paths, merged_boundary_path)
+    boundary_name = boundary_files[0][0]
+    slug = _batch_slug(boundary_name)
 
+    # Prefer POP/OLT/SENTRAL/RBS embedded in the boundary KML. If none is
+    # embedded, use the first explicitly uploaded point file. The generator
+    # models one POP per network core, so all disconnected areas share it.
+    embedded_pop = None
+    for _, boundary_path in boundary_files:
+        try:
+            if read_pop_point(str(boundary_path)):
+                embedded_pop_path = input_dir / f"embedded_pop_{uuid.uuid4().hex[:12]}.kml"
+                write_points_file(boundary_path, embedded_pop_path, pop_only=True)
+                embedded_pop = (embedded_pop_path.name, embedded_pop_path)
+                break
+        except Exception:
+            continue
+    pop_match = embedded_pop or (pop_files[0] if pop_files else None)
+    jobs: list[dict] = []
+    if not pop_match:
+        jobs.append({
+            "job_id": f"skipped-{uuid.uuid4().hex[:10]}",
+            "item_id": uuid.uuid4().hex[:12],
+            "boundary_name": boundary_name,
+            "design_name": slug,
+            "status": "SKIPPED",
+            "error": "POP pasangan tidak ditemukan.",
+        })
+    else:
         item_id = uuid.uuid4().hex[:12]
         item_dir = get_generation_cache_dir(current_user["id"], project_id, batch_id, item_id)
         item_input = item_dir / "input"
         item_input.mkdir(parents=True, exist_ok=True)
         boundary_item = item_input / "boundary.kml"
         pop_item = item_input / "pop.kml"
-        shutil.copy2(boundary_path, boundary_item)
+        shutil.copy2(merged_boundary_path, boundary_item)
         shutil.copy2(pop_match[1], pop_item)
         job_id = str(uuid.uuid4())
         timestamp = __import__("datetime").datetime.now().strftime("%Y%m%d_%H%M")
-        # The item suffix prevents same-named boundaries from overwriting each other.
         prefix = f"FTTH_{slug}_{timestamp}_{item_id[:6]}"
         jobs.append({
             "job_id": job_id,

@@ -539,6 +539,33 @@ def enforce_min_distance_between_odcs_on_road(road_graph, odcs, min_dist_m=40.0,
     semula agar ODC tidak pernah terdorong ke rel, sungai, atau pekarangan.
     Mutasi in-place."""
     n = len(odcs)
+    # The same ODC can be compared with many other ODCs. Cache the road-walk
+    # candidates for each origin/direction/branch so a dense boundary does
+    # not recalculate the same graph traversal thousands of times.
+    walk_candidates = {}
+
+    def cached_walk(origin, direction, branch_choice):
+        key = (
+            round(origin[0], 7),
+            round(origin[1], 7),
+            direction,
+            branch_choice,
+            min_dist_m,
+        )
+        if key not in walk_candidates:
+            try:
+                walk_candidates[key] = walk_along_road(
+                    road_graph,
+                    origin[0],
+                    origin[1],
+                    min_dist_m,
+                    direction=direction,
+                    branch_choice=branch_choice,
+                )
+            except Exception:
+                walk_candidates[key] = None
+        return walk_candidates[key]
+
     for _ in range(max_passes):
         moved = False
         for i in range(n):
@@ -551,13 +578,9 @@ def enforce_min_distance_between_odcs_on_road(road_graph, odcs, min_dist_m=40.0,
                 result = None
                 for direction in (1, -1):
                     for branch_choice in range(4):
-                        try:
-                            candidate = walk_along_road(
-                                road_graph, a.lat, a.lon, min_dist_m,
-                                direction=direction, branch_choice=branch_choice,
-                            )
-                        except Exception:
-                            candidate = None
+                        candidate = cached_walk(
+                            (a.lat, a.lon), direction, branch_choice
+                        )
                         if candidate is None:
                             continue
                         if all(haversine_m(*candidate, odcs[k].lat, odcs[k].lon) >= min_dist_m

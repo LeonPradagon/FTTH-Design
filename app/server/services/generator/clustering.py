@@ -9,6 +9,8 @@ from server.core.config import settings
 from server.core.logging import logger
 from server.services.generator.routing import snap_to_road
 
+MAX_AUTO_SNAP_FALLBACK_M = 1500.0
+
 def capacitated_clustering(points, capacity, min_size=1):
     """Kelompokkan daftar titik (lat, lon) menjadi cluster berukuran maksimum
     `capacity`. Dipakai dua kali: rumah->ODP dan ODP->ODC.
@@ -84,12 +86,33 @@ def snap_centroid_to_road(target_centroid, road_graph, max_distance_m=None):
     """
     if road_graph is None:
         return target_centroid
-    return snap_to_road(
-        road_graph,
-        target_centroid[0],
-        target_centroid[1],
-        max_distance_m=max_distance_m,
-    )
+    try:
+        return snap_to_road(
+            road_graph,
+            target_centroid[0],
+            target_centroid[1],
+            max_distance_m=max_distance_m,
+        )
+    except ValueError:
+        # Sparse/incomplete OSM coverage can leave an otherwise valid cluster
+        # just beyond the configured distance. Retry once with the documented
+        # upper bound so one disconnected boundary does not fail an entire
+        # batch. If no road exists within 1500m, the original routing error is
+        # still raised and the job remains correctly failed.
+        if max_distance_m is None or max_distance_m >= MAX_AUTO_SNAP_FALLBACK_M:
+            raise
+        logger.warning(
+            "Centroid %s is beyond the %sm snap limit; retrying up to %sm",
+            target_centroid,
+            max_distance_m,
+            MAX_AUTO_SNAP_FALLBACK_M,
+        )
+        return snap_to_road(
+            road_graph,
+            target_centroid[0],
+            target_centroid[1],
+            max_distance_m=MAX_AUTO_SNAP_FALLBACK_M,
+        )
 
 
 def build_design(houses, odp_capacity=None, odc_capacity=None, road_graph=None, config=None):
