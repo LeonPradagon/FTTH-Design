@@ -340,6 +340,15 @@ CORS_ORIGINS=http://localhost:3000
 OSM_CACHE_MAX_AGE_SECONDS=86400
 OSM_REQUEST_TIMEOUT_SECONDS=15
 OSM_TILE_WORKERS=4
+OSM_NATIVE_RETRIES=3
+OSM_NATIVE_SPLIT_DEPTH=2
+OSM_SOURCE_MODE=auto
+OSM_ONLINE_MAX_AREA_KM2=25
+OSM_ONLINE_MAX_TILES=4
+OSM_LOCAL_FALLBACK_ON_ONLINE_FAILURE=true
+OSM_PBF_URL=https://download.geofabrik.de/asia/indonesia-latest.osm.pbf
+OSM_PBF_PATH=/data/osm/indonesia-latest.osm.pbf
+OSM_PBF_COVERAGE=94,-11.5,141.5,6.5
 CLUSTERING_ODP_WORKERS=15
 CLUSTERING_ODC_WORKERS=10
 ARQ_MAX_JOBS=2
@@ -358,6 +367,55 @@ identitas input, konfigurasi, dan versi algoritma. Generate Design dengan input
 yang sama dapat langsung memakai ODC/ODP serta jalur kabel yang tersimpan,
 sehingga tahap OSM, clustering, dan routing dilewati. Jika input atau konfigurasi
 berubah, cache turunan otomatis ditolak dan dibuat ulang.
+
+### Sumber data OSM online dan lokal
+
+Mode `auto` memakai OSM/Overpass online untuk boundary kecil agar data tetap
+fresh. Boundary besar memakai snapshot OSM PBF yang sudah diimport ke PostGIS
+lokal sehingga Generate tidak bergantung pada timeout API. Source, dataset, dan
+timestamp yang dipakai disimpan di manifest Network Core.
+
+Update snapshot OSM dijalankan sebagai job terpisah dan tidak berjalan ketika
+user menekan Generate. Contoh lokal:
+
+```bash
+docker compose --profile osm-update build
+docker compose --profile osm-update run --rm osm-importer -m server.scripts.download_osm_pbf
+docker compose --profile osm-update run --rm osm-importer -m server.scripts.import_osm_pbf --pbf /data/osm/indonesia-latest.osm.pbf
+```
+
+Untuk scheduler mingguan, kedua langkah tersebut dapat dijalankan sebagai satu
+command yang hanya mengaktifkan dataset baru setelah import dan validasi selesai:
+
+```bash
+docker compose --profile osm-update run --rm osm-importer -m server.scripts.update_osm_dataset
+```
+
+Untuk production, gunakan file `compose.prod.yaml` dan `.env.prod`. Karena
+`osm-importer` berada dalam profile `osm-update`, profile tersebut harus
+diaktifkan saat build agar seluruh image, termasuk image importer, ikut dibuild:
+
+```bash
+docker compose --env-file .env.prod -f compose.prod.yaml --profile osm-update build
+```
+
+Jalankan service utama seperti biasa:
+
+```bash
+docker compose --env-file .env.prod -f compose.prod.yaml up -d
+```
+
+Jalankan update/download dan import PBF sebagai job terpisah, misalnya saat
+bootstrap atau melalui scheduler mingguan:
+
+```bash
+docker compose --env-file .env.prod -f compose.prod.yaml --profile osm-update run --rm osm-importer -m server.scripts.update_osm_dataset
+```
+
+Perintah `up -d` tidak otomatis menjalankan importer. Ini disengaja karena
+download/import PBF adalah proses berat dan data PBF tidak perlu dibake ke dalam
+image Docker. Import baru masuk sebagai staging dan hanya menjadi aktif setelah
+seluruh data berhasil diproses; jika gagal, dataset aktif sebelumnya tetap dipakai.
 
 ### Environment frontend
 

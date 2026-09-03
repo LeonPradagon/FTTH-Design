@@ -79,6 +79,15 @@ services:
       REDIS_URL: redis://redis:6379/0
       USER_CACHE_ROOT: /workspace/app/server/cache/users
       RUN_EMBEDDED_WORKER: "false"
+      OSM_SOURCE_MODE: ${OSM_SOURCE_MODE:-auto}
+      OSM_ONLINE_MAX_AREA_KM2: ${OSM_ONLINE_MAX_AREA_KM2:-25}
+      OSM_ONLINE_MAX_TILES: ${OSM_ONLINE_MAX_TILES:-4}
+      OSM_LOCAL_FALLBACK_ON_ONLINE_FAILURE: ${OSM_LOCAL_FALLBACK_ON_ONLINE_FAILURE:-true}
+      OSM_CACHE_MAX_AGE_SECONDS: ${OSM_CACHE_MAX_AGE_SECONDS:-86400}
+      OSM_REQUEST_TIMEOUT_SECONDS: ${OSM_REQUEST_TIMEOUT_SECONDS:-30}
+      OSM_TILE_WORKERS: ${OSM_TILE_WORKERS:-4}
+      OSM_NATIVE_RETRIES: ${OSM_NATIVE_RETRIES:-3}
+      OSM_NATIVE_SPLIT_DEPTH: ${OSM_NATIVE_SPLIT_DEPTH:-2}
       STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL:-http://seaweedfs:8333}
       STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:-ftth-local}
       STORAGE_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY:-ftth-local-secret}
@@ -119,6 +128,15 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env.prod}
       REDIS_URL: redis://redis:6379/0
       USER_CACHE_ROOT: /workspace/app/server/cache/users
+      OSM_SOURCE_MODE: ${OSM_SOURCE_MODE:-auto}
+      OSM_ONLINE_MAX_AREA_KM2: ${OSM_ONLINE_MAX_AREA_KM2:-25}
+      OSM_ONLINE_MAX_TILES: ${OSM_ONLINE_MAX_TILES:-4}
+      OSM_LOCAL_FALLBACK_ON_ONLINE_FAILURE: ${OSM_LOCAL_FALLBACK_ON_ONLINE_FAILURE:-true}
+      OSM_CACHE_MAX_AGE_SECONDS: ${OSM_CACHE_MAX_AGE_SECONDS:-86400}
+      OSM_REQUEST_TIMEOUT_SECONDS: ${OSM_REQUEST_TIMEOUT_SECONDS:-30}
+      OSM_TILE_WORKERS: ${OSM_TILE_WORKERS:-4}
+      OSM_NATIVE_RETRIES: ${OSM_NATIVE_RETRIES:-3}
+      OSM_NATIVE_SPLIT_DEPTH: ${OSM_NATIVE_SPLIT_DEPTH:-2}
       STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL:-http://seaweedfs:8333}
       STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:-ftth-local}
       STORAGE_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY:-ftth-local-secret}
@@ -137,6 +155,28 @@ services:
         condition: service_healthy
     networks:
       - backend
+      - egress
+
+  osm-importer:
+    profiles: ["osm-update"]
+    build:
+      context: .
+      dockerfile: app/server/Dockerfile.osm-importer
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ftth}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ftth}?schema=public
+      OSM_PBF_URL: ${OSM_PBF_URL:-https://download.geofabrik.de/asia/indonesia-latest.osm.pbf}
+      OSM_PBF_PATH: ${OSM_PBF_PATH:-/data/osm/indonesia-latest.osm.pbf}
+      OSM_PBF_COVERAGE: ${OSM_PBF_COVERAGE:-94,-11.5,141.5,6.5}
+      OSM_PBF_DOWNLOAD_TIMEOUT_SECONDS: ${OSM_PBF_DOWNLOAD_TIMEOUT_SECONDS:-3600}
+      OSM_IMPORT_WORKERS: ${OSM_IMPORT_WORKERS:-1}
+    volumes:
+      - osm_pbf_data:/data/osm
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+      - egress
 
   web:
     build:
@@ -172,9 +212,11 @@ networks:
   frontend:
   backend:
     internal: true
+  egress:
 
 volumes:
   postgres_data:
   generated_data:
   backend_cache:
   seaweed_data:
+  osm_pbf_data:

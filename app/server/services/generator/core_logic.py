@@ -27,6 +27,15 @@ from server.services.generator.osm_local import (
     fetch_road_graph,
     fetch_houses_in_boundary,
 )
+from server.services.generator.data_provider import (
+    choose_source,
+    local_fallback_enabled,
+    local_source_metadata,
+    online_source_metadata,
+    fetch_road_graph as provider_fetch_road_graph,
+    find_strategic_pop as provider_find_strategic_pop,
+)
+from server.services.generator import osm_postgis
 from server.services.generator.routing import (
     build_feeder_segments_preserving_order,
     build_feeder_chain,
@@ -48,7 +57,7 @@ CACHE_DIR = os.path.abspath("cache")
 # current connectivity checks. Bumping these versions invalidates cores made
 # before endpoint/parent validation was enforced.
 NETWORK_STATE_VERSION = 4
-CORE_MANIFEST_VERSION = 2
+CORE_MANIFEST_VERSION = 3
 DEFAULT_MAX_DISTRIBUTION_LENGTH_M = 500.0
 
 
@@ -267,6 +276,13 @@ def _fetch_osm_tiled(boundary, pop, force_refresh=False, job_id=None, cache_dir=
                     if houses_path:
                         with open(houses_path) as source:
                             cached_houses = [tuple(item) for item in json.load(source)]
+                    # Empty house checkpoints may have been written by an
+                    # older/failed provider query. Re-fetch them so a later
+                    # provider fix (or newly available OSM data) can recover
+                    # instead of permanently returning zero customers.
+                    if load_houses and not cached_houses:
+                        logger.info("Checkpoint rumah kosong untuk tile %s diabaikan; mengambil ulang", key)
+                        raise ValueError("empty house checkpoint")
                     with open(roads_path, "rb") as source:
                         return cached_houses, pickle.load(source), True
                 except Exception as exc:
@@ -319,6 +335,110 @@ def _fetch_osm_tiled(boundary, pop, force_refresh=False, job_id=None, cache_dir=
         if boundary.covers(Point(lon, lat))
     })
     return unique_houses, prepare_road_graph(road_graph)
+
+
+def _fetch_generation_data(
+    boundary,
+    pop,
+    decision,
+    force_refresh=False,
+    job_id=None,
+    cache_dir=None,
+):
+    """Fetch one complete generation input set from exactly one source.
+
+    Online failures may retry the entire acquisition against the local
+    snapshot in automatic mode.  A successful online tile set is never mixed
+    with local rows from the same job.
+    """
+    if decision.source == "local":
+        metadata = local_source_metadata(boundary)
+        houses = osm_postgis.fetch_houses_in_boundary(boundary, force_refresh=force_refresh)
+        road_graph = osm_postgis.fetch_road_graph(
+            boundary,
+            pop=pop,
+            force_refresh=force_refresh,
+        )
+        return houses, road_graph, metadata
+
+    try:
+        houses, road_graph = _fetch_osm_tiled(
+            boundary,
+            pop,
+            force_refresh=force_refresh,
+            job_id=job_id,
+            cache_dir=cache_dir,
+        )
+        if not houses:
+            raise OSMUnavailableError(
+                message="Provider OSM online tidak mengembalikan bangunan untuk boundary."
+            )
+        return houses, road_graph, online_source_metadata(decision.reason)
+    except Exception as online_error:
+        if os.getenv("OSM_SOURCE_MODE", "auto").strip().lower() != "auto":
+            raise
+        if not local_fallback_enabled():
+            raise
+        logger.warning(
+            "OSM online gagal; mengulang seluruh akuisisi dari PostGIS lokal: %s",
+            online_error,
+        )
+        if job_id:
+            progress_manager.update(
+                job_id,
+                "LOADING_ROADS",
+                "OSM online gagal; mengulang penuh dengan OSM lokal...",
+                30,
+            )
+        try:
+            metadata = local_source_metadata(boundary)
+            houses = osm_postgis.fetch_houses_in_boundary(boundary, force_refresh=force_refresh)
+            road_graph = osm_postgis.fetch_road_graph(
+                boundary,
+                pop=pop,
+                force_refresh=force_refresh,
+            )
+            metadata = {**metadata, "reason": f"fallback penuh setelah online gagal: {online_error}"}
+            return houses, road_graph, metadata
+        except Exception as local_error:
+            raise OSMUnavailableError(
+                message=(
+                    "Provider OSM online dan fallback OSM lokal sama-sama gagal. "
+                    f"Online: {online_error}; lokal: {local_error}"
+                )
+            ) from local_error
+
+
+def _validate_generation_inputs(houses, road_graph, pop):
+    """Fail before clustering when the selected OSM source is not usable."""
+    if not houses:
+        raise NoCustomerFoundError(
+            message="Tidak ada building yang tersedia dari sumber OSM terpilih."
+        )
+    if road_graph is None or road_graph.number_of_nodes() == 0 or road_graph.number_of_edges() == 0:
+        raise OSMUnavailableError(
+            message="Road graph OSM kosong; generate dihentikan sebelum clustering/routing."
+        )
+    try:
+        pop_node = min(
+            road_graph.nodes,
+            key=lambda node: (
+                float(road_graph.nodes[node].get("x", 0.0)) - float(pop["lon"])
+            ) ** 2 + (
+                float(road_graph.nodes[node].get("y", 0.0)) - float(pop["lat"])
+            ) ** 2,
+        )
+        connected_component = nx.node_connected_component(
+            road_graph.to_undirected(), pop_node
+        )
+    except (KeyError, TypeError, ValueError, nx.NetworkXError) as exc:
+        raise OSMUnavailableError(
+            message="POP tidak dapat dipetakan ke road graph OSM.",
+        ) from exc
+    if len(connected_component) < 2:
+        raise OSMUnavailableError(
+            message="Road graph OSM tidak memiliki jalur yang dapat dirouting dari POP."
+        )
 
 
 def _cache_paths(cache_dir=None):
@@ -716,9 +836,9 @@ def load_road_graph(cache_dir=None):
         return prepare_road_graph(pickle.load(f))
 
 
-def _core_cache_key(boundary_path, pop_path, has_custom_pop, config):
+def _core_cache_key(boundary_path, pop_path, has_custom_pop, config, source_signature=None):
     """Return the deterministic identity of a generated Network Core."""
-    return {
+    key = {
         "manifest_version": CORE_MANIFEST_VERSION,
         "network_state_version": NETWORK_STATE_VERSION,
         "algorithm_version": ALGORITHM_VERSION,
@@ -726,9 +846,19 @@ def _core_cache_key(boundary_path, pop_path, has_custom_pop, config):
         "has_custom_pop": bool(has_custom_pop),
         "config": config.model_dump(mode="json"),
     }
+    if source_signature:
+        key["osm_source_signature"] = source_signature
+    return key
 
 
-def _load_reusable_core(boundary_path, pop_path, has_custom_pop, config, cache_dir=None):
+def _load_reusable_core(
+    boundary_path,
+    pop_path,
+    has_custom_pop,
+    config,
+    cache_dir=None,
+    source_signature=None,
+):
     """Load a complete core only when it belongs to the current inputs/config."""
     # FULL mode contains homepass routing, so keep its existing behaviour.
     if config.include_homepass or config.force_refresh_osm:
@@ -739,7 +869,13 @@ def _load_reusable_core(boundary_path, pop_path, has_custom_pop, config, cache_d
     try:
         with open(manifest_path, "r") as source:
             manifest = json.load(source)
-        expected = _core_cache_key(boundary_path, pop_path, has_custom_pop, config)
+        expected = _core_cache_key(
+            boundary_path,
+            pop_path,
+            has_custom_pop,
+            config,
+            source_signature=source_signature,
+        )
         if any(manifest.get(key) != value for key, value in expected.items()):
             return None
         pop, odcs, state = load_network_state(cache_dir=cache_dir)
@@ -750,11 +886,35 @@ def _load_reusable_core(boundary_path, pop_path, has_custom_pop, config, cache_d
         return None
 
 
-def _save_core_manifest(boundary_path, pop_path, has_custom_pop, config, osm_timestamp, cache_dir=None):
+def _save_core_manifest(
+    boundary_path,
+    pop_path,
+    has_custom_pop,
+    config,
+    osm_timestamp,
+    cache_dir=None,
+    source_metadata=None,
+):
     resolved_cache_dir, _, _ = _cache_paths(cache_dir)
     os.makedirs(resolved_cache_dir, exist_ok=True)
-    manifest = _core_cache_key(boundary_path, pop_path, has_custom_pop, config)
+    source_signature = None
+    if source_metadata:
+        source_signature = ":".join(
+            str(value)
+            for value in (source_metadata.get("source"), source_metadata.get("dataset_id"))
+            if value
+        )
+    manifest = _core_cache_key(
+        boundary_path,
+        pop_path,
+        has_custom_pop,
+        config,
+        source_signature=source_signature,
+    )
     manifest["osm_timestamp"] = osm_timestamp
+    if source_metadata:
+        manifest["osm_source"] = source_metadata
+        manifest["osm_dataset_id"] = source_metadata.get("dataset_id")
     path = _core_manifest_path(cache_dir)
     temporary_path = f"{path}.tmp"
     with open(temporary_path, "w") as target:
@@ -803,7 +963,7 @@ def regenerate_cables_only(
             ])
             try:
                 logger.info("Fetching road graph for bbox: %s", bbox)
-                road_graph = fetch_road_graph(bbox, pop, buffer_deg=0.015)
+                road_graph = provider_fetch_road_graph(bbox, pop, buffer_deg=0.015)
                 if road_graph is not None:
                     # Simpan ke cache agar percobaan berikutnya lebih cepat
                     with open(road_graph_path, "wb") as f:
@@ -1022,7 +1182,7 @@ def generate_cables_from_custom_points(
     logger.info("Mengambil data jalan untuk custom routing...")
     road_graph = None
     try:
-        road_graph = fetch_road_graph(bbox, pop, buffer_deg=0.015)
+        road_graph = provider_fetch_road_graph(bbox, pop, buffer_deg=0.015)
     except Exception as e:
         raise OSMUnavailableError(
             message=f"Gagal mengambil data jalan ({e}). Generate dihentikan agar kabel tidak memotong rel atau sungai.",
@@ -1149,7 +1309,6 @@ import glob
 from datetime import datetime, timezone
 from server.core.errors import ExportFailedError, PopTooFarError, NoCustomerFoundError
 from server.services.generator.kml_parser import read_boundary, read_points, read_pop_point
-from server.services.generator.osm_local import fetch_houses_in_boundary, find_strategic_pop
 from server.services.generator.clustering import build_design
 from server.services.generator.routing import enforce_min_distance_between_odcs, enforce_min_distance_between_odcs_on_road
 from server.services.generator.generation_config import GenerationConfig, ALGORITHM_VERSION
@@ -1235,11 +1394,30 @@ def _run_generator_logic(
     pipeline_started = time.perf_counter()
     if config is None:
         config = GenerationConfig()
-    osm_timestamp = datetime.now(timezone.utc).isoformat()
 
     if job_id: progress_manager.update(job_id, "PARSING", "Membaca file input...", 10)
 
     boundary = read_boundary(boundary_path)
+    source_decision = choose_source(boundary)
+    source_metadata = (
+        local_source_metadata(boundary)
+        if source_decision.source == "local"
+        else online_source_metadata(source_decision.reason)
+    )
+    source_signature = ":".join(
+        str(value)
+        for value in (source_metadata.get("source"), source_metadata.get("dataset_id"))
+        if value
+    )
+    osm_timestamp = source_metadata.get("timestamp") or datetime.now(timezone.utc).isoformat()
+    logger.info(
+        "OSM source=%s reason=%s area=%.2fkm² tiles=%d dataset=%s",
+        source_metadata.get("source"),
+        source_decision.reason,
+        source_decision.area_km2,
+        source_decision.tile_count,
+        source_metadata.get("dataset_id") or "online",
+    )
 
     if has_custom_pop:
         pop_points = read_points(pop_path)
@@ -1269,8 +1447,6 @@ def _run_generator_logic(
 
     if pop is None:
         # Jika tidak ada POP yang di-upload, otomatis buat POP di lokasi strategis
-        from server.services.generator.osm_local import find_strategic_pop
-
         if job_id:
             progress_manager.update(
                 job_id,
@@ -1278,7 +1454,7 @@ def _run_generator_logic(
                 "POP tidak ditemukan; mencari lokasi POP otomatis dari OSM...",
                 15,
             )
-        pop = find_strategic_pop(boundary)
+        pop = provider_find_strategic_pop(boundary)
         logger.info(
             "Auto-generated POP at %s, %s (Location: %s)",
             pop["lon"],
@@ -1302,6 +1478,7 @@ def _run_generator_logic(
         has_custom_pop,
         config,
         cache_dir=cache_dir,
+        source_signature=source_signature,
     )
     if cached_core:
         cached_pop, cached_odcs, cached_state, cached_osm_timestamp = cached_core
@@ -1354,21 +1531,34 @@ def _run_generator_logic(
     # Keep OSM tile checkpoints intact; only invalidate the derived network.
     invalidate_design_state(cache_dir=cache_dir)
 
-    if job_id: progress_manager.update(job_id, "LOADING_ROADS", "Mengambil data jalan & rumah dari OSM...", 30)
+    if job_id:
+        progress_manager.update(
+            job_id,
+            "LOADING_ROADS",
+            f"Mengambil data jalan & rumah dari {source_metadata.get('source')}...",
+            30,
+        )
     osm_started = time.perf_counter()
     try:
-        houses, road_graph = _fetch_osm_tiled(
+        houses, road_graph, source_metadata = _fetch_generation_data(
             boundary,
             pop,
+            source_decision,
             force_refresh=config.force_refresh_osm,
             job_id=job_id,
             cache_dir=cache_dir,
         )
+        osm_timestamp = source_metadata.get("timestamp") or osm_timestamp
         if not houses:
             raise NoCustomerFoundError(
-                message="Tidak ada rumah yang ditemukan di OpenStreetMap untuk area ini.",
+                message=(
+                    "Tidak ada rumah yang ditemukan di OpenStreetMap "
+                    "di dalam boundary. Pastikan boundary mencakup area rumah "
+                    "dan data OSM untuk area tersebut tersedia."
+                ),
             )
         road_graph = prepare_road_graph(road_graph, config.routing_strategy)
+        _validate_generation_inputs(houses, road_graph, pop)
     except NoCustomerFoundError:
         raise
     except Exception as e:
@@ -1376,7 +1566,8 @@ def _run_generator_logic(
             message=f"Gagal mengambil jaringan jalan OSM ({e}). Generate dihentikan agar kabel tidak memotong rel atau sungai.",
         ) from e
     logger.info(
-        "Generation stage OSM selesai dalam %.2fs: rumah=%d nodes=%d edges=%d",
+        "Generation stage %s selesai dalam %.2fs: rumah=%d nodes=%d edges=%d",
+        source_metadata.get("source"),
         time.perf_counter() - osm_started,
         len(houses),
         len(road_graph.nodes) if road_graph is not None else 0,
@@ -1496,6 +1687,7 @@ def _run_generator_logic(
             config,
             osm_timestamp,
             cache_dir=cache_dir,
+            source_metadata=source_metadata,
         )
     except Exception as e:
         logger.warning("Network Core tersimpan tetapi manifest cache gagal dibuat: %s", e)

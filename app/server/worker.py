@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -142,6 +143,17 @@ async def generate_task(
 
         input_hash = await asyncio.to_thread(_compute_input_hash, boundary_path, pop_path)
 
+        # The generator writes the authoritative source decision only after a
+        # complete online/local acquisition succeeds. Keep that same record
+        # alongside the DesignVersion metadata for auditability.
+        osm_source = None
+        try:
+            manifest_path = Path(cache_dir) / "core_manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            osm_source = manifest.get("osm_source")
+        except Exception as exc:
+            logger.warning("Could not read OSM source metadata from manifest: %s", exc)
+
         # Publish generated files through the configured S3-compatible storage.
         progress_manager.update(job_id, "EXPORTING", "Mengunggah file ke penyimpanan...", 92)
         await asyncio.to_thread(upload_file, user_id, output_kmz_name, Path(output_kmz_path))
@@ -155,6 +167,7 @@ async def generate_task(
             "generator_version": GENERATOR_VERSION,
             "config": used_config.model_dump(),
             "osm_timestamp": osm_ts,
+            "osm_source": osm_source,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "artifacts": {
                 "kmz": user_object_key(user_id, output_kmz_name),

@@ -7,6 +7,8 @@ fastapi
 uvicorn
 python-multipart
 
+psycopg[binary]
+
 python-dotenv
 pydantic-settings
 prisma

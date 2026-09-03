@@ -1,0 +1,21 @@
+FROM python:3.11-slim
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential libgeos-dev libproj-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+COPY app/server/requirements.txt ./requirements-base.txt
+COPY app/server/requirements-osm-importer.txt ./requirements-osm-importer.txt
+RUN pip install -r requirements-base.txt -r requirements-osm-importer.txt
+
+COPY app/server ./app/server
+RUN mkdir -p /data/osm
+
+WORKDIR /workspace/app
+ENTRYPOINT ["python"]

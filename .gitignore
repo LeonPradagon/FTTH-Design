@@ -48,6 +48,7 @@ build/
 
 # Project Specific (FTTH Design Generator)
 cache/
+data/osm/
 /storage/users/
 *.kmz
 *.kml

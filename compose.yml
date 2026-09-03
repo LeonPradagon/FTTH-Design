@@ -74,6 +74,10 @@ services:
       USER_CACHE_ROOT: /workspace/app/server/cache/users
       RUN_EMBEDDED_WORKER: "false"
       OSM_REQUEST_TIMEOUT_SECONDS: ${OSM_REQUEST_TIMEOUT_SECONDS:-15}
+      OSM_SOURCE_MODE: ${OSM_SOURCE_MODE:-auto}
+      OSM_ONLINE_MAX_AREA_KM2: ${OSM_ONLINE_MAX_AREA_KM2:-25}
+      OSM_ONLINE_MAX_TILES: ${OSM_ONLINE_MAX_TILES:-4}
+      OSM_LOCAL_FALLBACK_ON_ONLINE_FAILURE: ${OSM_LOCAL_FALLBACK_ON_ONLINE_FAILURE:-true}
       STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL:-http://seaweedfs:8333}
       STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:-${SEAWEEDFS_ACCESS_KEY_ID:-ftth-local}}
       STORAGE_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY:-${SEAWEEDFS_SECRET_ACCESS_KEY:-ftth-local-secret}}
@@ -90,6 +94,24 @@ services:
       redis:
         condition: service_healthy
       seaweedfs:
+        condition: service_healthy
+
+  osm-importer:
+    profiles: ["osm-update"]
+    build:
+      context: .
+      dockerfile: app/server/Dockerfile.osm-importer
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ftth}:${POSTGRES_PASSWORD:-ftth-dev-password}@db:5432/${POSTGRES_DB:-ftth}?schema=public
+      OSM_PBF_URL: ${OSM_PBF_URL:-https://download.geofabrik.de/asia/indonesia-latest.osm.pbf}
+      OSM_PBF_PATH: ${OSM_PBF_PATH:-/data/osm/indonesia-latest.osm.pbf}
+      OSM_PBF_COVERAGE: ${OSM_PBF_COVERAGE:-94,-11.5,141.5,6.5}
+      OSM_PBF_DOWNLOAD_TIMEOUT_SECONDS: ${OSM_PBF_DOWNLOAD_TIMEOUT_SECONDS:-900}
+      OSM_IMPORT_WORKERS: ${OSM_IMPORT_WORKERS:-1}
+    volumes:
+      - osm_pbf_data:/data/osm
+    depends_on:
+      db:
         condition: service_healthy
 
   worker:
@@ -131,3 +153,4 @@ services:
 volumes:
   postgres_data:
   seaweed_data:
+  osm_pbf_data:

@@ -3,7 +3,7 @@ import math
 import sys
 
 from server.services.generator.kml_parser import read_boundary, read_points, read_houses_from_file
-from server.services.generator.osm_client import fetch_houses_in_boundary, fetch_road_graph
+from server.services.generator.data_provider import fetch_houses_in_boundary, fetch_road_graph
 from server.services.generator.clustering import build_design
 from server.services.generator.routing import build_feeder_chain, enforce_min_distance_between_odcs
 from server.services.generator.core_logic import save_design_state

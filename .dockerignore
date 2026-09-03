@@ -4,14 +4,21 @@
 .env.*
 
 node_modules
+**/node_modules
 app/web/node_modules
 app/web/.next
+**/.next
 
 __pycache__
+**/__pycache__
 *.py[cod]
 .pytest_cache
+**/.pytest_cache
 .venv
+**/.venv
 venv
+**/venv
+**/prisma-cache
 
 cache
 app/server/cache

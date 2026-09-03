@@ -180,6 +180,24 @@ def test_tiled_osm_normalizes_mixed_graph_types(tmp_path):
     assert graph.number_of_edges() == 3
 
 
+def test_tiled_fetch_retries_empty_house_checkpoint(tmp_path):
+    graph = nx.MultiDiGraph()
+    graph.add_edge("a", "b", length=10, highway="residential")
+    boundary = box(0, 0, 1, 1)
+
+    with patch("server.services.generator.core_logic._build_generation_tiles", return_value=[boundary]), \
+         patch(
+             "server.services.generator.core_logic.fetch_houses_in_boundary",
+             side_effect=[[], [(0.5, 0.5)]],
+         ) as fetch_houses, \
+         patch("server.services.generator.core_logic.fetch_road_graph", return_value=graph):
+        _fetch_osm_tiled(boundary, {"lat": 0.5, "lon": 0.5}, cache_dir=tmp_path)
+        houses, _ = _fetch_osm_tiled(boundary, {"lat": 0.5, "lon": 0.5}, cache_dir=tmp_path)
+
+    assert houses == [(0.5, 0.5)]
+    assert fetch_houses.call_count == 2
+
+
 def test_buildings_intersecting_boundary_are_not_lost_when_centroid_is_outside():
     boundary = box(0, 0, 1, 1)
     building = Polygon([(0.9, 0.4), (1.1, 0.4), (1.1, 0.6), (0.9, 0.6)])

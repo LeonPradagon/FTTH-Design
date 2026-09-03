@@ -18,10 +18,13 @@ import os
 import time
 import math
 import hashlib
+import threading
 import geopandas as gpd
+import pandas as pd
 import osmnx as ox
 import networkx as nx
-from shapely.geometry import Point, box
+from osmnx._errors import InsufficientResponseError
+from shapely.geometry import Point, Polygon, box
 from shapely.ops import unary_union
 
 from server.core.logging import logger
@@ -45,6 +48,12 @@ OVERPASS_ENDPOINTS = [
     "https://overpass.kumi.systems/api",
     "https://overpass.osm.ch/api",
 ]
+
+# OSMnx stores the Overpass endpoint in process-global settings.  The tiled
+# generator queries several tiles concurrently, so changing this setting
+# without a lock can make one request hit the wrong endpoint (or retry the
+# same endpoint unexpectedly).
+_OVERPASS_SETTINGS_LOCK = threading.Lock()
 
 # OSMnx uses ``requests_timeout`` for both the HTTP request and the timeout
 # embedded in Overpass queries.  ``settings.timeout`` is not a supported
@@ -127,9 +136,16 @@ def _safe_native_features(polygon, tags):
     """Fallback ke Overpass untuk pencarian fitur non-graph (buildings, dll) karena Native API susah di-filter via tag."""
     last_err = None
     for ep in OVERPASS_ENDPOINTS:
-        ox.settings.overpass_url = ep
         try:
-            return ox.features_from_polygon(polygon, tags=tags)
+            with _OVERPASS_SETTINGS_LOCK:
+                ox.settings.overpass_url = ep
+                return ox.features_from_polygon(polygon, tags=tags)
+        except InsufficientResponseError:
+            # OSMnx memakai exception ini ketika area valid tetapi tidak ada
+            # fitur yang cocok. Itu bukan kegagalan Overpass; tile kosong
+            # harus boleh dilanjutkan agar tile lain tetap diproses.
+            logger.info("  Tidak ada fitur OSM yang cocok untuk tag %s", tags)
+            return gpd.GeoDataFrame({"geometry": []}, geometry="geometry", crs="EPSG:4326")
         except Exception as e:
             last_err = e
             logger.info(f"  Overpass {ep} gagal: {type(e).__name__}")
@@ -141,10 +157,98 @@ def _safe_native_features(polygon, tags):
 def _fetch_osm_xml(bbox_str):
     import requests
     url = f'https://api.openstreetmap.org/api/0.6/map?bbox={bbox_str}'
-    res = requests.get(url, timeout=15)
-    if res.status_code == 200:
-        return res.content
-    raise Exception(f'Native OSM Error: {res.status_code}')
+    try:
+        retries = max(1, int(os.getenv("OSM_NATIVE_RETRIES", "3")))
+    except ValueError:
+        retries = 3
+    last_error = None
+    for attempt in range(1, retries + 1):
+        try:
+            res = requests.get(url, timeout=OSM_REQUEST_TIMEOUT_SECONDS)
+            if res.status_code == 200:
+                return res.content
+            last_error = RuntimeError(f"Native OSM Error: {res.status_code}")
+            if res.status_code in {400, 413}:
+                raise last_error
+        except Exception as exc:
+            last_error = exc
+        if attempt < retries:
+            time.sleep(min(4, attempt))
+    raise last_error or RuntimeError("Native OSM request failed")
+
+
+def _buildings_from_osm_xml(xml_data):
+    """Parse building ways/nodes from Native OSM XML into a GeoDataFrame."""
+    import xml.etree.ElementTree as ET
+
+    root = ET.fromstring(xml_data)
+    node_coordinates = {
+        node.attrib["id"]: (float(node.attrib["lon"]), float(node.attrib["lat"]))
+        for node in root.findall("node")
+        if "id" in node.attrib and "lon" in node.attrib and "lat" in node.attrib
+    }
+    rows = []
+
+    for node in root.findall("node"):
+        tags = {tag.attrib.get("k"): tag.attrib.get("v") for tag in node.findall("tag")}
+        if "building" in tags and node.attrib.get("id") in node_coordinates:
+            rows.append({"building": tags["building"], "geometry": Point(node_coordinates[node.attrib["id"]])})
+
+    for way in root.findall("way"):
+        tags = {tag.attrib.get("k"): tag.attrib.get("v") for tag in way.findall("tag")}
+        if "building" not in tags:
+            continue
+        coordinates = [
+            node_coordinates[node_ref.attrib["ref"]]
+            for node_ref in way.findall("nd")
+            if node_ref.attrib.get("ref") in node_coordinates
+        ]
+        if len(coordinates) < 4 or coordinates[0] != coordinates[-1]:
+            continue
+        geometry = Polygon(coordinates)
+        if geometry.is_empty or not geometry.is_valid:
+            geometry = geometry.buffer(0)
+        if not geometry.is_empty:
+            rows.append({"building": tags["building"], "geometry": geometry})
+
+    return gpd.GeoDataFrame(rows, geometry="geometry", crs="EPSG:4326")
+
+
+def _safe_native_buildings(polygon, split_depth=0):
+    """Fetch buildings through Native OSM API, splitting slow/large bboxes."""
+    minx, miny, maxx, maxy = polygon.bounds
+    try:
+        xml_data = _fetch_osm_xml(f"{minx},{miny},{maxx},{maxy}")
+        return _buildings_from_osm_xml(xml_data)
+    except Exception:
+        try:
+            max_split_depth = max(0, int(os.getenv("OSM_NATIVE_SPLIT_DEPTH", "2")))
+        except ValueError:
+            max_split_depth = 2
+        if split_depth >= max_split_depth or maxx <= minx or maxy <= miny:
+            raise
+
+        midx = (minx + maxx) / 2
+        midy = (miny + maxy) / 2
+        parts = (
+            box(minx, miny, midx, midy),
+            box(midx, miny, maxx, midy),
+            box(minx, midy, midx, maxy),
+            box(midx, midy, maxx, maxy),
+        )
+        frames = [
+            _safe_native_buildings(part, split_depth=split_depth + 1)
+            for part in parts
+            if part.intersects(polygon)
+        ]
+        non_empty = [frame for frame in frames if not frame.empty]
+        if not non_empty:
+            return gpd.GeoDataFrame({"geometry": []}, geometry="geometry", crs="EPSG:4326")
+        return gpd.GeoDataFrame(
+            pd.concat(non_empty, ignore_index=True),
+            geometry="geometry",
+            crs="EPSG:4326",
+        )
 
 def _safe_native_graph(polygon, network_type="all"):
     """Query road graph menggunakan Native OSM API. Sangat cepat, jarang timeout."""
@@ -192,9 +296,10 @@ def _safe_native_graph(polygon, network_type="all"):
             logger.warning(f"Native OSM API gagal ({e}). Fallback ke Overpass...")
             last_err = None
             for ep in OVERPASS_ENDPOINTS:
-                ox.settings.overpass_url = ep
                 try:
-                    return ox.graph_from_polygon(polygon, network_type=network_type)
+                    with _OVERPASS_SETTINGS_LOCK:
+                        ox.settings.overpass_url = ep
+                        return ox.graph_from_polygon(polygon, network_type=network_type)
                 except Exception as e2:
                     last_err = e2
             if last_err is not None:
@@ -369,8 +474,22 @@ def fetch_houses_in_boundary(polygon, force_refresh=False):
             print(f"Ditemukan {len(houses)} bangunan di dalam boundary. ({elapsed:.1f}s, dari cache lokal)")
             return houses
     
-    # 2. Fallback ke Overpass API
-    print("  Cache lokal tidak tersedia, mengambil dari OpenStreetMap...")
+    # 2. Native OSM API is considerably faster and returns the same map
+    # objects without depending on Overpass tag filtering.
+    print("  Cache lokal tidak tersedia, mengambil dari Native OSM API...")
+    try:
+        gdf = _safe_native_buildings(polygon)
+        if not gdf.empty:
+            _save_buildings_cache(polygon, gdf)
+            houses = _building_points_in_boundary(gdf, polygon)
+            elapsed = time.time() - start
+            print(f"Ditemukan {len(houses)} bangunan di dalam boundary. ({elapsed:.1f}s, dari Native OSM API)")
+            return houses
+    except Exception as native_error:
+        logger.info("Native OSM API gagal mengambil bangunan: %s", native_error)
+
+    # 3. Fallback ke Overpass API
+    print("  Native OSM API tidak menemukan bangunan, mencoba Overpass...")
     try:
         gdf = _safe_native_features(polygon, tags={"building": True})
         gdf = gdf[gdf.geometry.type.isin(["Polygon", "MultiPolygon", "Point"])]
@@ -385,8 +504,11 @@ def fetch_houses_in_boundary(polygon, force_refresh=False):
         return houses
         
     except Exception as e:
-        print(f"OSMnx error saat mengambil bangunan: {e}")
-        return []
+        # An unavailable Overpass service is not the same as an area with no
+        # buildings.  Returning [] here made the caller raise the misleading
+        # NoCustomerFoundError after waiting through all endpoint retries.
+        logger.exception("OSMnx gagal mengambil bangunan dari semua endpoint")
+        raise
 
 
 def find_strategic_pop(boundary, buffer_deg=0.01):
