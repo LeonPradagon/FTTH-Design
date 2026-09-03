@@ -105,6 +105,33 @@ def test_read_custom_mapped_kml_keeps_compound_odp_names_as_odp():
         os.unlink(temp_path)
 
 
+def test_read_custom_mapped_kml_accepts_manual_kml_without_standard_namespace(tmp_path):
+    # Some hand-authored KML files omit the namespace or use an older Google
+    # Earth namespace. Classification must still use the folder and point
+    # names rather than rejecting every point as unknown.
+    source = tmp_path / "manual-custom.kml"
+    source.write_text("""<?xml version="1.0" encoding="UTF-8"?>
+    <kml>
+      <Document>
+        <Folder><name>OLT</name>
+          <Placemark><name>Sentral Utama</name><Point><coordinates>106.8,-6.2,0</coordinates></Point></Placemark>
+        </Folder>
+        <Folder><name>ODC</name>
+          <Placemark><name>Cabinet 01</name><Point><coordinates>106.801,-6.201,0</coordinates></Point></Placemark>
+        </Folder>
+        <Folder><name>ODP</name>
+          <Placemark><name>01/01</name><Point><coordinates>106.802,-6.202,0</coordinates></Point></Placemark>
+        </Folder>
+      </Document>
+    </kml>""")
+
+    points = read_custom_mapped_kml(source)
+
+    assert [point["name"] for point in points["olt"]] == ["Sentral Utama"]
+    assert [point["name"] for point in points["odc"]] == ["Cabinet 01"]
+    assert [point["name"] for point in points["odp"]] == ["01/01"]
+
+
 def test_combined_boundaries_split_and_rbs_is_detected_as_pop(tmp_path):
     kml_content = """<?xml version="1.0" encoding="UTF-8"?>
     <kml xmlns="http://www.opengis.net/kml/2.2">

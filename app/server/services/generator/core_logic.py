@@ -1110,9 +1110,22 @@ def generate_cables_from_custom_points(
                 "harus memiliki titik sumber yang nyata."
             ),
         )
+    logger.info(
+        "Custom KML points terdeteksi: OLT/POP=%d, ODC=%d, ODP=%d, HC=%d",
+        len(points["olt"]),
+        len(points["odc"]),
+        len(points["odp"]),
+        len(points["hc"]),
+    )
     if not points['odc']:
         raise InvalidFileError(
-            message="Tidak ditemukan titik ODC di file custom KML. Pastikan ada nama yang mengandung 'ODC'.",
+            message=(
+                "Tidak ditemukan titik ODC di file custom KML "
+                f"(terbaca OLT/POP={len(points['olt'])}, "
+                f"ODP={len(points['odp'])}, HC={len(points['hc'])}). "
+                "Pastikan titik ODC berupa Point dan namanya/folder/description "
+                "mengandung 'ODC'."
+            ),
         )
     if not points['odp']:
         raise InvalidFileError(
