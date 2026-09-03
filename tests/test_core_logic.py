@@ -16,6 +16,7 @@ from server.services.generator.core_logic import (
 )
 from server.services.generator.osm_local import _building_points_in_boundary
 from server.core.errors import RoutingFailedError
+from server.services.generator.routing import NoVehicleRoadsError
 from unittest.mock import patch
 from server.services.generator.models import ODC, ODP, Splitter
 
@@ -178,6 +179,24 @@ def test_tiled_osm_normalizes_mixed_graph_types(tmp_path):
     assert isinstance(graph, nx.MultiDiGraph)
     assert graph.is_directed()
     assert graph.number_of_edges() == 3
+
+
+def test_tiled_osm_skips_tile_without_vehicle_roads(tmp_path):
+    graph = nx.MultiDiGraph()
+    graph.add_edge(1, 2, highway="residential", length=10)
+
+    with patch("server.services.generator.core_logic._build_generation_tiles", return_value=[box(0, 0, 1, 1), box(1, 0, 2, 1)]), \
+         patch("server.services.generator.core_logic.fetch_houses_in_boundary", side_effect=[[(0.5, 0.5)], [(0.5, 1.5)]]), \
+         patch(
+             "server.services.generator.core_logic.fetch_road_graph",
+             side_effect=[NoVehicleRoadsError("empty vehicle-road tile"), graph],
+         ):
+        houses, combined = _fetch_osm_tiled(
+            box(0, 0, 2, 1), {"lat": 0.5, "lon": 0.5}, cache_dir=tmp_path
+        )
+
+    assert len(houses) == 2
+    assert combined.number_of_edges() == 1
 
 
 def test_tiled_fetch_retries_empty_house_checkpoint(tmp_path):
