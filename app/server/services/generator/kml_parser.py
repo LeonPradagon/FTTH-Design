@@ -339,18 +339,23 @@ def read_custom_mapped_kml(path):
     root = ET.fromstring(_extract_kml_bytes(path))
     points = {'olt': [], 'odc': [], 'odp': [], 'hc': []}
 
+    def local_tag(element):
+        """Return an XML tag without depending on the KML namespace URI."""
+        return element.tag.rsplit("}", 1)[-1].lower()
+
+    def direct_text(element, name):
+        for child in element:
+            if local_tag(child) == name:
+                return "".join(child.itertext()).strip()
+        return ""
+
     def walk_placemarks(element, folders=()):
-        tag = element.tag.rsplit("}", 1)[-1]
+        tag = local_tag(element)
         current_folders = folders
-        if tag == "Folder":
-            folder_name_el = element.find("kml:name", KML_NS)
-            folder_name = (
-                folder_name_el.text.strip()
-                if folder_name_el is not None and folder_name_el.text
-                else ""
-            )
+        if tag == "folder":
+            folder_name = direct_text(element, "name")
             current_folders = folders + (folder_name,)
-        if tag == "Placemark":
+        if tag == "placemark":
             yield element, current_folders
         for child in element:
             yield from walk_placemarks(child, current_folders)
@@ -368,17 +373,26 @@ def read_custom_mapped_kml(path):
         return None
 
     for pm, folders in walk_placemarks(root):
-        pt_el = pm.find(".//kml:Point/kml:coordinates", KML_NS)
-        if pt_el is None:
+        point_el = next((element for element in pm.iter() if local_tag(element) == "point"), None)
+        if point_el is None:
+            continue
+        pt_el = next(
+            (element for element in point_el.iter() if local_tag(element) == "coordinates"),
+            None,
+        )
+        if pt_el is None or not (pt_el.text or "").strip():
             continue
 
-        lon, lat, *_ = pt_el.text.strip().split(",")
-        lat, lon = float(lat), float(lon)
+        try:
+            lon, lat, *_ = pt_el.text.strip().split(",")
+            lat, lon = float(lat), float(lon)
+        except (TypeError, ValueError):
+            # Ignore malformed point features and continue parsing the rest
+            # of the upload. A valid ODC/ODP elsewhere must still be usable.
+            continue
 
-        name_el = pm.find("kml:name", KML_NS)
-        display_name = name_el.text.strip() if name_el is not None and name_el.text else "Unknown"
-        description_el = pm.find("kml:description", KML_NS)
-        description = description_el.text.strip() if description_el is not None and description_el.text else ""
+        display_name = direct_text(pm, "name") or "Unknown"
+        description = direct_text(pm, "description")
         folder_text = " ".join(folder for folder in folders if folder)
         pt_data = {"name": display_name, "lat": lat, "lon": lon}
 

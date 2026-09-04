@@ -6,6 +6,7 @@ from shapely.geometry import Point as ShPoint, LineString
 from shapely.ops import substring
 from server.utils.geometry import haversine_m, bearing_between, offset_latlon
 from server.core.logging import logger
+from server.services.generator.models import ODC, Splitter
 
 # Bump this whenever the allowed edge set or cost model changes.  Existing
 # GraphML caches are re-sanitised instead of silently reusing an old profile.
@@ -35,6 +36,15 @@ ROAD_PRIORITY_FACTORS = {
     "road": 2.50,
     "service": 3.00,
 }
+
+
+class NoVehicleRoadsError(ValueError):
+    """The queried OSM area contains no road usable by vehicles.
+
+    This is a valid result for an individual tile (for example, a tile that
+    contains water, railway, or an undeveloped area). The tiled acquisition
+    layer can skip such a tile and validate the combined graph afterwards.
+    """
 
 
 def _highway_values(value):
@@ -78,7 +88,7 @@ def prepare_road_graph(road_graph, routing_strategy="priority_road"):
     road_graph.remove_edges_from(invalid_edges)
     road_graph.remove_nodes_from(list(nx.isolates(road_graph)))
     if road_graph.number_of_edges() == 0:
-        raise ValueError("Road graph tidak memiliki jalan kendaraan yang valid.")
+        raise NoVehicleRoadsError("Road graph tidak memiliki jalan kendaraan yang valid.")
 
     road_graph.graph["ftth_road_profile"] = f"{ROAD_PROFILE_VERSION}:{routing_strategy}"
     logger.info(
@@ -966,6 +976,26 @@ def _assign_odps_globally_by_road(
         if assignments is None:
             return False
         if over_limit_or_missing(assignments):
+            problematic = over_limit_or_missing(assignments)
+            recovery_by_odp_id = _add_recovery_odcs(
+                odcs,
+                problematic,
+                road_graph,
+                odc_capacity=odc_capacity,
+            )
+            if recovery_by_odp_id:
+                # Keep the already-valid assignment and replace only the
+                # problematic ODPs. Re-running the full global assignment
+                # here would repeat thousands of A* searches for a handful
+                # of outlier ODPs on a large boundary.
+                odc_by_id = {odc.id: odc for odc in odcs}
+                for odc in odcs:
+                    odc.odps.clear()
+                for odp in all_odps:
+                    recovery = recovery_by_odp_id.get(odp.id)
+                    target_odc = recovery or odc_by_id[assignments[odp.id]]
+                    target_odc.odps.append(odp)
+                return True
             logger.warning(
                 "Global mapping tidak menemukan rute distribusi <= %.0fm untuk semua ODP",
                 max_distribution_length_m,
@@ -990,6 +1020,91 @@ def _assign_odps_globally_by_road(
         len(all_odps),
     )
     return True
+
+
+def _add_recovery_odcs(odcs, problematic, road_graph, odc_capacity=4):
+    """Create road-backed ODCs for ODPs no existing ODC can serve.
+
+    Geographic clustering can put an ODP on a road that is technically in
+    the same OSM graph but too far from every existing ODC. Dropping the ODP
+    or drawing a straight cable would hide a real coverage gap. A small
+    recovery ODC keeps the ODP on its road and lets the normal feeder stage
+    decide whether the new cabinet can be reached from the POP.
+    """
+    if not problematic:
+        return {}
+
+    existing_ids = {odc.id for odc in odcs}
+    recovery_index = 1
+    recovery_by_odp_id = {}
+    for odp in problematic:
+        current = next((odc for odc in odcs if odp in odc.odps), None)
+        if current is None:
+            continue
+
+        current.odps.remove(odp)
+        while f"ODC-RECOVERY-{recovery_index:03d}" in existing_ids:
+            recovery_index += 1
+        recovery_id = f"ODC-RECOVERY-{recovery_index:03d}"
+        existing_ids.add(recovery_id)
+
+        # Keep the recovery cabinet on the same vehicle road while making a
+        # visible, non-zero ODC -> ODP segment whenever the road allows it.
+        location = (odp.lat, odp.lon)
+        for distance_m in (40.0, 20.0, 10.0):
+            for direction in (1, -1):
+                try:
+                    candidate = walk_along_road(
+                        road_graph,
+                        odp.lat,
+                        odp.lon,
+                        distance_m,
+                        direction=direction,
+                    )
+                except Exception:
+                    candidate = None
+                if candidate and haversine_m(*candidate, odp.lat, odp.lon) > 1.0:
+                    location = candidate
+                    break
+            if location != (odp.lat, odp.lon):
+                break
+
+        if location == (odp.lat, odp.lon):
+            # A very short/dead-end road may not yield a walk candidate, but
+            # its graph edge still provides a safe, non-zero road position.
+            try:
+                info = locate_on_road(road_graph, odp.lat, odp.lon)
+                for node in info["edge"][:2]:
+                    candidate = (
+                        float(road_graph.nodes[node]["y"]),
+                        float(road_graph.nodes[node]["x"]),
+                    )
+                    if haversine_m(*candidate, odp.lat, odp.lon) > 1.0:
+                        location = candidate
+                        break
+            except Exception:
+                pass
+
+        odcs.append(
+            ODC(
+                id=recovery_id,
+                lat=location[0],
+                lon=location[1],
+                odps=[odp],
+                splitter=Splitter(ratio=f"1:{odc_capacity}", location="ODC"),
+                closure_id=recovery_id.replace("ODC", "CL"),
+            )
+        )
+        recovery_index += 1
+        recovery_by_odp_id[odp.id] = odcs[-1]
+
+    if recovery_by_odp_id:
+        logger.warning(
+            "Membuat %d ODC recovery di jalan untuk ODP yang tidak terlayani "
+            "oleh cluster ODC geografis",
+            len(recovery_by_odp_id),
+        )
+    return recovery_by_odp_id
 
 
 def build_distribution_tree(odc, road_graph, max_distance_m=500.0):

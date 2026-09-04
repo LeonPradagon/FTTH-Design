@@ -45,6 +45,7 @@ from server.services.generator.routing import (
     arrange_odps_around_odc,
     rebalance_odps_by_road_connectivity,
     build_distribution_tree,
+    NoVehicleRoadsError,
 )
 from server.services.generator.kml_builder import export_kmz
 from server.services.generator.csv_exporter import export_csv
@@ -288,12 +289,20 @@ def _fetch_osm_tiled(boundary, pop, force_refresh=False, job_id=None, cache_dir=
                 except Exception as exc:
                     logger.warning("Tile checkpoint %s tidak dapat dibaca: %s", key, exc)
         houses = fetch_houses_in_boundary(tile, force_refresh=force_refresh) if load_houses else []
-        roads = fetch_road_graph(
-            tile,
-            pop=None,
-            force_refresh=force_refresh,
-            include_pop=False,
-        )
+        try:
+            roads = fetch_road_graph(
+                tile,
+                pop=None,
+                force_refresh=force_refresh,
+                include_pop=False,
+            )
+        except NoVehicleRoadsError:
+            # A boundary can legitimately cover a tile containing only rail,
+            # water, or other non-vehicle OSM ways. That tile is not a source
+            # outage; keep the buildings and let the combined graph from the
+            # other tiles decide whether the design is routable.
+            logger.info("Tile OSM %s tidak memiliki jalan kendaraan; tile dilewati", key)
+            roads = nx.MultiDiGraph()
         if roads_path and (not load_houses or houses_path):
             temporary_houses = f"{houses_path}.tmp"
             temporary_roads = f"{roads_path}.tmp"
@@ -1101,9 +1110,22 @@ def generate_cables_from_custom_points(
                 "harus memiliki titik sumber yang nyata."
             ),
         )
+    logger.info(
+        "Custom KML points terdeteksi: OLT/POP=%d, ODC=%d, ODP=%d, HC=%d",
+        len(points["olt"]),
+        len(points["odc"]),
+        len(points["odp"]),
+        len(points["hc"]),
+    )
     if not points['odc']:
         raise InvalidFileError(
-            message="Tidak ditemukan titik ODC di file custom KML. Pastikan ada nama yang mengandung 'ODC'.",
+            message=(
+                "Tidak ditemukan titik ODC di file custom KML "
+                f"(terbaca OLT/POP={len(points['olt'])}, "
+                f"ODP={len(points['odp'])}, HC={len(points['hc'])}). "
+                "Pastikan titik ODC berupa Point dan namanya/folder/description "
+                "mengandung 'ODC'."
+            ),
         )
     if not points['odp']:
         raise InvalidFileError(

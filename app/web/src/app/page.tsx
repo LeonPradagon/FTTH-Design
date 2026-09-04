@@ -834,7 +834,14 @@ export default function Home() {
       const uploadData = resp.data || resp;
       const url = toProxyApiUrl(uploadData.url);
       const fileNameLower = fileToUse.name.toLowerCase();
-      const isBoundary = ['boundary', 'polygon', 'area'].some(token => fileNameLower.includes(token));
+      let containsPolygon = false;
+      try {
+        const document = new DOMParser().parseFromString(await fileToUse.text(), "text/xml");
+        containsPolygon = countKmlPolygons(document) > 0;
+      } catch (error) {
+        console.warn(`Tidak dapat memeriksa geometry ${fileToUse.name}:`, error);
+      }
+      const isBoundary = containsPolygon || ['boundary', 'polygon', 'area'].some(token => fileNameLower.includes(token));
       const isPop = ['pop', 'olt', 'sentral', 'rbs'].some(token => fileNameLower.includes(token));
       const inputStem = fileToUse.name.replace(/\.[^/.]+$/, '').trim();
       const importId = crypto.randomUUID?.() ?? crypto.getRandomValues(new Uint32Array(4)).join("-");
@@ -1125,11 +1132,42 @@ export default function Home() {
     // Determine which layers are which
     const visibleLayers = layers.filter(l => l.visible && l.id !== 'design' && !l.id.startsWith('design:'));
     const boundaryLayers = visibleLayers.filter(l => l.name.toLowerCase().includes('boundary') || l.id === 'boundary');
-    const boundaryLayer = boundaryLayers[0];
-    const popLayers = visibleLayers.filter(l => {
+    let boundaryLayer = boundaryLayers[0];
+    const popCandidates = visibleLayers.filter(l => {
       const name = l.name.toLowerCase();
       return name.includes('pop') || name.includes('olt') || name.includes('sentral') || name.includes('rbs');
     });
+
+    // A hand-authored boundary is not necessarily named "boundary.kml".
+    // Inspect the actual KML geometry before falling back to custom-cable
+    // mode; otherwise a file such as "OLT.kml" containing a Polygon and an
+    // embedded POP is incorrectly sent to /generate-custom.
+    if (!boundaryLayer) {
+      for (const layer of visibleLayers) {
+        try {
+          const response = await fetch(layer.url);
+          if (!response.ok) continue;
+          const blob = await response.blob();
+          const file = await extractKmlFromFile(new File(
+            [blob],
+            uploadFilenameForLayer(layer, "boundary"),
+            { type: blob.type || "application/octet-stream" },
+          ));
+          const document = new DOMParser().parseFromString(await file.text(), "text/xml");
+          if (countKmlPolygons(document) > 0) {
+            boundaryLayer = layer;
+            break;
+          }
+        } catch (error) {
+          console.warn(`Gagal memeriksa geometry layer ${layer.name}:`, error);
+        }
+      }
+    }
+
+    // Do not send the boundary file again as a separate POP file when it
+    // contains an embedded OLT/POP. The backend can extract that point from
+    // the boundary KML itself.
+    const popLayers = popCandidates.filter(l => !boundaryLayer || l.id !== boundaryLayer.id);
     const popLayer = popLayers[0];
 
     if (boundaryLayers.length > 1) {
@@ -1782,7 +1820,9 @@ export default function Home() {
       />
       <Navbar
         onImportLayer={handleImportLayer}
-        onSmartGenerate={batchFiles.length > 0 || visibleLayers.some((l: LayerConfig) => l.name.toLowerCase().includes('boundary') || l.name.toLowerCase().includes('pop') || l.name.toLowerCase().includes('olt') || l.name.toLowerCase().includes('rbs')) ? handleSmartGenerate : undefined}
+        // Let the handler inspect the actual KML geometry. File names are
+        // not reliable for hand-authored boundary/POP uploads.
+        onSmartGenerate={batchFiles.length > 0 || visibleLayers.length > 0 ? handleSmartGenerate : undefined}
         isGenerating={isGenerating}
         onRegenerateCables={visibleLayers.some((l: LayerConfig) =>
           l.id === "design" ||

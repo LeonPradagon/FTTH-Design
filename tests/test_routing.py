@@ -366,3 +366,43 @@ def test_rebalance_expands_candidates_for_large_boundary_barrier_case():
 
     assert [odp.id for odp in odcs[0].odps] == ["ODP-017"]
     assert [odp.id for odp in odcs[16].odps] == ["ODP-001"]
+
+
+def test_rebalance_adds_recovery_odc_for_unreachable_distribution():
+    odp = ODP(id="ODP-STRANDED", lat=0.010, lon=0.0)
+    odc = ODC(
+        id="ODC-001",
+        lat=0.0,
+        lon=0.0,
+        odps=[odp],
+        splitter=Splitter(ratio="1:1", location="ODC"),
+    )
+
+    def fake_route(_graph, source, target, **_kwargs):
+        length = 40.0 if abs(source[0] - target[0]) < 0.002 else 600.0
+        return {
+            "coords": [source, target],
+            "length_m": length,
+            "routing_cost": length,
+        }
+
+    odcs = [odc]
+    with patch(
+        "server.services.generator.routing.route_with_connectivity_fallback",
+        side_effect=fake_route,
+    ), patch(
+        "server.services.generator.routing.walk_along_road",
+        return_value=(0.0096, 0.0),
+    ):
+        rebalance_odps_by_road_connectivity(
+            odcs,
+            object(),
+            max_distribution_length_m=500.0,
+            odc_capacity=1,
+        )
+
+    recovery_odcs = [item for item in odcs if item.id.startswith("ODC-RECOVERY-")]
+    assert len(recovery_odcs) == 1
+    assert odp in recovery_odcs[0].odps
+    assert odp not in odc.odps
+    assert recovery_odcs[0].lat == pytest.approx(0.0096)
