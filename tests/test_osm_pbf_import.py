@@ -3,7 +3,43 @@
 import geopandas as gpd
 from shapely.geometry import LineString, Point, Polygon
 
-from server.scripts.import_osm_pbf import _edge_rows, _node_rows, _poi_rows
+from server.scripts.import_osm_pbf import _edge_rows, _insert_many, _node_rows, _poi_rows
+
+
+class _RecordingCursor:
+    def __init__(self, connection):
+        self.connection = connection
+        self.calls = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def executemany(self, statement, rows):
+        self.calls.append((statement, list(rows)))
+
+
+class _RecordingConnection:
+    def __init__(self):
+        self.commit_count = 0
+        self.cursor_instance = _RecordingCursor(self)
+
+    def cursor(self):
+        return self.cursor_instance
+
+    def commit(self):
+        self.commit_count += 1
+
+
+def test_insert_many_does_not_commit_each_batch():
+    connection = _RecordingConnection()
+
+    _insert_many(connection, "INSERT test VALUES (%s)", [(1,), (2,), (3,)], chunk_size=2)
+
+    assert [len(call[1]) for call in connection.cursor_instance.calls] == [2, 1]
+    assert connection.commit_count == 0
 
 
 def test_importer_normalizes_network_rows():

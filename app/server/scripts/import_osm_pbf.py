@@ -79,12 +79,45 @@ def _geometry_parts(geometry) -> Iterable:
 
 
 def _insert_many(connection, statement: str, rows: list[tuple], chunk_size=2000):
+    """Insert rows without committing.
+
+    The caller owns the transaction. Committing here used to turn every
+    2,000-row batch into a separate transaction, which is particularly costly
+    when PostGIS indexes and WAL are involved.
+    """
     if not rows:
         return
     with connection.cursor() as cursor:
         for start in range(0, len(rows), chunk_size):
             cursor.executemany(statement, rows[start:start + chunk_size])
-            connection.commit()
+
+
+def _copy_insert(
+    connection,
+    *,
+    temp_table: str,
+    temp_columns: str,
+    temp_definition: str,
+    rows: list[tuple],
+    insert_statement: str,
+) -> int:
+    """Bulk-load rows through a temporary bytea staging table.
+
+    Psycopg's COPY protocol avoids one server-side INSERT execution per row.
+    Geometry is staged as WKB because COPY cannot apply ST_GeomFromWKB while
+    reading rows; the conversion is then done once in a set-based INSERT.
+    """
+    if not rows:
+        return 0
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f"CREATE TEMP TABLE {temp_table} ({temp_definition}) ON COMMIT DROP"
+        )
+        with cursor.copy(f"COPY {temp_table} ({temp_columns}) FROM STDIN") as copy:
+            for row in rows:
+                copy.write_row(row)
+        cursor.execute(insert_statement)
+    return len(rows)
 
 
 def _import_buildings(connection, dataset_id: str, buildings) -> int:
@@ -95,16 +128,77 @@ def _import_buildings(connection, dataset_id: str, buildings) -> int:
         if geometry is None or geometry.is_empty:
             continue
         rows.append((dataset_id, osm_id, bytes(geometry.wkb)))
-    _insert_many(
+    return _copy_insert(
         connection,
-        """
-        INSERT INTO osm_data.building (dataset_id, osm_id, geom)
-        VALUES (%s, %s, ST_GeomFromWKB(%s, 4326))
-        ON CONFLICT (dataset_id, osm_id) DO NOTHING
+        temp_table="_osm_building_stage",
+        temp_columns="dataset_id, osm_id, geom_wkb",
+        temp_definition="dataset_id TEXT, osm_id BIGINT, geom_wkb BYTEA",
+        rows=rows,
+        insert_statement="""
+            INSERT INTO osm_data.building (dataset_id, osm_id, geom)
+            SELECT dataset_id, osm_id, ST_GeomFromWKB(geom_wkb, 4326)
+            FROM _osm_building_stage
+            ON CONFLICT (dataset_id, osm_id) DO NOTHING
         """,
-        rows,
     )
-    return len(rows)
+
+
+def _import_nodes(connection, rows: list[tuple]) -> int:
+    return _copy_insert(
+        connection,
+        temp_table="_osm_node_stage",
+        temp_columns="dataset_id, node_id, geom_wkb",
+        temp_definition="dataset_id TEXT, node_id BIGINT, geom_wkb BYTEA",
+        rows=rows,
+        insert_statement="""
+            INSERT INTO osm_data.road_node (dataset_id, node_id, geom)
+            SELECT dataset_id, node_id, ST_GeomFromWKB(geom_wkb, 4326)
+            FROM _osm_node_stage
+            ON CONFLICT (dataset_id, node_id) DO NOTHING
+        """,
+    )
+
+
+def _import_edges(connection, rows: list[tuple]) -> int:
+    return _copy_insert(
+        connection,
+        temp_table="_osm_edge_stage",
+        temp_columns=(
+            "dataset_id, edge_id, source_node, target_node, edge_index, "
+            "geom_wkb, highway, length_m, oneway, name"
+        ),
+        temp_definition=(
+            "dataset_id TEXT, edge_id TEXT, source_node BIGINT, target_node BIGINT, "
+            "edge_index INTEGER, geom_wkb BYTEA, highway TEXT, length_m DOUBLE PRECISION, "
+            "oneway BOOLEAN, name TEXT"
+        ),
+        rows=rows,
+        insert_statement="""
+            INSERT INTO osm_data.road_edge
+                (dataset_id, edge_id, source_node, target_node, edge_index, geom,
+                 highway, length_m, oneway, name)
+            SELECT dataset_id, edge_id, source_node, target_node, edge_index,
+                   ST_GeomFromWKB(geom_wkb, 4326), highway, length_m, oneway, name
+            FROM _osm_edge_stage
+            ON CONFLICT (dataset_id, edge_id, edge_index) DO NOTHING
+        """,
+    )
+
+
+def _import_pois(connection, rows: list[tuple]) -> int:
+    return _copy_insert(
+        connection,
+        temp_table="_osm_poi_stage",
+        temp_columns="dataset_id, poi_id, kind, name, geom_wkb",
+        temp_definition="dataset_id TEXT, poi_id TEXT, kind TEXT, name TEXT, geom_wkb BYTEA",
+        rows=rows,
+        insert_statement="""
+            INSERT INTO osm_data.poi (dataset_id, poi_id, kind, name, geom)
+            SELECT dataset_id, poi_id, kind, name, ST_GeomFromWKB(geom_wkb, 4326)
+            FROM _osm_poi_stage
+            ON CONFLICT (dataset_id, poi_id) DO NOTHING
+        """,
+    )
 
 
 def _node_rows(dataset_id: str, nodes) -> list[tuple]:
@@ -261,49 +355,34 @@ def import_pbf(
 
         nodes, edges = osm.get_network("driving", nodes=True)
         node_rows = _node_rows(dataset_id, nodes)
-        _insert_many(
-            connection,
-            """
-            INSERT INTO osm_data.road_node (dataset_id, node_id, geom)
-            VALUES (%s, %s, ST_GeomFromWKB(%s, 4326))
-            ON CONFLICT (dataset_id, node_id) DO NOTHING
-            """,
-            node_rows,
-        )
+        node_count = _import_nodes(connection, node_rows)
+        del node_rows
         edge_rows = _edge_rows(dataset_id, edges)
-        _insert_many(
-            connection,
-            """
-            INSERT INTO osm_data.road_edge
-                (dataset_id, edge_id, source_node, target_node, edge_index, geom,
-                 highway, length_m, oneway, name)
-            VALUES (%s, %s, %s, %s, %s, ST_GeomFromWKB(%s, 4326), %s, %s, %s, %s)
-            ON CONFLICT (dataset_id, edge_id, edge_index) DO NOTHING
-            """,
-            edge_rows,
-        )
+        edge_count = _import_edges(connection, edge_rows)
+        del edge_rows
         del nodes, edges
 
         if building_count <= 0:
             raise RuntimeError("Import OSM PBF tidak memiliki building; dataset tidak diaktifkan.")
-        if not node_rows or not edge_rows:
+        if node_count <= 0 or edge_count <= 0:
             raise RuntimeError("Import OSM PBF tidak memiliki road node/edge; dataset tidak diaktifkan.")
 
-        poi_rows = []
+        poi_count = 0
         if include_pois:
+            poi_savepoint = "osm_poi_import"
+            with connection.cursor() as cursor:
+                cursor.execute(f"SAVEPOINT {poi_savepoint}")
             try:
                 pois = osm.get_pois(custom_filter={"railway": True, "office": True, "building": True})
                 poi_rows = _poi_rows(dataset_id, pois)
-                _insert_many(
-                    connection,
-                    """
-                    INSERT INTO osm_data.poi (dataset_id, poi_id, kind, name, geom)
-                    VALUES (%s, %s, %s, %s, ST_GeomFromWKB(%s, 4326))
-                    ON CONFLICT (dataset_id, poi_id) DO NOTHING
-                    """,
-                    poi_rows,
-                )
+                poi_count = _import_pois(connection, poi_rows)
+                del poi_rows
+                with connection.cursor() as cursor:
+                    cursor.execute(f"RELEASE SAVEPOINT {poi_savepoint}")
             except Exception as exc:
+                with connection.cursor() as cursor:
+                    cursor.execute(f"ROLLBACK TO SAVEPOINT {poi_savepoint}")
+                    cursor.execute(f"RELEASE SAVEPOINT {poi_savepoint}")
                 print(f"Peringatan: POI tidak berhasil diimport, lanjut tanpa POI: {exc}", file=sys.stderr)
 
         with connection.cursor() as cursor:
@@ -316,7 +395,7 @@ def import_pbf(
                     poi_count = %s
                 WHERE dataset_id = %s
                 """,
-                (building_count, len(node_rows), len(edge_rows), len(poi_rows), dataset_id),
+                (building_count, node_count, edge_count, poi_count, dataset_id),
             )
             cursor.execute(
                 "UPDATE osm_data.dataset SET status = 'failed' WHERE status = 'active' AND dataset_id <> %s",
@@ -328,9 +407,9 @@ def import_pbf(
             "dataset_id": dataset_id,
             "checksum": checksum,
             "building_count": building_count,
-            "road_node_count": len(node_rows),
-            "road_edge_count": len(edge_rows),
-            "poi_count": len(poi_rows),
+            "road_node_count": node_count,
+            "road_edge_count": edge_count,
+            "poi_count": poi_count,
         }
     except Exception:
         connection.rollback()

@@ -416,6 +416,9 @@ Perintah `up -d` tidak otomatis menjalankan importer. Ini disengaja karena
 download/import PBF adalah proses berat dan data PBF tidak perlu dibake ke dalam
 image Docker. Import baru masuk sebagai staging dan hanya menjadi aktif setelah
 seluruh data berhasil diproses; jika gagal, dataset aktif sebelumnya tetap dipakai.
+Importer menggunakan PostgreSQL `COPY` melalui temporary staging table untuk bulk
+insert building, node jalan, edge jalan, dan POI, sehingga tidak melakukan
+transaction commit untuk setiap batch kecil.
 
 ### Environment frontend
 
