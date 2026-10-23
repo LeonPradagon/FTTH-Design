@@ -8,33 +8,21 @@ Aplikasi web untuk membuat rancangan jaringan Fiber To The Home (FTTH) dari data
 - Pairing boundary–POP berdasarkan nama file atau posisi POP di dalam boundary.
 - Generate Network Core: OLT/POP, ODC, ODP/tiang, feeder, dan kabel distribusi.
 - Generate Homepass terpisah: titik rumah dan kabel langsung ODP → rumah.
-- Kapasitas ODP maksimal mengikuti konfigurasi, default 10 rumah.
-- Boundary besar diproses menggunakan tile OSM, cache, checkpoint, dan worker asynchronous.
+- Kapasitas ODP mengikuti konfigurasi, default 10 rumah.
+- Job generation tersimpan di PostgreSQL dan antrean NestJS memproses maksimal dua job bersamaan.
 - Progress generation berada di dalam map dan dapat dipulihkan setelah refresh.
 - Banyak design dalam satu project dikelompokkan berdasarkan batch tanpa menimpa design lama.
 - Export KMZ dan CSV. KML di dalam KMZ dibaca langsung oleh dashboard untuk menampilkan layer map.
 - PostgreSQL + PostGIS untuk metadata project/design dan SeaweedFS untuk file.
 - Better Auth, ownership project, signed proxy header, dan audit log.
 
-### Status data lokal saat ini
+### Status migrasi backend
 
-Yang sudah tersedia di aplikasi:
-
-- Cache regional OSM di `cache/regions/` untuk buildings, road graph, dan POI.
-- Checkpoint OSM tiled di `checkpoints/osm_tiles/<boundary-fingerprint>/`.
-- Cache Network Core: `design_state.json`, `road_graph.pkl`, dan `core_manifest.json`.
-- Cache hasil generation dipisahkan berdasarkan user/project/batch/item sehingga data design antar-user tidak tercampur. Cache regional OSM di `cache/regions/` bersifat shared pada satu instance karena datanya berasal dari sumber publik.
-- Generate ulang dengan input dan konfigurasi yang sama pada scope cache yang sama dapat melewati OSM, clustering, dan routing.
-- Homepass membaca Network Core yang sudah tersimpan sehingga tidak melakukan routing ulang.
-- Routing feeder menggunakan cache endpoint bersama dan optimasi 2-opt tanpa menghitung ulang seluruh rantai pada setiap perubahan.
-
-Yang belum tersedia:
-
-- Belum ada database OSM offline seluruh Indonesia di PostGIS.
-- PostgreSQL/PostGIS saat ini terutama menyimpan metadata project, design, kabel, validasi, dan audit.
-- Jika area belum ada di cache lokal, generator masih mengambil data jalan/gedung dari OSM/Overpass.
-
-`cache/` adalah cache hasil query dan hasil design, bukan salinan lengkap peta seluruh Indonesia.
+- API NestJS menggantikan FastAPI untuk runtime lokal; Drizzle mengelola schema PostgreSQL/PostGIS yang sama.
+- Job generation, progress, project, version, audit, upload, dan storage memiliki endpoint NestJS.
+- Data OSM diambil dari Overpass atau dataset PostGIS aktif. Utilitas Python untuk mengimpor OSM PBF masih disimpan.
+- Port generator TypeScript belum mencapai parity penuh dengan Python. Clustering berkapasitas dan ukuran minimum, centroid poligon bangunan, titik rumah dari footprint yang memotong boundary, deduplikasi koordinat rumah, snapping dan routing dari proyeksi ruas jalan termasuk biaya ruas parsial, penjarakan ODC mulai dari proyeksi ruas jalan, feeder nearest-neighbor/2-opt, routing prioritas jalan dan retry dua arah untuk jalan satu arah, cache kandidat road-walk saat penjarakan ODC, pemilihan tree distribusi berdasarkan biaya routing, pemilihan POP berdasarkan prioritas OSM, validasi radius/panjang kabel, pemeriksaan konektivitas/tree/duplikasi, normalisasi urutan dan ID ODC pada desain custom, query/cache OSM online per tile termasuk connector road, cache hasil query PostGIS lokal per boundary beserta ID bangunan per tile regional, cache graf jalan lokal berbasis data OSM dan strategi routing, checkpoint tile per job yang dapat dilanjutkan setelah restart, CSV rincian material, folder KMZ dan boundary termasuk lubang, ikon rumah KMZ mandiri, dan batch satu design dengan penggabungan polygon, pengenalan file tak berlabel, prioritas POP tertanam, serta status tanpa POP sudah dipindahkan. Optimasi routing feeder/distribusi lanjutan, beberapa aturan validasi desain custom, dan pembatalan komputasi job yang sedang berjalan masih perlu disamakan.
+- Data job dan design yang sudah ada tetap di database; migrasi Drizzle bersifat aditif dan idempotent.
 
 ## Arsitektur
 
@@ -42,30 +30,28 @@ Yang belum tersedia:
 Browser
   │
   ▼
-Next.js Dashboard :3000
+Next.js Dashboard :3001
   │  proxy + session verification
   ▼
-FastAPI Backend :8000 ─── PostgreSQL/PostGIS
+NestJS API :8000 ──────── PostgreSQL/PostGIS
   │                         └── project, version, audit, spatial data
-  ├── Redis ─────────────── job queue + progress state
-  ├── SeaweedFS ─────────────── input/output KML, KMZ, CSV
-  └── ARQ Worker ────────── proses generation maksimal 2 job paralel
+  ├── Drizzle ORM ───────── schema dan query database
+  ├── S3-compatible storage ─ input/output KML, KMZ, CSV
+  └── generation job ─────── berjalan dalam proses NestJS
 ```
 
 | Komponen | Lokasi | Fungsi |
 |---|---|---|
 | Dashboard | `app/web/` | Next.js, React, Deck.gl, import file, map, layer/group, progress UI |
-| API | `app/server/api/` | Endpoint generation, project, version, audit, file |
-| Generator | `app/server/services/generator/` | Parsing KML, OSM, clustering, routing, export |
-| Worker | `app/server/worker.py` | Menjalankan job panjang melalui ARQ/Redis |
-| Database | `app/server/schema.prisma` | Schema PostgreSQL/PostGIS dan metadata design |
-| Storage | `app/server/storage/` | Object storage S3-compatible yang memakai SeaweedFS secara default |
+| API | `app/nest/src/` | Endpoint generation, project, version, audit, file |
+| Generator | `app/nest/src/generation/` | Parsing KML, OSM, penempatan perangkat, routing, export |
+| Database | `app/nest/src/db/` | Schema Drizzle PostgreSQL/PostGIS dan metadata design |
+| Storage | `app/nest/src/storage/` | Object storage S3-compatible |
 
-PostGIS belum menjadi sumber data OSM pada pipeline saat ini. Data jalan yang
-sudah diambil diproses menjadi graph NetworkX lokal karena engine routing utama
-menggunakan NetworkX agar hasil rute konsisten. Untuk deployment besar, PostGIS
-dapat dijadikan sumber data OSM bersama, lalu graph hanya dibuat untuk boundary
-dan corridor POP yang sedang diproses.
+> Bagian alur generator dan pipeline lama di bawah ini menjelaskan perilaku backend Python sebelum migrasi. Fitur yang belum dipindahkan belum tersedia di runtime NestJS.
+
+NestJS dapat mengambil OSM dari Overpass atau membaca dataset lokal PostGIS yang
+aktif. Routing dan pembuatan desain dilakukan di proses NestJS.
 
 ## Alur aplikasi
 
@@ -148,7 +134,9 @@ tidak dibuat. Semua ODP tetap dihitung terhadap kapasitas ODC.
 
 ### Worker dan concurrency
 
-Request HTTP hanya membuat job. Proses berat dijalankan worker ARQ melalui Redis.
+Request HTTP membuat generation job di database, lalu antrean lokal NestJS
+memproses maksimal dua job sekaligus. Jika NestJS berhenti, job yang belum
+selesai dimasukkan lagi ke antrean saat backend menyala.
 Dalam Docker, worker embedded di backend dimatikan dan service `worker` dipakai
 sebagai worker terpisah. Satu worker default memproses maksimal dua job, sedangkan
 pengambilan tile OSM dan clustering memiliki worker thread internal yang jumlahnya
@@ -250,55 +238,38 @@ atau item agar dua boundary bernama sama tidak saling menimpa.
 
 ### Prasyarat
 
-- Python 3.11+;
-- Node.js 20+;
-- PostgreSQL dengan PostGIS atau Docker;
-- Redis;
-- SeaweedFS;
-- akses internet ke OpenStreetMap/Overpass.
+- Node.js 20+ dan pnpm;
+- PostgreSQL dengan PostGIS yang sudah tersedia secara lokal;
+- S3-compatible object storage yang dikonfigurasi melalui `.env`;
+- akses internet ke OpenStreetMap/Overpass untuk area kecil, atau dataset OSM PostGIS untuk area besar.
 
-Install dependency backend:
+Backend NestJS memakai database yang sama dengan Better Auth. Jalankan migrasi Drizzle satu kali dari folder `app/nest/`:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r app/server/requirements-dev.txt
-```
-
-Install dependency dashboard:
-
-```bash
-cd app/web
+cd app/nest
 pnpm install
-cd ../..
+pnpm db:migrate
 ```
 
-Jalankan dashboard development dari folder `app/web/`:
+Jalankan backend lokal di port `8000`:
 
 ```bash
 pnpm dev
 ```
 
-Script development memakai port `3001`. Jalankan backend dari root project:
+Di terminal lain, jalankan dashboard Next.js lokal di port `3001`:
 
 ```bash
-cd app
-uvicorn server.main:app --reload --host 0.0.0.0 --port 8000
+cd app/web
+pnpm install
+pnpm dev
 ```
 
-`server.main` menjalankan ARQ worker lokal saat startup. Jika menjalankan worker terpisah secara manual, pastikan tidak menjalankan worker duplikat yang tidak diperlukan.
+## Deployment Docker Compose (konfigurasi lama)
 
-Pada Docker Compose, worker embedded backend otomatis dimatikan karena service
-`worker` berjalan terpisah.
-
-Worker manual:
-
-```bash
-cd app
-arq server.worker.WorkerSettings
-```
-
-## Deployment Docker Compose
+Jangan gunakan bagian ini untuk menjalankan backend NestJS. File Compose yang
+tersedia masih menjalankan FastAPI/ARQ dan belum dimigrasikan. Untuk penggunaan
+lokal, ikuti langkah di atas; Docker tidak diperlukan.
 
 ### Prasyarat
 

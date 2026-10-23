@@ -284,7 +284,7 @@ export default function Home() {
 
   useEffect(() => {
     // Active jobs already have an SSE connection (or the batch poller).
-    // Polling them again here only duplicates traffic and Redis reads.
+    // Polling them again here only duplicates the active progress request.
     if (isGenerating || isGeneratingHomepass) return;
     if (!sessionUserId || !activeJobsStorageKey) return;
     let cancelled = false;
@@ -296,7 +296,7 @@ export default function Home() {
         try {
           const response = await fetch(`/api/proxy/generate/status/${encodeURIComponent(jobId)}`, { cache: "no-store" });
           if (!response.ok) {
-            // Expired Redis jobs are no longer resumable.
+            // Jobs removed from the backend can no longer be resumed.
             continue;
           }
           const payload = await response.json();
@@ -1381,7 +1381,7 @@ export default function Home() {
 
         const resp = await response.json();
         if (resp.success) {
-          // The API creates the Redis progress state while accepting the job.
+          // The API saves the job state before accepting it.
           // Open SSE only after the POST succeeds to avoid reading the state too early.
           eventSource = new EventSource(`/api/proxy/generate/progress/${jobId}`);
           eventSource.onmessage = handleProgress;
@@ -1398,7 +1398,7 @@ export default function Home() {
         }
       } catch (error) {
         console.error("Error generating design:", error);
-        addToast("Error generating design. Is the Python API running?", "error");
+        addToast("Gagal membuat desain. Apakah backend NestJS berjalan?", "error");
         setGenerationProgress(null);
         setIsGenerating(false);
       }
@@ -1480,7 +1480,7 @@ export default function Home() {
         }
       } catch (error) {
         console.error("Error generating from custom KML:", error);
-        addToast("Error generating custom cables. Is the Python API running?", "error");
+        addToast("Gagal membuat kabel custom. Apakah backend NestJS berjalan?", "error");
         setGenerationProgress(null);
         setIsGenerating(false);
       }
@@ -1584,7 +1584,7 @@ export default function Home() {
       }
     } catch (error) {
       console.error("Error regenerating cables:", error);
-      addToast("Error regenerating cables. Is the Python API running?", "error");
+      addToast("Gagal membuat ulang kabel. Apakah backend NestJS berjalan?", "error");
       setIsGenerating(false);
       setGenerationProgress(null);
       setIsRegeneratingCables(false);
