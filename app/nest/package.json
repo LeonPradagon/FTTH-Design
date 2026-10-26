@@ -5,7 +5,12 @@
   "scripts": {
     "dev": "nest start --watch",
     "build": "nest build",
+    "test": "npm run build && node --test test/*.test.cjs",
     "start": "node dist/src/main.js",
+    "osm:download": "node --env-file-if-exists=../../.env dist/src/scripts/download-osm-pbf.js",
+    "osm:import": "node --env-file-if-exists=../../.env dist/src/scripts/import-osm-pbf.js",
+    "osm:update": "node --env-file-if-exists=../../.env dist/src/scripts/import-osm-pbf.js --download true",
+    "design:generate": "node --env-file-if-exists=../../.env dist/src/scripts/generate-design.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },

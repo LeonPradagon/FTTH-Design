@@ -1,0 +1,1 @@
+ALTER TABLE "design_cable" ALTER COLUMN "length" SET DATA TYPE double precision;

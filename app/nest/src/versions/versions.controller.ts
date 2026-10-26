@@ -1,10 +1,13 @@
-import { Controller, Delete, ForbiddenException, Get, Inject, NotFoundException, Param, Post, Query, Req, Res, StreamableFile, UseGuards } from '@nestjs/common';
+import { Controller, Delete, ForbiddenException, Get, HttpException, Inject, Param, Post, Query, Req, Res, StreamableFile, UseGuards } from '@nestjs/common';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { DB } from '../db/database.module';
 import { auditLogs, designCables, designOdcs, designOdps, designVersions, projects } from '../db/schema';
 import { ProxyAuthGuard } from '../auth/proxy-auth.guard';
 import { StorageService } from '../storage/storage.service';
+import { fastapiInteger } from '../http/fastapi-integer';
+
+const apiError = (code: string, message: string, status = 404) => new HttpException({ success: false, error: { code, message } }, status);
 
 @Controller('api/projects/:projectId/versions')
 @UseGuards(ProxyAuthGuard)
@@ -13,7 +16,7 @@ export class VersionsController {
 
   private async project(projectId: string, user: any) {
     const [project] = await this.db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
-    if (!project || (user.role !== 'viewer' && project.userId !== user.id)) throw new NotFoundException('Project not found or access denied');
+    if (!project || (user.role !== 'viewer' && project.userId !== user.id)) throw apiError('PROJECT_NOT_FOUND', 'Project not found or access denied');
     return project;
   }
 
@@ -36,8 +39,8 @@ export class VersionsController {
   @Get('compare/versions')
   async compare(@Param('projectId') projectId: string, @Query('v1') v1: string, @Query('v2') v2: string, @Req() req: any) {
     await this.project(projectId, req.user);
-    const [one, two] = await Promise.all([this.version(projectId, Number(v1)), this.version(projectId, Number(v2))]);
-    if (!one || !two) throw new NotFoundException('One or both versions not found');
+    const [one, two] = await Promise.all([this.version(projectId, fastapiInteger(v1, 'query', 'v1')), this.version(projectId, fastapiInteger(v2, 'query', 'v2'))]);
+    if (!one || !two) throw apiError('VERSION_NOT_FOUND', 'One or both versions not found');
     const a = one.stats ?? {}, b = two.stats ?? {};
     return { success: true, data: { v1: one, v2: two, diff: {
       odc_count_diff: (b.odc_count ?? 0) - (a.odc_count ?? 0), odp_count_diff: (b.odp_count ?? 0) - (a.odp_count ?? 0),
@@ -48,11 +51,11 @@ export class VersionsController {
   @Get(':version/export/:artifact')
   async export(@Param('projectId') projectId: string, @Param('version') version: string, @Param('artifact') artifact: string, @Req() req: any, @Res({ passthrough: true }) res: any) {
     await this.project(projectId, req.user);
-    const result = await this.version(projectId, Number(version));
-    if (!result) throw new NotFoundException(`Version ${version} not found`);
-    if (artifact !== 'kmz' && artifact !== 'csv') throw new NotFoundException('Artifact not found');
+    if (artifact !== 'kmz' && artifact !== 'csv') throw apiError('ARTIFACT_NOT_FOUND', 'Artifact not found');
+    const result = await this.version(projectId, fastapiInteger(version, 'path', 'version'));
+    if (!result) throw apiError('VERSION_NOT_FOUND', `Version ${version} not found`);
     const key = result.metadata?.artifacts?.[artifact];
-    if (!key) throw new NotFoundException('Artifact not found');
+    if (!key) throw apiError('ARTIFACT_NOT_FOUND', 'Artifact not found');
     const object = await this.storage.download(key);
     res.setHeader('Content-Type', object.contentType);
     if (object.contentLength != null) res.setHeader('Content-Length', object.contentLength);
@@ -63,8 +66,8 @@ export class VersionsController {
   @Get(':version')
   async get(@Param('projectId') projectId: string, @Param('version') version: string, @Req() req: any) {
     await this.project(projectId, req.user);
-    const result = await this.version(projectId, Number(version));
-    if (!result) throw new NotFoundException(`Version ${version} not found`);
+    const result = await this.version(projectId, fastapiInteger(version, 'path', 'version'));
+    if (!result) throw apiError('VERSION_NOT_FOUND', `Version ${version} not found`);
     return { success: true, data: result };
   }
 
@@ -72,8 +75,8 @@ export class VersionsController {
   async remove(@Param('projectId') projectId: string, @Param('version') version: string, @Req() req: any) {
     if (req.user.role !== 'admin') throw new ForbiddenException('Admin access is required');
     await this.project(projectId, req.user);
-    const result = await this.version(projectId, Number(version));
-    if (!result) throw new NotFoundException(`Version ${version} not found`);
+    const result = await this.version(projectId, fastapiInteger(version, 'path', 'version'));
+    if (!result) throw apiError('VERSION_NOT_FOUND', `Version ${version} not found`);
     await this.db.transaction(async (tx: any) => {
       await tx.delete(designVersions).where(eq(designVersions.id, result.id));
       await tx.insert(auditLogs).values({ id: randomUUID(), userId: req.user.id, action: 'DELETE_VERSION', projectId, versionId: result.id, details: { old: { version: result.version }, new: null } });
@@ -82,10 +85,10 @@ export class VersionsController {
   }
 
   @Post(':version/duplicate')
-  duplicate(@Param('projectId') projectId: string, @Param('version') version: string, @Req() req: any) { return this.copy(projectId, Number(version), req.user, 'DUPLICATE_VERSION'); }
+  duplicate(@Param('projectId') projectId: string, @Param('version') version: string, @Req() req: any) { return this.copy(projectId, fastapiInteger(version, 'path', 'version'), req.user, 'DUPLICATE_VERSION'); }
 
   @Post(':version/rollback')
-  rollback(@Param('projectId') projectId: string, @Param('version') version: string, @Req() req: any) { return this.copy(projectId, Number(version), req.user, 'ROLLBACK_VERSION'); }
+  rollback(@Param('projectId') projectId: string, @Param('version') version: string, @Req() req: any) { return this.copy(projectId, fastapiInteger(version, 'path', 'version'), req.user, 'ROLLBACK_VERSION'); }
 
   private async copy(projectId: string, number: number, user: any, action: string) {
     if (!['admin', 'engineer', 'user'].includes(user.role)) throw new ForbiddenException('Generation access is not allowed');
@@ -93,7 +96,7 @@ export class VersionsController {
     return this.db.transaction(async (tx: any) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${projectId}))`);
       const [source] = await tx.select().from(designVersions).where(and(eq(designVersions.projectId, projectId), eq(designVersions.version, number))).limit(1);
-      if (!source) throw new NotFoundException(`Version ${number} not found`);
+      if (!source) throw apiError('VERSION_NOT_FOUND', `Version ${number} not found`);
       const [last] = await tx.select({ version: designVersions.version }).from(designVersions).where(eq(designVersions.projectId, projectId)).orderBy(desc(designVersions.version)).limit(1);
       const [duplicate] = await tx.insert(designVersions).values({ ...source, id: randomUUID(), version: (last?.version ?? 0) + 1, createdAt: new Date() }).returning();
       await tx.execute(sql`INSERT INTO "design_odc" ("id", "designVersionId", "label", "location") SELECT gen_random_uuid(), ${duplicate.id}, "label", "location" FROM "design_odc" WHERE "designVersionId" = ${source.id}`);

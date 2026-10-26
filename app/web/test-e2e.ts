@@ -30,18 +30,19 @@ async function testEndToEnd() {
       if (match) rawToken = match[1];
     }
     
-    // 3. Make request to Python API proxy
-    console.log("Testing server proxy with parsed cookie...");
+    // 3. Make request through the NestJS API proxy
+    console.log("Testing NestJS proxy with parsed cookie...");
     const proxyRes = await fetch("http://localhost:3001/api/proxy/api/projects", {
       headers: {
         "Cookie": `better-auth.session_token=${rawToken}`
       }
     });
     console.log("Proxy API Status:", proxyRes.status);
+    const payload = await proxyRes.json();
     if (proxyRes.ok) {
-        console.log("Success! Proxy returned:", (await proxyRes.json()).length, "projects.");
+        console.log("Success! Proxy returned:", payload.data.length, "projects.");
     } else {
-        console.log("Proxy failed:", await proxyRes.text());
+        console.log("Proxy failed:", JSON.stringify(payload));
     }
     
 

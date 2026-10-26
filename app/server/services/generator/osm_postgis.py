@@ -300,6 +300,7 @@ def fetch_road_graph(boundary, pop=None, buffer_deg=0.002, force_refresh=False, 
     query_geometry = unary_union(geometries).convex_hull
     connection = _connect()
     graph = nx.MultiDiGraph()
+    graph.graph["crs"] = "EPSG:4326"
     graph.graph["ftth_data_source"] = "osm_postgis"
     graph.graph["ftth_dataset_id"] = dataset["dataset_id"]
     try:

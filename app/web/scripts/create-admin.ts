@@ -1,14 +1,11 @@
 import { auth } from "../src/lib/auth";
-import { PrismaClient } from "@prisma/client";
+import { sql } from "drizzle-orm";
+import { db } from "../src/lib/db";
 
 async function main() {
-  const prisma = new PrismaClient();
-  
   // Clean up old admins
   try {
-    await prisma.user.deleteMany({
-      where: { email: { in: ["admin@ftth.com", "admin@surge.com"] } }
-    });
+    await db.execute(sql`DELETE FROM "user" WHERE email IN ('admin@ftth.com', 'admin@surge.com')`);
   } catch {}
 
   // Create the user
@@ -29,10 +26,7 @@ async function main() {
   }
 
   // Update role to admin
-  await prisma.user.update({
-    where: { email: "admin@surge.com" },
-    data: { role: "admin" }
-  });
+  await db.execute(sql`UPDATE "user" SET role = 'admin' WHERE email = 'admin@surge.com'`);
   console.log("Role set to admin!");
 }
 

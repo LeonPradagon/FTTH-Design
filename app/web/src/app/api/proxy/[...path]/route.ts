@@ -7,7 +7,7 @@ import { auth } from "@/lib/auth";
 export const runtime = "nodejs";
 export const maxDuration = 900;
 
-const BACKEND_ORIGIN = process.env.BACKEND_URL || "http://127.0.0.1:8000";
+const BACKEND_ORIGIN = process.env.BACKEND_URL || "http://127.0.0.1:8001";
 const PROXY_TIMEOUT_MS = 15 * 60 * 1000;
 // Keep local development compatible with installations that only configured
 // BETTER_AUTH_SECRET. Production should still use a dedicated secret.
@@ -130,11 +130,13 @@ async function proxy(req: NextRequest) {
       resHeaders.set('content-encoding', 'none');
     }
 
+    const status = res.statusCode || 502;
+    if (req.method === 'HEAD' || [204, 205, 304].includes(status)) {
+      res.resume();
+      return new NextResponse(null, { status, headers: resHeaders });
+    }
     const responseBody = Readable.toWeb(res) as ReadableStream<Uint8Array>;
-    return new NextResponse(responseBody, {
-      status: res.statusCode || 502,
-      headers: resHeaders
-    });
+    return new NextResponse(responseBody, { status, headers: resHeaders });
   } catch (error: unknown) {
     const code = error && typeof error === 'object' && 'code' in error
       ? String(error.code)

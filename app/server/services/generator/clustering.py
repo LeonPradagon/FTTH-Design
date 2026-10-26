@@ -56,12 +56,24 @@ def capacitated_clustering(points, capacity, min_size=1):
             random.seed(42)  # Deterministic seed
             seed_pos = random.randint(0, len(rem_coords) - 1)
         else:
-            dists_to_last = np.linalg.norm(rem_coords - last_centroid, axis=1)
-            seed_pos = int(np.argmin(dists_to_last))
+            # Quantize sub-micrometer ties so Python and the Nest port choose
+            # the same first remaining point despite floating-point details.
+            seed_pos = min(
+                range(len(rem_coords)),
+                key=lambda index: (
+                    math.floor(math.hypot(*(rem_coords[index] - last_centroid)) * 1e12 + 0.5),
+                    index,
+                ),
+            )
         seed = rem_coords[seed_pos]
 
-        dists = np.linalg.norm(rem_coords - seed, axis=1)
-        order = np.argsort(dists)[:target_sizes[len(clusters)]]
+        order = sorted(
+            range(len(rem_coords)),
+            key=lambda index: (
+                math.floor(math.hypot(*(rem_coords[index] - seed)) * 1e12 + 0.5),
+                index,
+            ),
+        )[:target_sizes[len(clusters)]]
         cluster = remaining[order].tolist()
         clusters.append(cluster)
         last_centroid = coords[cluster].mean(axis=0)

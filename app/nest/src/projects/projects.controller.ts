@@ -1,9 +1,10 @@
-import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Inject, NotFoundException, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, HttpException, Inject, NotFoundException, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { and, desc, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { DB } from '../db/database.module';
 import { auditLogs, projects } from '../db/schema';
 import { ProxyAuthGuard } from '../auth/proxy-auth.guard';
+import { fastapiInteger } from '../http/fastapi-integer';
 
 const DEFAULT_COLORS = { pop: '#eab308', odc: '#ff0000', odp: '#0000ff', house: '#6b7280', feeder: '#ff0000', distribution: '#aa00ff' };
 const LEGACY_COLORS = [
@@ -11,13 +12,35 @@ const LEGACY_COLORS = [
   { pop: '#eab308', odc: '#ef4444', odp: '#3b82f6', house: '#6b7280', feeder: '#ef4444', distribution: '#8b5cf6' },
 ];
 const CONFIG_KEY = '__generation_config__';
+const PROJECT_FIELDS: [string, string, (value: unknown) => boolean][] = [
+  ['name', 'string', (value) => typeof value === 'string'],
+  ['layers', 'list', Array.isArray],
+  ['filters', 'dict', (value) => value !== null && typeof value === 'object' && !Array.isArray(value)],
+  ['feature_colors', 'dict', (value) => value !== null && typeof value === 'object' && !Array.isArray(value)],
+  ['generation_config', 'dict', (value) => value !== null && typeof value === 'object' && !Array.isArray(value)],
+];
+
+function validateProjectBody(body: any, creating: boolean) {
+  const errors: any[] = [];
+  for (const [name, type, valid] of PROJECT_FIELDS) {
+    if (body?.[name] === undefined) {
+      if (creating && name !== 'generation_config') errors.push({ type: 'missing', loc: ['body', name], msg: 'Field required', input: body });
+    } else if (!valid(body[name]) && !(body[name] === null && !creating)) {
+      errors.push({ type: `${type}_type`, loc: ['body', name], msg: `Input should be a valid ${type === 'dict' ? 'dictionary' : type}`, input: body[name] });
+    }
+  }
+  if (errors.length) throw new HttpException({ detail: errors }, 422);
+}
 
 function serialize(project: any) {
   const filters = project.filters && typeof project.filters === 'object' ? project.filters : {};
+  const storedConfig = project.generation_config && Object.keys(project.generation_config).length
+    ? project.generation_config
+    : filters[CONFIG_KEY] ?? {};
   return {
     id: project.id, name: project.name, layers: project.layers,
     filters: Object.fromEntries(Object.entries(filters).filter(([key]) => key !== CONFIG_KEY)),
-    feature_colors: project.feature_colors, generation_config: project.generation_config || filters[CONFIG_KEY] || {},
+    feature_colors: project.feature_colors, generation_config: storedConfig,
     userId: project.userId, created_at: project.created_at?.toISOString() ?? null, updated_at: project.updated_at?.toISOString() ?? null,
   };
 }
@@ -40,13 +63,13 @@ export class ProjectsController {
   async create(@Body() body: any, @Req() req: any) {
     const user = req.user;
     this.requireGeneration(user);
-    if (typeof body?.name !== 'string' || !body.name.trim()) throw new BadRequestException('Project name is required');
+    validateProjectBody(body, true);
     const now = new Date();
-    const filters = { ...(body.filters ?? {}), [CONFIG_KEY]: body.generation_config ?? {} };
+    const filters = { ...body.filters, [CONFIG_KEY]: body.generation_config ?? {} };
     const project = await this.db.transaction(async (tx: any) => {
       const [created] = await tx.insert(projects).values({
-        id: randomUUID(), name: body.name.trim(), layers: body.layers ?? [], filters,
-        feature_colors: user.role === 'admin' ? this.allowedColors(body.feature_colors ?? {}) : DEFAULT_COLORS,
+        id: randomUUID(), name: body.name, layers: body.layers, filters,
+        feature_colors: user.role === 'admin' ? this.allowedColors(body.feature_colors) : DEFAULT_COLORS,
         generation_config: body.generation_config ?? {}, userId: user.id, created_at: now, updated_at: now,
       }).returning();
       await tx.insert(auditLogs).values({ id: randomUUID(), userId: user.id, action: 'CREATE_PROJECT', projectId: created.id, details: { old: null, new: serialize(created) } });
@@ -58,7 +81,7 @@ export class ProjectsController {
   @Get()
   async list(@Req() req: any, @Query('skip') skip = '0', @Query('limit') limit = '100') {
     const where = req.user.role === 'viewer' ? undefined : eq(projects.userId, req.user.id);
-    const rows = await this.db.select().from(projects).where(where).orderBy(desc(projects.updated_at)).offset(Math.max(0, Number(skip) || 0)).limit(Math.min(100, Math.max(1, Number(limit) || 100)));
+    const rows = await this.db.select().from(projects).where(where).orderBy(desc(projects.updated_at)).offset(fastapiInteger(skip, 'query', 'skip')).limit(fastapiInteger(limit, 'query', 'limit'));
     return { success: true, data: rows.map(serialize) };
   }
 
@@ -72,19 +95,24 @@ export class ProjectsController {
   @Put(':id')
   async update(@Param('id') id: string, @Body() body: any, @Req() req: any) {
     this.requireGeneration(req.user);
+    validateProjectBody(body, false);
     const [project] = await this.db.select().from(projects).where(eq(projects.id, id)).limit(1);
     this.access(project, req.user);
+    const generationConfig = body.generation_config ?? undefined;
     const filters = body.filters === undefined
-      ? body.generation_config === undefined ? project.filters : { ...(project.filters ?? {}), [CONFIG_KEY]: body.generation_config }
-      : { ...(body.filters ?? {}), ...(body.generation_config === undefined ? {} : { [CONFIG_KEY]: body.generation_config }) };
-    const [updated] = await this.db.update(projects).set({
-      ...(body.name === undefined ? {} : { name: body.name }), ...(body.layers === undefined ? {} : { layers: body.layers }),
-      ...(body.filters === undefined && body.generation_config === undefined ? {} : { filters }),
-      ...(body.generation_config === undefined ? {} : { generation_config: body.generation_config }),
-      ...(req.user.role === 'admin' && body.feature_colors !== undefined ? { feature_colors: this.allowedColors(body.feature_colors) } : req.user.role === 'admin' ? {} : { feature_colors: DEFAULT_COLORS }),
-      updated_at: new Date(),
-    }).where(eq(projects.id, id)).returning();
-    await this.audit(req.user.id, 'UPDATE_PROJECT', id, serialize(project), serialize(updated));
+      ? generationConfig === undefined ? project.filters : { ...(project.filters ?? {}), [CONFIG_KEY]: generationConfig }
+      : { ...(body.filters ?? {}), ...(generationConfig === undefined ? {} : { [CONFIG_KEY]: generationConfig }) };
+    const updated = await this.db.transaction(async (tx: any) => {
+      const [row] = await tx.update(projects).set({
+        ...(body.name === undefined ? {} : { name: body.name }), ...(body.layers === undefined ? {} : { layers: body.layers }),
+        ...(body.filters === undefined && generationConfig === undefined ? {} : { filters }),
+        ...(generationConfig === undefined ? {} : { generation_config: generationConfig }),
+        ...(req.user.role === 'admin' && body.feature_colors != null ? { feature_colors: this.allowedColors(body.feature_colors) } : req.user.role === 'admin' ? {} : { feature_colors: DEFAULT_COLORS }),
+        updated_at: new Date(),
+      }).where(eq(projects.id, id)).returning();
+      await tx.insert(auditLogs).values({ id: randomUUID(), userId: req.user.id, action: 'UPDATE_PROJECT', projectId: id, details: { old: serialize(project), new: serialize(row) } });
+      return row;
+    });
     return { success: true, data: serialize(updated) };
   }
 

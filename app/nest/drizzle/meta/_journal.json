@@ -8,6 +8,41 @@
       "when": 1792744794305,
       "tag": "0000_pretty_vargas",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792984863177,
+      "tag": "0001_osm_dataset",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792984941532,
+      "tag": "0002_osm_geometry_srid",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792990666727,
+      "tag": "0003_cuddly_maddog",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793006760690,
+      "tag": "0004_bumpy_agent_zero",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793006833970,
+      "tag": "0005_omniscient_umar",
+      "breakpoints": true
     }
   ]
 }

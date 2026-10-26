@@ -14,14 +14,27 @@ Aplikasi web untuk membuat rancangan jaringan Fiber To The Home (FTTH) dari data
 - Banyak design dalam satu project dikelompokkan berdasarkan batch tanpa menimpa design lama.
 - Export KMZ dan CSV. KML di dalam KMZ dibaca langsung oleh dashboard untuk menampilkan layer map.
 - PostgreSQL + PostGIS untuk metadata project/design dan SeaweedFS untuk file.
-- Better Auth, ownership project, signed proxy header, dan audit log.
+- Better Auth, ownership project, signed proxy header dengan format signature ketat, dan audit log.
 
 ### Status migrasi backend
 
 - API NestJS menggantikan FastAPI untuk runtime lokal; Drizzle mengelola schema PostgreSQL/PostGIS yang sama.
-- Job generation, progress, project, version, audit, upload, dan storage memiliki endpoint NestJS.
-- Data OSM diambil dari Overpass atau dataset PostGIS aktif. Utilitas Python untuk mengimpor OSM PBF masih disimpan.
-- Port generator TypeScript belum mencapai parity penuh dengan Python. Clustering berkapasitas dan ukuran minimum, centroid poligon bangunan, titik rumah dari footprint yang memotong boundary, deduplikasi koordinat rumah, snapping dan routing dari proyeksi ruas jalan termasuk biaya ruas parsial, penjarakan ODC mulai dari proyeksi ruas jalan, feeder nearest-neighbor/2-opt, routing prioritas jalan dan retry dua arah untuk jalan satu arah, cache kandidat road-walk saat penjarakan ODC, pemilihan tree distribusi berdasarkan biaya routing, pemilihan POP berdasarkan prioritas OSM, validasi radius/panjang kabel, pemeriksaan konektivitas/tree/duplikasi, normalisasi urutan dan ID ODC pada desain custom, query/cache OSM online per tile termasuk connector road, cache hasil query PostGIS lokal per boundary beserta ID bangunan per tile regional, cache graf jalan lokal berbasis data OSM dan strategi routing, checkpoint tile per job yang dapat dilanjutkan setelah restart, CSV rincian material, folder KMZ dan boundary termasuk lubang, ikon rumah KMZ mandiri, dan batch satu design dengan penggabungan polygon, pengenalan file tak berlabel, prioritas POP tertanam, serta status tanpa POP sudah dipindahkan. Optimasi routing feeder/distribusi lanjutan, beberapa aturan validasi desain custom, dan pembatalan komputasi job yang sedang berjalan masih perlu disamakan.
+- Job generation, progress, project, version, audit, upload, dan storage memiliki endpoint NestJS. SSE progress mengirim heartbeat terpisah selama status tidak berubah agar koneksi ekspor panjang tetap aktif.
+- Endpoint `/data/...` Nest menerima key file bertingkat dari router Express dan mengembalikan 404 untuk key di luar akses pengguna, seperti FastAPI.
+- Antrean Nest disimpan di database, diklaim dengan advisory lock lintas-instance, dan job RUNNING tanpa lock dipulihkan setelah batas timeout worker.
+- Rate limit upload/generation tersimpan atomik di PostgreSQL agar tetap konsisten antar-instance. Pembatalan menyimpan status lintas-instance dan mengirim AbortSignal ke permintaan OSM; komputasi sinkron berhenti pada checkpoint fase berikutnya.
+- Validasi parameter integer project/version, field wajib pembuatan project, tipe field pembaruan project, JSON opsi generation, dan envelope error audit mengikuti format FastAPI.
+- CLI generator Nest tersedia melalui `cd app/nest && npm run build && npm run design:generate -- --input area.kmz`; CLI mendukung file boundary/POP terpisah, rumah manual, target homepass, kapasitas perangkat, strategi routing, jalur lurus, ekspor KMZ/CSV, dan jarak minimum ODC.
+- Jalur custom KML Nest mengikuti default Python (routing priority-road, kapasitas splitter 1:10 dan 1:4, distribusi 500 m, homepass aktif, serta buffer jalan 0,015°). Mode CLI rumah manual + jalur lurus tidak memerlukan query OSM; saat jaringan jalan gagal diambil atau kosong, CLI rumah manual beralih ke kabel lurus seperti Python. Keduanya dicakup tes parity Nest.
+- Input OSM online Nest mengambil bangunan node/way dari Native API dan relasi multipolygon dari Overpass. Jika Native API tidak memberi bangunan, atau POP otomatis belum menemukan stasiun/kantor, Nest mencoba Overpass seperti provider Python. Pada mode otomatis, respons online tanpa bangunan juga memicu fallback penuh ke PostGIS lokal. Jalan dari Native/Overpass dibuat dua arah seperti graf online Python; graph PostGIS lokal mempertahankan arah edge `source_node → target_node` seperti provider Python dan mencoba arah balik hanya saat rute terarah tidak tersedia. Prioritas sumbernya Native OSM API, lalu Overpass, kemudian PostGIS lokal; area online dibagi menjadi tile. Tes mencakup parsing relasi dengan ring dalam, fallback sumber, dan POP `building=office`.
+- POP otomatis Nest mempertahankan nama POI OSM dan memakai fallback stasiun/kantor/jalan yang sama dengan provider Python; prioritas stasiun atas kantor/jalan dan fallback label dicakup tes.
+- Rebalancing distribusi Nest tetap menerapkan assignment global yang feasible sebelum membuat ODC recovery untuk rute tersisa, seperti pipeline Python; skenario kapasitas silang dengan ODP recovery dicakup tes.
+- Ringkasan batch Nest hanya menampilkan retry terbaru untuk tiap item, memakai hitungan completed/failed/canceled dan nama file core yang sama dengan Python.
+- Cache Network Core versi 4 Python dapat dipakai oleh endpoint Homepass dan Regenerate Nest, termasuk pemulihan scope proyek default; Regenerate mengunduh jaringan jalan bila pickle graph Python tidak dapat dibaca lalu menyimpan graph hasil konversi ke cache Nest. Kedua endpoint mempertahankan `job_id` dari FE agar SSE memakai ID job yang sama, dan tidak membuat versi desain baru seperti worker Python.
+- CSV Nest mengikuti radius haversine Python, format angka float Python, dan ID ODC mentah pada baris feeder; nama feeder di KMZ juga menggunakan nama POP seperti Python. Fixture CSV dan label feeder dicakup tes parity.
+- Data OSM diambil dari Overpass, Native OSM API, atau dataset PostGIS aktif. Tabel dataset OSM kini tercatat di schema Drizzle; utilitas Python untuk mengimpor dan memperbarui OSM PBF masih disimpan.
+- Importer Nest dibandingkan langsung dengan Pyrosm pada PBF fixture lokal yang sama: 2 bangunan, 126 node, 120 edge, dan 2 POI. Impor POI sekarang memakai filter stasiun/kantor Pyrosm; fallback POP jalan memilih node jaringan seperti Python. Filter akses kendaraan Nest mengikuti urutan Pyrosm `motorcar`, `motor_vehicle`, `vehicle`, lalu `access`, dan mengabaikan area tertutup. Jumlah proses import diatur melalui `OSM_IMPORT_WORKERS` (default 1). Importer memproses bangunan multipolygon dan mengurutkan otomatis PBF fixture yang tidak terurut. Untuk import lokal, gunakan `cd app/nest && npm run build && npm run osm:import -- --pbf data/osm/indonesia-latest.osm.pbf`; `npm run osm:update` mengunduh lalu mengimpor. Dibutuhkan `osm2pgsql` 2.3.0+ dan `osmium-tool` lokal untuk input PBF yang tidak terurut.
+- Migrasi Python belum selesai: parity penuh untuk variasi input, ekspor, job, storage, dan pemulihan belum terbukti. Perbandingan CLI lokal pada 4 dan 12 rumah manual dengan kabel lurus menyamakan jumlah, penomoran, koordinat, dan geometri placemark; fixture jalan 8 rumah juga menyamakan geometri feeder/distribusi/drop. Pada PBF Monaco, 1.620 bangunan, 5.418 node, 5.607 edge, dan 146 POI Nest cocok dengan ekstraksi Pyrosm. Runtime CLI dengan 4 homepass dan strategi `priority_road` menghasilkan 10 placemark dengan nama dan geometri koordinat yang sama pada kedua implementasi. Fixture PBF kecil juga cocok seluruh record dan geometri. Alur API FE → Nest—upload boundary/POP, job hingga terminal, versi desain, dan unduh KMZ/CSV—sudah diuji pada dataset lokal Monaco; smoke test login FE → proxy Nest juga berhasil. Pengujian routing memakai graf Monaco yang sama kini mencocokkan seluruh 456 kandidat jalan untuk penggeseran ODC, serta posisi akhir semua 26 ODC setelah tahap spacing. Pada input Monaco API yang sama, Python dan Nest gagal pada tujuh ODP yang sama dan kini mengembalikan daftar, urutan ODP, mapping ODC, serta pesan kegagalan yang sama. Keberhasilan ekspor untuk input ini belum terbukti karena Python sendiri berhenti pada kegagalan routing tersebut. Importer Nest memakai `osm2pgsql`, sedangkan Python memakai Pyrosm; variasi PBF regional, parity output API yang sukses, batch, cancel/recovery, dan siklus storage lintas backend masih perlu diverifikasi. Jangan hapus dependensi atau kode Python sebelum parity menyeluruh terbukti.
 - Data job dan design yang sudah ada tetap di database; migrasi Drizzle bersifat aditif dan idempotent.
 
 ## Arsitektur
@@ -33,7 +46,7 @@ Browser
 Next.js Dashboard :3001
   │  proxy + session verification
   ▼
-NestJS API :8000 ──────── PostgreSQL/PostGIS
+NestJS API :8001 ──────── PostgreSQL/PostGIS
   │                         └── project, version, audit, spatial data
   ├── Drizzle ORM ───────── schema dan query database
   ├── S3-compatible storage ─ input/output KML, KMZ, CSV
@@ -207,7 +220,7 @@ ke RAM setiap job.
 | `POST` | `/generate-custom` | Generate dari mapping KML custom |
 | `GET` | `/api/files/{filename}` | Download file milik user |
 
-Swagger tersedia di `http://localhost:8000/docs` saat backend berjalan.
+Health check NestJS tersedia di `http://localhost:8001/health` saat backend berjalan.
 
 ## Isolasi cache dan output
 
@@ -240,7 +253,7 @@ atau item agar dua boundary bernama sama tidak saling menimpa.
 
 - Node.js 20+ dan pnpm;
 - PostgreSQL dengan PostGIS yang sudah tersedia secara lokal;
-- S3-compatible object storage yang dikonfigurasi melalui `.env`;
+- S3-compatible object storage, atau mode filesystem lokal untuk development;
 - akses internet ke OpenStreetMap/Overpass untuk area kecil, atau dataset OSM PostGIS untuk area besar.
 
 Backend NestJS memakai database yang sama dengan Better Auth. Jalankan migrasi Drizzle satu kali dari folder `app/nest/`:
@@ -251,7 +264,18 @@ pnpm install
 pnpm db:migrate
 ```
 
-Jalankan backend lokal di port `8000`:
+Untuk berjalan tanpa SeaweedFS/MinIO, jalankan backend dalam mode filesystem lokal di port `8001`:
+
+```bash
+STORAGE_DRIVER=local pnpm dev
+```
+
+Proxy Next.js mengarah ke `http://127.0.0.1:8001` secara default. Jika port
+berbeda, atur `BACKEND_URL` di `app/web/.env` ke alamat NestJS.
+
+File tersimpan sementara di `USER_CACHE_ROOT` hanya bila menggunakan cache
+generator; file upload/download mode lokal disimpan di `${TMPDIR}/ftth_local_storage`.
+Untuk storage S3-compatible, cukup jalankan:
 
 ```bash
 pnpm dev

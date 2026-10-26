@@ -62,6 +62,15 @@ class TestCapacitatedClustering:
         c2 = capacitated_clustering(points, 10)
         assert c1 == c2
 
+    def test_equal_distance_ties_keep_input_order(self):
+        points = [((i * 31) % 40, (i * 17) % 40) for i in range(40)]
+        assert capacitated_clustering(points, 10) == [
+            [7, 21, 2, 16, 28, 30, 11, 35, 25, 37],
+            [39, 13, 4, 8, 34, 20, 22, 3, 17, 29],
+            [12, 26, 38, 31, 33, 0, 24, 15, 19, 10],
+            [1, 27, 6, 32, 36, 18, 5, 23, 9, 14],
+        ]
+
 
 class TestCentroidOf:
     def test_single_point(self):

@@ -9,10 +9,11 @@ import { FilesController } from './files/files.controller';
 import { StorageModule } from './storage/storage.module';
 import { GenerationController } from './generation/generation.controller';
 import { GeneratorService } from './generation/generator.service';
+import { GenerationRateLimiter } from './auth/generation-rate-limiter';
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../../.env', '../.env', '.env'] }), DatabaseModule, StorageModule],
   controllers: [HealthController, ProjectsController, AuditController, VersionsController, FilesController, GenerationController],
-  providers: [GeneratorService],
+  providers: [GeneratorService, GenerationRateLimiter],
 })
 export class AppModule {}
