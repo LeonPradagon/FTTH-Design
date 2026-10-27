@@ -1,6 +1,6 @@
 import { HttpException } from '@nestjs/common';
 
-export function fastapiInteger(value: unknown, source: 'query' | 'path', name: string, defaultValue?: number): number {
+export function integerParameter(value: unknown, source: 'query' | 'path', name: string, defaultValue?: number): number {
   if (value === undefined && defaultValue !== undefined) return defaultValue;
   const input = typeof value === 'string' ? value.trim() : '';
   if (!/^[+-]?\d+$/.test(input) || !Number.isSafeInteger(Number(input))) {

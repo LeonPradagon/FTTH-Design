@@ -16,7 +16,7 @@ If these files do not exist, proceed silently. Domain-modeling skills create the
 ├── CONTEXT.md
 ├── docs/adr/
 └── app/
-    ├── server/
+    ├── nest/
     └── web/
 ```
 

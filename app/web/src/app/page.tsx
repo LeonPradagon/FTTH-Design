@@ -1024,11 +1024,42 @@ export default function Home() {
       (payload.data.jobs || []).forEach((job: { job_id?: string }) => job.job_id && rememberJob(job.job_id));
       addToast("1 design gabungan sedang diproses.", "info");
 
+      // ponytail: stop retrying after 2 minutes so a dead API surfaces instead of polling forever.
+      let pollConnectionLostAt: number | undefined;
       const poll = async (): Promise<void> => {
-        const result = await fetch(`/api/proxy/generate/batch/${batchId}`, { cache: "no-store" });
+        let result: Response;
+        try {
+          result = await fetch(`/api/proxy/generate/batch/${batchId}`, { cache: "no-store" });
+        } catch (error) {
+          pollConnectionLostAt ??= Date.now();
+          if (Date.now() - pollConnectionLostAt < 120_000) {
+            setGenerationProgress(current => current
+              ? { ...current, message: "Koneksi status batch terputus, mencoba kembali..." }
+              : current);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            return poll();
+          }
+          throw error;
+        }
         const statePayload = await result.json();
         const state = statePayload.data;
-        if (!state) throw new Error("Status batch tidak ditemukan");
+        if (!result.ok && result.status >= 500 && result.status <= 599) {
+          pollConnectionLostAt ??= Date.now();
+          if (Date.now() - pollConnectionLostAt < 120_000) {
+            setGenerationProgress(current => current
+              ? { ...current, message: "Koneksi status batch terputus, mencoba kembali..." }
+              : current);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            return poll();
+          }
+        }
+        if (!result.ok || !statePayload.success || !state) {
+          const message = (typeof statePayload.error === "string" ? statePayload.error : statePayload.error?.message)
+            || (typeof statePayload.detail === "string" ? statePayload.detail : statePayload.detail?.message)
+            || statePayload.message;
+          throw new Error(message || `Gagal mengambil status batch (HTTP ${result.status})`);
+        }
+        pollConnectionLostAt = undefined;
         const jobs: {
           status: string;
           item_id: string;

@@ -44,7 +44,7 @@ services:
   migrate:
     build:
       context: .
-      dockerfile: app/web/Dockerfile
+      dockerfile: app/nest/Dockerfile
       target: migrate
     restart: "no"
     environment:
@@ -55,30 +55,17 @@ services:
     networks:
       - backend
 
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    networks:
-      - backend
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  server:
+  api:
     build:
       context: .
-      dockerfile: app/server/Dockerfile
+      dockerfile: app/nest/Dockerfile
     restart: unless-stopped
     init: true
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-ftth}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ftth}?schema=public
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env.prod}
       BACKEND_PROXY_SECRET: ${BACKEND_PROXY_SECRET:?Set BACKEND_PROXY_SECRET in .env.prod}
-      REDIS_URL: redis://redis:6379/0
-      USER_CACHE_ROOT: /workspace/app/server/cache/users
-      RUN_EMBEDDED_WORKER: "false"
+      USER_CACHE_ROOT: /workspace/app/nest/cache/users
       OSM_SOURCE_MODE: ${OSM_SOURCE_MODE:-auto}
       OSM_ONLINE_MAX_AREA_KM2: ${OSM_ONLINE_MAX_AREA_KM2:-25}
       OSM_ONLINE_MAX_TILES: ${OSM_ONLINE_MAX_TILES:-4}
@@ -95,88 +82,23 @@ services:
       STORAGE_REGION: ${STORAGE_REGION:-us-east-1}
       STORAGE_FORCE_PATH_STYLE: ${STORAGE_FORCE_PATH_STYLE:-true}
     ports:
-      - "8000:8000"
+      - "8001:8001"
     volumes:
-      - generated_data:/workspace/app/server/data
-      - backend_cache:/workspace/app/server/cache
+      - nest_cache:/workspace/app/nest/cache
     depends_on:
       migrate:
         condition: service_completed_successfully
       seaweedfs:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     networks:
       - frontend
       - backend
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/docs', timeout=3)"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8001/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 10
       start_period: 30s
-
-  worker:
-    build:
-      context: .
-      dockerfile: app/server/Dockerfile
-    command: ["arq", "server.worker.WorkerSettings"]
-    restart: unless-stopped
-    init: true
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-ftth}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ftth}?schema=public
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env.prod}
-      REDIS_URL: redis://redis:6379/0
-      USER_CACHE_ROOT: /workspace/app/server/cache/users
-      OSM_SOURCE_MODE: ${OSM_SOURCE_MODE:-auto}
-      OSM_ONLINE_MAX_AREA_KM2: ${OSM_ONLINE_MAX_AREA_KM2:-25}
-      OSM_ONLINE_MAX_TILES: ${OSM_ONLINE_MAX_TILES:-4}
-      OSM_LOCAL_FALLBACK_ON_ONLINE_FAILURE: ${OSM_LOCAL_FALLBACK_ON_ONLINE_FAILURE:-true}
-      OSM_CACHE_MAX_AGE_SECONDS: ${OSM_CACHE_MAX_AGE_SECONDS:-86400}
-      OSM_REQUEST_TIMEOUT_SECONDS: ${OSM_REQUEST_TIMEOUT_SECONDS:-30}
-      OSM_TILE_WORKERS: ${OSM_TILE_WORKERS:-4}
-      OSM_NATIVE_RETRIES: ${OSM_NATIVE_RETRIES:-3}
-      OSM_NATIVE_SPLIT_DEPTH: ${OSM_NATIVE_SPLIT_DEPTH:-2}
-      STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL:-http://seaweedfs:8333}
-      STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:-ftth-local}
-      STORAGE_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY:-ftth-local-secret}
-      STORAGE_BUCKET: ${STORAGE_BUCKET:-ftth-designs}
-      STORAGE_REGION: ${STORAGE_REGION:-us-east-1}
-      STORAGE_FORCE_PATH_STYLE: ${STORAGE_FORCE_PATH_STYLE:-true}
-    volumes:
-      - generated_data:/workspace/app/server/data
-      - backend_cache:/workspace/app/server/cache
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-      seaweedfs:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - backend
-      - egress
-
-  osm-importer:
-    profiles: ["osm-update"]
-    build:
-      context: .
-      dockerfile: app/server/Dockerfile.osm-importer
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-ftth}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ftth}?schema=public
-      OSM_PBF_URL: ${OSM_PBF_URL:-https://download.geofabrik.de/asia/indonesia-latest.osm.pbf}
-      OSM_PBF_PATH: ${OSM_PBF_PATH:-/data/osm/indonesia-latest.osm.pbf}
-      OSM_PBF_COVERAGE: ${OSM_PBF_COVERAGE:-94,-11.5,141.5,6.5}
-      OSM_PBF_DOWNLOAD_TIMEOUT_SECONDS: ${OSM_PBF_DOWNLOAD_TIMEOUT_SECONDS:-3600}
-      OSM_IMPORT_WORKERS: ${OSM_IMPORT_WORKERS:-1}
-    volumes:
-      - osm_pbf_data:/data/osm
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - backend
-      - egress
 
   web:
     build:
@@ -191,12 +113,12 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-ftth}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ftth}?schema=public
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env.prod}
       BETTER_AUTH_URL: ${APP_URL:-http://localhost:3000}
-      BACKEND_URL: http://server:8000
+      BACKEND_URL: http://api:8001
       BACKEND_PROXY_SECRET: ${BACKEND_PROXY_SECRET:?Set BACKEND_PROXY_SECRET in .env.prod}
     ports:
       - "80:3000"
     depends_on:
-      server:
+      api:
         condition: service_healthy
     networks:
       - frontend
@@ -216,7 +138,5 @@ networks:
 
 volumes:
   postgres_data:
-  generated_data:
-  backend_cache:
+  nest_cache:
   seaweed_data:
-  osm_pbf_data:

@@ -7,33 +7,6 @@
 ehthumbs.db
 Thumbs.db
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-/lib/
-/lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-venv/
-.venv/
-env/
-.env
-
 # Next.js / Node.js
 node_modules/
 .pnpm-store/
@@ -44,6 +17,7 @@ yarn-error.log*
 .next/
 out/
 build/
+dist/
 .vercel
 *.tsbuildinfo
 
@@ -59,19 +33,14 @@ data/osm/
 temp_*.xml
 temp_osm.xml
 
-# Server-generated data outputs
+# Generated outputs
 *.log
-app/server/data/**/*.csv
-app/server/data/**/*.kml
-app/server/data/**/*.kmz
-app/server/data/**/*.log
 app/web/proxy-error.log
 
 # Database
 *.sqlite
 *.sqlite3
 *.db
-app/server/ftth.db
 
 
 # IDEs and Editors

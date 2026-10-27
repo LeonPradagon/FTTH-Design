@@ -16,27 +16,14 @@ Aplikasi web untuk membuat rancangan jaringan Fiber To The Home (FTTH) dari data
 - PostgreSQL + PostGIS untuk metadata project/design dan SeaweedFS untuk file.
 - Better Auth, ownership project, signed proxy header dengan format signature ketat, dan audit log.
 
-### Status migrasi backend
+### Backend NestJS
 
-- API NestJS menggantikan FastAPI untuk runtime lokal; Drizzle mengelola schema PostgreSQL/PostGIS yang sama.
-- Job generation, progress, project, version, audit, upload, dan storage memiliki endpoint NestJS. SSE progress mengirim heartbeat terpisah selama status tidak berubah agar koneksi ekspor panjang tetap aktif.
-- Endpoint `/data/...` Nest menerima key file bertingkat dari router Express dan mengembalikan 404 untuk key di luar akses pengguna, seperti FastAPI.
-- Antrean Nest disimpan di database, diklaim dengan advisory lock lintas-instance, dan job RUNNING tanpa lock dipulihkan setelah batas timeout worker.
-- Rate limit upload/generation tersimpan atomik di PostgreSQL agar tetap konsisten antar-instance. Pembatalan menyimpan status lintas-instance dan mengirim AbortSignal ke permintaan OSM; komputasi sinkron berhenti pada checkpoint fase berikutnya.
-- Validasi parameter integer project/version, field wajib pembuatan project, tipe field pembaruan project, JSON opsi generation, dan envelope error audit mengikuti format FastAPI.
-- CLI generator Nest tersedia melalui `cd app/nest && npm run build && npm run design:generate -- --input area.kmz`; CLI mendukung file boundary/POP terpisah, rumah manual, target homepass, kapasitas perangkat, strategi routing, jalur lurus, ekspor KMZ/CSV, dan jarak minimum ODC.
-- Jalur custom KML Nest mengikuti default Python (routing priority-road, kapasitas splitter 1:10 dan 1:4, distribusi 500 m, homepass aktif, serta buffer jalan 0,015°). Mode CLI rumah manual + jalur lurus tidak memerlukan query OSM; saat jaringan jalan gagal diambil atau kosong, CLI rumah manual beralih ke kabel lurus seperti Python. Keduanya dicakup tes parity Nest.
-- Input OSM online Nest mengambil bangunan node/way dari Native API dan relasi multipolygon dari Overpass. Jika Native API tidak memberi bangunan, atau POP otomatis belum menemukan stasiun/kantor, Nest mencoba Overpass seperti provider Python. Pada mode otomatis, respons online tanpa bangunan juga memicu fallback penuh ke PostGIS lokal. Jalan dari Native/Overpass dibuat dua arah seperti graf online Python; graph PostGIS lokal mempertahankan arah edge `source_node → target_node` seperti provider Python dan mencoba arah balik hanya saat rute terarah tidak tersedia. Prioritas sumbernya Native OSM API, lalu Overpass, kemudian PostGIS lokal; area online dibagi menjadi tile. Tes mencakup parsing relasi dengan ring dalam, fallback sumber, dan POP `building=office`.
-- POP otomatis Nest mempertahankan nama POI OSM dan memakai fallback stasiun/kantor/jalan yang sama dengan provider Python; prioritas stasiun atas kantor/jalan dan fallback label dicakup tes.
-- Rebalancing distribusi Nest tetap menerapkan assignment global yang feasible sebelum membuat ODC recovery untuk rute tersisa, seperti pipeline Python; skenario kapasitas silang dengan ODP recovery dicakup tes.
-- Ringkasan batch Nest hanya menampilkan retry terbaru untuk tiap item, memakai hitungan completed/failed/canceled dan nama file core yang sama dengan Python.
-- Cache Network Core versi 4 Python dapat dipakai oleh endpoint Homepass dan Regenerate Nest, termasuk pemulihan scope proyek default; Regenerate mengunduh jaringan jalan bila pickle graph Python tidak dapat dibaca lalu menyimpan graph hasil konversi ke cache Nest. Kedua endpoint mempertahankan `job_id` dari FE agar SSE memakai ID job yang sama, dan tidak membuat versi desain baru seperti worker Python.
-- CSV Nest mengikuti radius haversine Python, format angka float Python, dan ID ODC mentah pada baris feeder; nama feeder di KMZ juga menggunakan nama POP seperti Python. Fixture CSV dan label feeder dicakup tes parity.
-- Data OSM diambil dari Overpass, Native OSM API, atau dataset PostGIS aktif. Tabel dataset OSM kini tercatat di schema Drizzle; utilitas Python untuk mengimpor dan memperbarui OSM PBF masih disimpan.
-- Importer Nest dibandingkan langsung dengan Pyrosm pada PBF fixture lokal yang sama: 2 bangunan, 126 node, 120 edge, dan 2 POI. Impor POI sekarang memakai filter stasiun/kantor Pyrosm; fallback POP jalan memilih node jaringan seperti Python. Filter akses kendaraan Nest mengikuti urutan Pyrosm `motorcar`, `motor_vehicle`, `vehicle`, lalu `access`, dan mengabaikan area tertutup. Jumlah proses import diatur melalui `OSM_IMPORT_WORKERS` (default 1). Importer memproses bangunan multipolygon dan mengurutkan otomatis PBF fixture yang tidak terurut. Untuk import lokal, gunakan `cd app/nest && npm run build && npm run osm:import -- --pbf data/osm/indonesia-latest.osm.pbf`; `npm run osm:update` mengunduh lalu mengimpor. Dibutuhkan `osm2pgsql` 2.3.0+ dan `osmium-tool` lokal untuk input PBF yang tidak terurut.
-- Migrasi Python belum selesai: parity penuh untuk variasi input, ekspor, job, storage, dan pemulihan belum terbukti. Perbandingan CLI lokal pada 4 dan 12 rumah manual dengan kabel lurus menyamakan jumlah, penomoran, koordinat, dan geometri placemark; fixture jalan 8 rumah juga menyamakan geometri feeder/distribusi/drop. Pada PBF Monaco, 1.620 bangunan, 5.418 node, 5.607 edge, dan 146 POI Nest cocok dengan ekstraksi Pyrosm. Runtime CLI dengan 4 homepass dan strategi `priority_road` menghasilkan 10 placemark dengan nama dan geometri koordinat yang sama pada kedua implementasi. Fixture PBF kecil juga cocok seluruh record dan geometri. Alur API FE → Nest—upload boundary/POP, job hingga terminal, versi desain, dan unduh KMZ/CSV—sudah diuji pada dataset lokal Monaco; smoke test login FE → proxy Nest juga berhasil. Pengujian routing memakai graf Monaco yang sama kini mencocokkan seluruh 456 kandidat jalan untuk penggeseran ODC, serta posisi akhir semua 26 ODC setelah tahap spacing. Pada input Monaco API yang sama, Python dan Nest gagal pada tujuh ODP yang sama dan kini mengembalikan daftar, urutan ODP, mapping ODC, serta pesan kegagalan yang sama. Keberhasilan ekspor untuk input ini belum terbukti karena Python sendiri berhenti pada kegagalan routing tersebut. Importer Nest memakai `osm2pgsql`, sedangkan Python memakai Pyrosm; variasi PBF regional, parity output API yang sukses, batch, cancel/recovery, dan siklus storage lintas backend masih perlu diverifikasi. Jangan hapus dependensi atau kode Python sebelum parity menyeluruh terbukti.
-- Data job dan design yang sudah ada tetap di database; migrasi Drizzle bersifat aditif dan idempotent.
-
+- Backend aplikasi, antrean, importer, migrasi database, dan seluruh endpoint memakai NestJS + Drizzle. Tidak ada runtime atau dependency reference implementation.
+- Nest menyediakan generation core, Homepass, custom mapping, routing OSM online/lokal, import PBF, progress/cancel/recovery, batch/retry, project/version/audit, upload/download, dan object storage. Seluruh 28 route HTTP dari backend lama memiliki padanan Nest; Nest juga menyediakan health check.
+- Job dan rate limit tersimpan di PostgreSQL; antrean memakai advisory lock, SSE menyediakan progress, dan cache desain versi lama tetap dapat dibaca kode Nest untuk menjaga data project.
+- Uji Indonesia Mataram/Lombok menghasilkan 1.153 rumah, 29 ODC, 116 ODP; 2.626 baris CSV cocok dan 1.303 geometri KMZ cocok setelah normalisasi titik duplikat. Alur Next.js ke Nest untuk single dan batch selesai; KMZ/CSV berhasil diunduh.
+- PBF Nusa Tenggara menghasilkan hitungan dan ID/geometri yang sama pada pembandingan terdahulu. Pemeriksaan menemukan 8 selisih panjang edge hingga sekitar 1 mm; pembulatan panjang per-edge sudah dihapus. Perbandingan ulang nilai panjang dan normalisasi nama kosong/null masih diperlukan setelah import dataset yang sama.
+- Tes backend Nest: 91/91 lulus; build dashboard Next.js lulus. Import PBF lokal memakai skrip Nest dan memerlukan osm2pgsql 2.3.0+ serta osmium-tool untuk file yang belum terurut.
 ## Arsitektur
 
 ```text
@@ -61,10 +48,14 @@ NestJS API :8001 ──────── PostgreSQL/PostGIS
 | Database | `app/nest/src/db/` | Schema Drizzle PostgreSQL/PostGIS dan metadata design |
 | Storage | `app/nest/src/storage/` | Object storage S3-compatible |
 
-> Bagian alur generator dan pipeline lama di bawah ini menjelaskan perilaku backend Python sebelum migrasi. Fitur yang belum dipindahkan belum tersedia di runtime NestJS.
+> Detail alur di bawah menjelaskan penggunaan runtime NestJS saat ini.
 
-NestJS dapat mengambil OSM dari Overpass atau membaca dataset lokal PostGIS yang
-aktif. Routing dan pembuatan desain dilakukan di proses NestJS.
+Dalam mode normal (`auto`), NestJS mengecek cache tile lokal lebih dulu, lalu
+mengambil Native OSM/Overpass saat cache miss, untuk boundary kecil maupun besar.
+Cache tile disimpan di folder temporary sistem selama 24 jam; tidak perlu
+mengunduh PBF Indonesia atau mengisi database dengan data OSM. Mode `local`
+memakai dataset PostGIS secara eksplisit untuk penggunaan offline. Import PBF
+bersifat opsional. Routing dan pembuatan desain dilakukan di proses NestJS.
 
 ## Alur aplikasi
 
@@ -147,15 +138,10 @@ tidak dibuat. Semua ODP tetap dihitung terhadap kapasitas ODC.
 
 ### Worker dan concurrency
 
-Request HTTP membuat generation job di database, lalu antrean lokal NestJS
-memproses maksimal dua job sekaligus. Jika NestJS berhenti, job yang belum
-selesai dimasukkan lagi ke antrean saat backend menyala.
-Dalam Docker, worker embedded di backend dimatikan dan service `worker` dipakai
-sebagai worker terpisah. Satu worker default memproses maksimal dua job, sedangkan
-pengambilan tile OSM dan clustering memiliki worker thread internal yang jumlahnya
-dapat dikonfigurasi. Menambah concurrency meningkatkan throughput beberapa user,
-tetapi tidak selalu mempercepat satu design; terlalu banyak worker dapat berebut
-RAM/CPU dan memperlambat routing.
+Request HTTP membuat generation job di database, lalu antrean NestJS memproses
+maksimal dua job bersamaan per instance. Jika API berhenti, job yang tertinggal dipulihkan setelah API aktif kembali. Advisory lock database
+mencegah dua instance mengerjakan job yang sama. Pengambilan tile OSM berjalan
+paralel sesuai batas konfigurasi; sesuaikan jumlah job dengan kapasitas CPU dan RAM.
 
 ## Pipeline boundary besar
 
@@ -173,7 +159,7 @@ core_export_done
 homepass_done
 ```
 
-Cache tile generation dipisahkan berdasarkan user, project, batch, item, dan fingerprint geometry. Retry dapat menggunakan tile yang masih valid sehingga tidak selalu mengulang seluruh query. Nama tahap di atas adalah status progress pipeline, sedangkan file checkpoint fisiknya berupa `.houses.json` dan `.roads.pkl` per tile.
+Cache tile generation dipisahkan berdasarkan user, project, batch, item, dan fingerprint geometry. Retry dapat menggunakan tile yang masih valid sehingga tidak selalu mengulang seluruh query. Checkpoint OSM disimpan sebagai file JSON per tile.
 
 Cache OSM default berlaku 24 jam:
 
@@ -183,26 +169,23 @@ OSM_CACHE_MAX_AGE_SECONDS=86400
 
 Dashboard menyediakan opsi **Refresh data OSM** untuk memaksa fetch baru.
 
-### Rencana data OSM lokal skala besar
+### Data OSM lokal skala besar
 
 Untuk menyediakan data jalan dan gedung seluruh Indonesia secara lokal, alur
 yang direkomendasikan adalah:
 
 ```text
 OSM .pbf regional
-  -> PostgreSQL/PostGIS (source data bersama)
+  -> importer NestJS / osm2pgsql
+  -> PostgreSQL/PostGIS
   -> query jalan/gedung berdasarkan boundary + buffer POP
-  -> graph NetworkX per area
-  -> cache graph berdasarkan boundary dan versi data
+  -> graph jalan dan desain di NestJS
   -> generator
 ```
 
-Arsitektur ini belum aktif sebagai default. Saat ini aplikasi masih memakai
-cache file lokal dan OSM/Overpass sebagai fallback. PostGIS dapat ditambahkan
-kemudian tanpa mengubah output generator, selama data jalan yang diberikan ke
-NetworkX tetap memiliki atribut dan geometri yang sama. Untuk seluruh Indonesia,
-gunakan extract regional atau per provinsi; jangan memuat seluruh graph Indonesia
-ke RAM setiap job.
+Importer dan pipeline ini berjalan dari NestJS. Untuk seluruh Indonesia,
+gunakan extract regional atau per provinsi; jangan memuat seluruh data Indonesia
+ke RAM untuk satu job.
 
 ## Endpoint penting
 
@@ -234,7 +217,6 @@ USER_CACHE_ROOT/
           boundary_*.kml
           pop_*.kml
           design_state.json
-          road_graph.pkl
           core_manifest.json
           checkpoints/osm_tiles/{boundary-fingerprint}/
           core/                    # output batch
@@ -254,7 +236,7 @@ atau item agar dua boundary bernama sama tidak saling menimpa.
 - Node.js 20+ dan pnpm;
 - PostgreSQL dengan PostGIS yang sudah tersedia secara lokal;
 - S3-compatible object storage, atau mode filesystem lokal untuk development;
-- akses internet ke OpenStreetMap/Overpass untuk area kecil, atau dataset OSM PostGIS untuk area besar.
+- akses internet ke OpenStreetMap/Overpass; dataset PostGIS lokal bersifat opsional.
 
 Backend NestJS memakai database yang sama dengan Better Auth. Jalankan migrasi Drizzle satu kali dari folder `app/nest/`:
 
@@ -289,180 +271,15 @@ pnpm install
 pnpm dev
 ```
 
-## Deployment Docker Compose (konfigurasi lama)
+## Catatan Deployment
 
-Jangan gunakan bagian ini untuk menjalankan backend NestJS. File Compose yang
-tersedia masih menjalankan FastAPI/ARQ dan belum dimigrasikan. Untuk penggunaan
-lokal, ikuti langkah di atas; Docker tidak diperlukan.
-
-### Prasyarat
-
-- Docker dan Docker Compose;
-- domain atau IP server;
-- secret Better Auth;
-- secret proxy backend;
-- resource server yang cukup untuk PostgreSQL, Redis, SeaweedFS, dan worker.
-
-Service Compose:
-
-- `web`: dashboard Next.js;
-- `server`: FastAPI;
-- `worker`: ARQ generation worker;
-- `redis`: queue dan progress;
-- `db`: PostgreSQL + PostGIS;
-- `seaweedfs`: object storage.
-
-### Environment backend
-
-Buat `.env.prod` di root. Jangan commit file ini.
-
-```env
-DATABASE_URL=postgresql://postgres:password123@db:5432/ftth_db
-REDIS_URL=redis://redis:6379/0
-
-SEAWEEDFS_ACCESS_KEY_ID=ftth-local
-SEAWEEDFS_SECRET_ACCESS_KEY=ganti-secret-seaweedfs
-SEAWEEDFS_BUCKET=ftth-designs
-STORAGE_ENDPOINT_URL=http://seaweedfs:8333
-STORAGE_ACCESS_KEY_ID=ftth-local
-STORAGE_SECRET_ACCESS_KEY=ganti-secret-seaweedfs
-STORAGE_BUCKET=ftth-designs
-
-BETTER_AUTH_SECRET=secret-auth-yang-panjang
-BACKEND_PROXY_SECRET=secret-proxy-acak-minimal-32-byte
-CORS_ORIGINS=http://localhost:3000
-
-OSM_CACHE_MAX_AGE_SECONDS=86400
-OSM_REQUEST_TIMEOUT_SECONDS=15
-OSM_TILE_WORKERS=4
-OSM_NATIVE_RETRIES=3
-OSM_NATIVE_SPLIT_DEPTH=2
-OSM_SOURCE_MODE=auto
-OSM_ONLINE_MAX_AREA_KM2=25
-OSM_ONLINE_MAX_TILES=4
-OSM_LOCAL_FALLBACK_ON_ONLINE_FAILURE=true
-OSM_PBF_URL=https://download.geofabrik.de/asia/indonesia-latest.osm.pbf
-OSM_PBF_PATH=/data/osm/indonesia-latest.osm.pbf
-OSM_PBF_COVERAGE=94,-11.5,141.5,6.5
-CLUSTERING_ODP_WORKERS=15
-CLUSTERING_ODC_WORKERS=10
-ARQ_MAX_JOBS=2
-MAX_BATCH_FILES=100
-MAX_BATCH_FILE_BYTES=52428800
-MAX_UPLOAD_FILE_BYTES=52428800
-GENERATION_RATE_LIMIT=10
-GENERATION_RATE_WINDOW_SECONDS=60
-```
-
-Generator menyimpan checkpoint OSM lokal di `checkpoints/osm_tiles/` berdasarkan
-fingerprint boundary. Ini adalah cache data jalan/rumah, bukan database OSM
-offline penuh; tile baru tetap perlu diambil dari sumber OSM saat pertama kali
-dipakai. Setelah Network Core berhasil dibuat, `core_manifest.json` menyimpan
-identitas input, konfigurasi, dan versi algoritma. Generate Design dengan input
-yang sama dapat langsung memakai ODC/ODP serta jalur kabel yang tersimpan,
-sehingga tahap OSM, clustering, dan routing dilewati. Jika input atau konfigurasi
-berubah, cache turunan otomatis ditolak dan dibuat ulang.
-
-### Sumber data OSM online dan lokal
-
-Mode `auto` memakai OSM/Overpass online untuk boundary kecil agar data tetap
-fresh. Boundary besar memakai snapshot OSM PBF yang sudah diimport ke PostGIS
-lokal sehingga Generate tidak bergantung pada timeout API. Source, dataset, dan
-timestamp yang dipakai disimpan di manifest Network Core.
-
-Update snapshot OSM dijalankan sebagai job terpisah dan tidak berjalan ketika
-user menekan Generate. Contoh lokal:
-
-```bash
-docker compose --profile osm-update build
-docker compose --profile osm-update run --rm osm-importer -m server.scripts.download_osm_pbf
-docker compose --profile osm-update run --rm osm-importer -m server.scripts.import_osm_pbf --pbf /data/osm/indonesia-latest.osm.pbf
-```
-
-Untuk scheduler mingguan, kedua langkah tersebut dapat dijalankan sebagai satu
-command yang hanya mengaktifkan dataset baru setelah import dan validasi selesai:
-
-```bash
-docker compose --profile osm-update run --rm osm-importer -m server.scripts.update_osm_dataset
-```
-
-Untuk production, gunakan file `compose.prod.yaml` dan `.env.prod`. Karena
-`osm-importer` berada dalam profile `osm-update`, profile tersebut harus
-diaktifkan saat build agar seluruh image, termasuk image importer, ikut dibuild:
-
-```bash
-docker compose --env-file .env.prod -f compose.prod.yaml --profile osm-update build
-```
-
-Jalankan service utama seperti biasa:
-
-```bash
-docker compose --env-file .env.prod -f compose.prod.yaml up -d
-```
-
-Jalankan update/download dan import PBF sebagai job terpisah, misalnya saat
-bootstrap atau melalui scheduler mingguan:
-
-```bash
-docker compose --env-file .env.prod -f compose.prod.yaml --profile osm-update run --rm osm-importer -m server.scripts.update_osm_dataset
-```
-
-Perintah `up -d` tidak otomatis menjalankan importer. Ini disengaja karena
-download/import PBF adalah proses berat dan data PBF tidak perlu dibake ke dalam
-image Docker. Import baru masuk sebagai staging dan hanya menjadi aktif setelah
-seluruh data berhasil diproses; jika gagal, dataset aktif sebelumnya tetap dipakai.
-Importer menggunakan PostgreSQL `COPY` melalui temporary staging table untuk bulk
-insert building, node jalan, edge jalan, dan POI, sehingga tidak melakukan
-transaction commit untuk setiap batch kecil.
-
-### Environment frontend
-
-Buat `app/web/.env.prod`:
-
-```env
-BETTER_AUTH_SECRET=secret-auth-yang-panjang
-JWT_SECRET=secret-jwt-yang-panjang
-BETTER_AUTH_URL=https://ftth.example.com
-BACKEND_URL=http://server:8000
-BACKEND_PROXY_SECRET=secret-proxy-acak-yang-sama-dengan-backend
-```
-
-`BACKEND_PROXY_SECRET` harus sama di frontend dan backend. Proxy Next.js membuat signed service header; backend memvalidasi header tersebut. Jangan mengandalkan `X-User-Id` dari browser sebagai autentikasi production.
-
-Jalankan dari root project:
-
-```bash
-docker compose up -d --build
-```
-
-Endpoint:
-
-- Dashboard: `http://localhost:3000`;
-- API docs: `http://localhost:8000/docs`;
-- SeaweedFS tersedia di jaringan internal Docker melalui endpoint S3 port `8333`.
-
-Periksa status dan log:
-
-```bash
-docker compose ps
-docker compose logs -f server
-docker compose logs -f worker
-docker compose logs -f web
-```
-
-Hentikan service:
-
-```bash
-docker compose down
-```
-
-Database dan SeaweedFS berada di named volume. Jangan memakai `docker compose down -v` kecuali memang ingin menghapus seluruh data development.
+Aplikasi lokal menggunakan Next.js dan NestJS secara langsung; Docker tidak diperlukan. File Compose opsional memakai API NestJS, migrasi Drizzle, PostgreSQL/PostGIS, dan SeaweedFS. PBF lokal diimpor dengan perintah Nest di atas; proses tersebut memerlukan `osm2pgsql 2.3.0+` dan `osmium-tool`.
 
 ## Keamanan production
 
 - Generation mewajibkan session terautentikasi; hanya role `admin`, `engineer`, dan legacy `user` yang dapat menjalankan job.
 - Gunakan `BACKEND_PROXY_SECRET` acak dan berbeda dari password database.
-- Jangan expose Redis, PostgreSQL, dan SeaweedFS ke internet publik tanpa firewall/auth tambahan.
+- Jangan expose PostgreSQL dan SeaweedFS ke internet publik tanpa firewall/auth tambahan.
 - Ganti password default PostgreSQL dan SeaweedFS pada `compose.yml` sebelum deployment.
 - Batasi `CORS_ORIGINS` hanya ke domain dashboard.
 - Validasi ownership project dilakukan pada endpoint generation dan batch.
@@ -476,20 +293,15 @@ Database dan SeaweedFS berada di named volume. Jangan memakai `docker compose do
 
 ### Job berhenti di 0% / `Initializing...`
 
-```bash
-docker compose logs -f worker
-docker compose logs -f redis
-```
-
-Pastikan worker terhubung ke Redis dan fungsi ARQ terdaftar.
+Periksa output terminal API dan pastikan koneksi PostgreSQL/PostGIS serta object storage aktif.
 
 ### Job berhenti di export atau 85%
 
-Tahap tersebut biasanya sedang membuat KMZ/KML. Periksa jumlah ODP dan rumah di log worker. Untuk boundary besar, gunakan Network Core terlebih dahulu lalu Homepass terpisah.
+Tahap tersebut biasanya sedang membuat KMZ/KML. Periksa output terminal API dan jumlah ODP/rumah. Untuk boundary besar, gunakan Network Core terlebih dahulu lalu Homepass terpisah.
 
 ### `Job not found`
 
-Pastikan frontend dan backend memakai Redis database yang sama. Status progress disimpan di Redis, bukan hanya state React/browser.
+Status generation disimpan di PostgreSQL agar dapat dipulihkan setelah refresh dan restart API.
 
 ### `Cache Network Core ... generator lama`
 
@@ -508,13 +320,13 @@ Pastikan boundary/POP tidak diganti ketika generation berjalan. Dashboard mengun
 Backend test:
 
 ```bash
-PYTHONPATH=app python3 -m pytest -q app/server/tests tests --disable-warnings
+cd app/nest && npm test
 ```
 
 Compile check:
 
 ```bash
-python3 -m compileall -q app/server
+cd app/web && pnpm build
 ```
 
 Dashboard TypeScript, build, dan lint:
@@ -567,6 +379,6 @@ ODC 01
 ## Catatan operasional
 
 - Data OSM bersifat cache-aware dan tidak realtime. Default freshness adalah 24 jam.
-- Waktu generation bergantung pada luas boundary, jumlah bangunan, ukuran road graph, Overpass, dan resource worker.
+- Waktu generation bergantung pada luas boundary, jumlah bangunan, ukuran road graph, Overpass, dan resource API.
 - Homepass tetap dapat memakan waktu untuk boundary dengan ribuan rumah karena export KMZ membuat feature titik dan garis dalam jumlah besar.
-- Untuk banyak user, jalankan Redis, PostgreSQL, SeaweedFS, backend, dan worker sebagai service terpisah dengan monitoring dan backup.
+- Untuk banyak user, jalankan PostgreSQL, SeaweedFS, dan NestJS dengan monitoring dan backup.

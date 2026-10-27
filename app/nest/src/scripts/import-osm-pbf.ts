@@ -37,7 +37,7 @@ local drive = {
   motorway=true, motorway_link=true, trunk=true, trunk_link=true, primary=true,
   primary_link=true, secondary=true, secondary_link=true, tertiary=true,
   tertiary_link=true, unclassified=true, residential=true, living_street=true,
-  road=true
+  road=true, emergency_access_point=true, bridge=true
 }
 local function uid(object)
   return object.id
@@ -158,7 +158,7 @@ function pgEnvironment(connectionString: string) {
   };
 }
 
-async function runOsm2pgsql(pbf: string, schema: string, workdir: string, bbox?: number[]) {
+async function runOsm2pgsql(pbf: string, schema: string, workdir: string) {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw new Error('DATABASE_URL belum dikonfigurasi.');
   const pgEnv = pgEnvironment(connectionString);
@@ -178,7 +178,6 @@ async function runOsm2pgsql(pbf: string, schema: string, workdir: string, bbox?:
       `--database=${pgEnv.PGDATABASE}`, `--schema=${schema}`, `--middle-schema=${schema}`, `--prefix=${schema}`,
       `--number-processes=${importWorkerCount()}`,
     ];
-    if (bbox) args.push(`--bbox=${bbox.join(',')}`);
     args.push(pbf);
     const child = spawn(binary, args, { env: { ...process.env, OSM_STAGE_SCHEMA: schema, ...pgEnv } });
     let stderr = '';
@@ -234,14 +233,14 @@ async function importPbf(pbf: string, datasetId: string, sourceUrl: string, cove
 
     const workdir = await mkdtemp(resolve(tmpdir(), 'ftth-osm-'));
     try {
-      try { await runOsm2pgsql(pbf, schema, workdir, bbox); }
+      try { await runOsm2pgsql(pbf, schema, workdir); }
       catch (error) {
         if (!/Input data is not ordered/.test((error as any)?.stderr ?? '')) throw error;
         const sortedPbf = resolve(workdir, 'sorted.osm.pbf');
         await sortOsmPbf(pbf, sortedPbf);
         await client.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
         await client.query(`CREATE SCHEMA "${schema}"`);
-        await runOsm2pgsql(sortedPbf, schema, workdir, bbox);
+        await runOsm2pgsql(sortedPbf, schema, workdir);
       }
     }
     finally { await rm(workdir, { recursive: true, force: true }); }
@@ -252,12 +251,20 @@ async function importPbf(pbf: string, datasetId: string, sourceUrl: string, cove
     const buildings = await client.query(`
       INSERT INTO osm_data.building(dataset_id, osm_id, geom)
       SELECT $1, osm_id, ST_SetSRID(geom,4326) FROM "${schema}".buildings
-      ON CONFLICT (dataset_id, osm_id) DO NOTHING` , [datasetId]);
+      WHERE NOT $2::boolean OR ST_Intersects(geom, ST_MakeEnvelope($3,$4,$5,$6,4326))
+      ON CONFLICT (dataset_id, osm_id) DO NOTHING`, [datasetId, !!bbox, ...(bbox ?? [0, 0, 0, 0])]);
     await client.query(`
       INSERT INTO osm_data.road_node(dataset_id, node_id, geom)
-      SELECT DISTINCT ON (node_id) $1, node_id, ST_SetSRID(geom,4326)
-      FROM "${schema}".road_vertices ORDER BY node_id, way_id, sequence
-      ON CONFLICT (dataset_id,node_id) DO NOTHING`, [datasetId]);
+      SELECT DISTINCT ON (node_id) $1, node_id, ST_SetSRID(geom,4326) FROM (
+        SELECT v1.node_id, v1.geom, v1.way_id, v1.sequence FROM "${schema}".road_vertices v1
+        JOIN "${schema}".road_vertices v2 ON v2.way_id=v1.way_id AND v2.sequence=v1.sequence+1
+        WHERE NOT $2::boolean OR ST_Intersects(ST_MakeLine(v1.geom,v2.geom),ST_MakeEnvelope($3,$4,$5,$6,4326))
+        UNION ALL
+        SELECT v2.node_id, v2.geom, v2.way_id, v2.sequence FROM "${schema}".road_vertices v1
+        JOIN "${schema}".road_vertices v2 ON v2.way_id=v1.way_id AND v2.sequence=v1.sequence+1
+        WHERE NOT $2::boolean OR ST_Intersects(ST_MakeLine(v1.geom,v2.geom),ST_MakeEnvelope($3,$4,$5,$6,4326))
+      ) vertices ORDER BY node_id, way_id, sequence
+      ON CONFLICT (dataset_id,node_id) DO NOTHING`, [datasetId, !!bbox, ...(bbox ?? [0, 0, 0, 0])]);
     await client.query(`
       INSERT INTO osm_data.road_edge(dataset_id,edge_id,source_node,target_node,edge_index,geom,highway,length_m,oneway,name)
       SELECT $1, v1.way_id::text,
@@ -266,21 +273,23 @@ async function importPbf(pbf: string, datasetId: string, sourceUrl: string, cove
         v1.sequence - 1,
         ST_SetSRID(ST_MakeLine(CASE WHEN w.reverse THEN v2.geom ELSE v1.geom END,
           CASE WHEN w.reverse THEN v1.geom ELSE v2.geom END),4326), w.highway,
-        round(ST_DistanceSphere(
+        ST_DistanceSphere(
           CASE WHEN w.reverse THEN v2.geom ELSE v1.geom END,
           CASE WHEN w.reverse THEN v1.geom ELSE v2.geom END
-        )::numeric, 3)::double precision, w.oneway, w.name
+        )::double precision, w.oneway, w.name
       FROM "${schema}".road_vertices v1
       JOIN "${schema}".road_vertices v2 ON v2.way_id = v1.way_id AND v2.sequence = v1.sequence + 1
       JOIN "${schema}".road_ways w ON w.way_id = v1.way_id
-      ON CONFLICT (dataset_id,edge_id,edge_index) DO NOTHING`, [datasetId]);
+      WHERE NOT $2::boolean OR ST_Intersects(ST_MakeLine(v1.geom,v2.geom),ST_MakeEnvelope($3,$4,$5,$6,4326))
+      ON CONFLICT (dataset_id,edge_id,edge_index) DO NOTHING`, [datasetId, !!bbox, ...(bbox ?? [0, 0, 0, 0])]);
     let poiCount = 0;
     if (includePois) {
       try {
         await client.query('SAVEPOINT osm_pois');
         const pois = await client.query(`INSERT INTO osm_data.poi(dataset_id,poi_id,kind,name,geom)
           SELECT $1,poi_id,kind,name,ST_SetSRID(ST_PointOnSurface(geom),4326) FROM "${schema}".pois
-          ON CONFLICT (dataset_id,poi_id) DO NOTHING`, [datasetId]);
+          WHERE NOT $2::boolean OR ST_Intersects(geom,ST_MakeEnvelope($3,$4,$5,$6,4326))
+          ON CONFLICT (dataset_id,poi_id) DO NOTHING`, [datasetId, !!bbox, ...(bbox ?? [0, 0, 0, 0])]);
         poiCount = pois.rowCount ?? 0;
         await client.query('RELEASE SAVEPOINT osm_pois');
       } catch (error) {

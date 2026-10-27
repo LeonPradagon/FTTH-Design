@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { DB } from '../db/database.module';
 import { auditLogs, projects } from '../db/schema';
 import { ProxyAuthGuard } from '../auth/proxy-auth.guard';
-import { fastapiInteger } from '../http/fastapi-integer';
+import { integerParameter } from '../http/integer-parameter';
 
 const DEFAULT_COLORS = { pop: '#eab308', odc: '#ff0000', odp: '#0000ff', house: '#6b7280', feeder: '#ff0000', distribution: '#aa00ff' };
 const LEGACY_COLORS = [
@@ -81,7 +81,7 @@ export class ProjectsController {
   @Get()
   async list(@Req() req: any, @Query('skip') skip = '0', @Query('limit') limit = '100') {
     const where = req.user.role === 'viewer' ? undefined : eq(projects.userId, req.user.id);
-    const rows = await this.db.select().from(projects).where(where).orderBy(desc(projects.updated_at)).offset(fastapiInteger(skip, 'query', 'skip')).limit(fastapiInteger(limit, 'query', 'limit'));
+    const rows = await this.db.select().from(projects).where(where).orderBy(desc(projects.updated_at)).offset(integerParameter(skip, 'query', 'skip')).limit(integerParameter(limit, 'query', 'limit'));
     return { success: true, data: rows.map(serialize) };
   }
 

@@ -5,7 +5,7 @@ import { DB } from '../db/database.module';
 import { auditLogs, designCables, designOdcs, designOdps, designVersions, projects } from '../db/schema';
 import { ProxyAuthGuard } from '../auth/proxy-auth.guard';
 import { StorageService } from '../storage/storage.service';
-import { fastapiInteger } from '../http/fastapi-integer';
+import { integerParameter } from '../http/integer-parameter';
 
 const apiError = (code: string, message: string, status = 404) => new HttpException({ success: false, error: { code, message } }, status);
 
@@ -39,7 +39,7 @@ export class VersionsController {
   @Get('compare/versions')
   async compare(@Param('projectId') projectId: string, @Query('v1') v1: string, @Query('v2') v2: string, @Req() req: any) {
     await this.project(projectId, req.user);
-    const [one, two] = await Promise.all([this.version(projectId, fastapiInteger(v1, 'query', 'v1')), this.version(projectId, fastapiInteger(v2, 'query', 'v2'))]);
+    const [one, two] = await Promise.all([this.version(projectId, integerParameter(v1, 'query', 'v1')), this.version(projectId, integerParameter(v2, 'query', 'v2'))]);
     if (!one || !two) throw apiError('VERSION_NOT_FOUND', 'One or both versions not found');
     const a = one.stats ?? {}, b = two.stats ?? {};
     return { success: true, data: { v1: one, v2: two, diff: {
@@ -52,7 +52,7 @@ export class VersionsController {
   async export(@Param('projectId') projectId: string, @Param('version') version: string, @Param('artifact') artifact: string, @Req() req: any, @Res({ passthrough: true }) res: any) {
     await this.project(projectId, req.user);
     if (artifact !== 'kmz' && artifact !== 'csv') throw apiError('ARTIFACT_NOT_FOUND', 'Artifact not found');
-    const result = await this.version(projectId, fastapiInteger(version, 'path', 'version'));
+    const result = await this.version(projectId, integerParameter(version, 'path', 'version'));
     if (!result) throw apiError('VERSION_NOT_FOUND', `Version ${version} not found`);
     const key = result.metadata?.artifacts?.[artifact];
     if (!key) throw apiError('ARTIFACT_NOT_FOUND', 'Artifact not found');
@@ -66,7 +66,7 @@ export class VersionsController {
   @Get(':version')
   async get(@Param('projectId') projectId: string, @Param('version') version: string, @Req() req: any) {
     await this.project(projectId, req.user);
-    const result = await this.version(projectId, fastapiInteger(version, 'path', 'version'));
+    const result = await this.version(projectId, integerParameter(version, 'path', 'version'));
     if (!result) throw apiError('VERSION_NOT_FOUND', `Version ${version} not found`);
     return { success: true, data: result };
   }
@@ -75,7 +75,7 @@ export class VersionsController {
   async remove(@Param('projectId') projectId: string, @Param('version') version: string, @Req() req: any) {
     if (req.user.role !== 'admin') throw new ForbiddenException('Admin access is required');
     await this.project(projectId, req.user);
-    const result = await this.version(projectId, fastapiInteger(version, 'path', 'version'));
+    const result = await this.version(projectId, integerParameter(version, 'path', 'version'));
     if (!result) throw apiError('VERSION_NOT_FOUND', `Version ${version} not found`);
     await this.db.transaction(async (tx: any) => {
       await tx.delete(designVersions).where(eq(designVersions.id, result.id));
@@ -85,10 +85,10 @@ export class VersionsController {
   }
 
   @Post(':version/duplicate')
-  duplicate(@Param('projectId') projectId: string, @Param('version') version: string, @Req() req: any) { return this.copy(projectId, fastapiInteger(version, 'path', 'version'), req.user, 'DUPLICATE_VERSION'); }
+  duplicate(@Param('projectId') projectId: string, @Param('version') version: string, @Req() req: any) { return this.copy(projectId, integerParameter(version, 'path', 'version'), req.user, 'DUPLICATE_VERSION'); }
 
   @Post(':version/rollback')
-  rollback(@Param('projectId') projectId: string, @Param('version') version: string, @Req() req: any) { return this.copy(projectId, fastapiInteger(version, 'path', 'version'), req.user, 'ROLLBACK_VERSION'); }
+  rollback(@Param('projectId') projectId: string, @Param('version') version: string, @Req() req: any) { return this.copy(projectId, integerParameter(version, 'path', 'version'), req.user, 'ROLLBACK_VERSION'); }
 
   private async copy(projectId: string, number: number, user: any, action: string) {
     if (!['admin', 'engineer', 'user'].includes(user.role)) throw new ForbiddenException('Generation access is not allowed');

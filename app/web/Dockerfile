@@ -14,22 +14,13 @@ USER node
 COPY --chown=node:node app/web/package.json app/web/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
-FROM dependencies AS migrate
-
-COPY --chown=node:node app/server/schema.prisma ./schema.prisma
-RUN pnpm exec prisma generate --generator js_client --schema ./schema.prisma
-
-CMD ["pnpm", "exec", "prisma", "db", "push", "--schema", "/workspace/app/web/schema.prisma", "--skip-generate"]
-
 FROM dependencies AS builder
 
-COPY app/server/schema.prisma ./schema.prisma
-RUN pnpm exec prisma generate --generator js_client --schema ./schema.prisma
 COPY app/web/ ./
 RUN DATABASE_URL=postgresql://build:build@localhost:5432/build \
     BETTER_AUTH_SECRET=build-only-secret-that-is-at-least-32-characters \
     BETTER_AUTH_URL=http://localhost:3000 \
-    BACKEND_URL=http://server:8000 \
+    BACKEND_URL=http://api:8001 \
     pnpm exec next build --webpack
 
 FROM node:20-alpine AS runtime

@@ -19,13 +19,13 @@ const { StorageService } = require('../dist/src/storage/storage.service.js');
 const { downloadOsmPbf } = require('../dist/src/scripts/download-osm-pbf.js');
 const { projects } = require('../dist/src/db/schema.js');
 const { validateDesignUpload } = require('../dist/src/files/upload-validation.js');
-const { fastapiInteger } = require('../dist/src/http/fastapi-integer.js');
+const { integerParameter } = require('../dist/src/http/integer-parameter.js');
 const { datasetSourceTimestamp, flexStyle, importWorkerCount } = require('../dist/src/scripts/import-osm-pbf.js');
-const { addEdge, boundaryCentroid, buildCsv, capacitatedClusters, classifyCustomPoints, customMappingGroup, designStats, localFallbackEnabled, localOsmPopName, localPopSearchArea, localRoadWindow, normalizeCachedState, normalizeFeatureColors, osmRequestTimeoutSeconds, outputOdpLabel, parseNativeOsmXml, parseOverpassElements, readKml, rebalanceOdpsByRoadConnectivity, requireCompleteDistributionTree, requireDistributionConnectivity, route, strategicPop, walkAlongRoad, GeneratorService } = require('../dist/src/generation/generator.service.js');
+const { addEdge, boundaryCentroid, buildCsv, capacitatedClusters, classifyCustomPoints, customMappingGroup, designStats, localFallbackEnabled, localOsmPopName, localPopSearchArea, localRoadWindow, normalizeCachedState, normalizeFeatureColors, osmRequestTimeoutSeconds, outputOdpLabel, parseNativeOsmXml, parseOverpassElements, roundHalfEven, readKml, rebalanceOdpsByRoadConnectivity, requireCompleteDistributionTree, requireDistributionConnectivity, route, strategicPop, walkAlongRoad, GeneratorService } = require('../dist/src/generation/generator.service.js');
 
 const sample = (name) => resolve(__dirname, '../../../samples/kml', name);
 
-test('KML parsing matches the Python fixture counts', async () => {
+test('KML parsing matches the reference implementation fixture counts', async () => {
   const boundary = await readKml(await readFile(sample('boundary.kml')), 'boundary.kml');
   assert.equal(boundary.filter((item) => item.polygon).length, 1);
   assert.equal(boundary.filter((item) => item.point).length, 0);
@@ -36,12 +36,12 @@ test('KML parsing matches the Python fixture counts', async () => {
   assert.equal(combined.filter((item) => item.point).length, 75);
 });
 
-test('KML parsing finds point geometry nested in MultiGeometry like Python', async () => {
+test('KML parsing finds point geometry nested in MultiGeometry like reference implementation', async () => {
   const xml = Buffer.from('<kml><Document><Placemark><name>OLT</name><MultiGeometry><Point><coordinates>106.25,-6.25,0</coordinates></Point></MultiGeometry></Placemark></Document></kml>');
   assert.deepEqual(await readKml(xml, 'combined.kml'), [{ name: 'OLT', point: [106.25, -6.25], context: '', description: '', folderContext: '' }]);
 });
 
-test('upload validation accepts KML and rejects invalid inputs like Python', async () => {
+test('upload validation accepts KML and rejects invalid inputs like reference implementation', async () => {
   assert.equal(await validateDesignUpload({ originalname: 'boundary.kml', buffer: Buffer.from('<kml></kml>') }, 1024), 'boundary.kml');
   await assert.rejects(validateDesignUpload({ originalname: 'boundary.txt', buffer: Buffer.from('x') }, 1024), (error) => {
     assert.equal(error.getStatus(), 400);
@@ -58,7 +58,7 @@ test('upload validation accepts KML and rejects invalid inputs like Python', asy
   assert.deepEqual(await readKml(bytes, 'archive.kmz'), []);
 });
 
-test('required multipart files return FastAPI validation errors', async () => {
+test('required multipart files return previous API validation errors', async () => {
   const files = new FilesController({}, { consume: async () => {} });
   const req = { user: { id: 'owner', role: 'engineer' }, body: {} };
   await assert.rejects(files.upload(undefined, req), (error) => error.getStatus() === 422 && error.getResponse().detail[0].loc.join('/') === 'body/file');
@@ -68,7 +68,7 @@ test('required multipart files return FastAPI validation errors', async () => {
   await assert.rejects(generation.custom({}, req), (error) => error.getStatus() === 422 && error.getResponse().detail[0].loc.join('/') === 'body/customFile');
 });
 
-test('KML upload content type follows the filename extension like Python', async () => {
+test('KML upload content type follows the filename extension like reference implementation', async () => {
   let uploaded;
   const controller = new FilesController({ async upload(...args) { uploaded = args; } }, { consume() {} });
   await controller.upload({ originalname: '../../__Site Plan.kml', mimetype: 'text/html', buffer: Buffer.from('<kml>site</kml>') }, { user: { id: 'test-user', role: 'engineer' } });
@@ -142,9 +142,9 @@ test('proxy authentication rejects appended or malformed signatures', () => {
     const pipedEmailPayload = `owner|${timestamp}|engineer|a|b@example.com`;
     const pipedEmailSignature = createHmac('sha256', 'parity-secret').update(pipedEmailPayload).digest('hex');
     assert.deepEqual(verify(`${pipedEmailPayload}|${pipedEmailSignature}`), { id: 'owner', role: 'engineer', email: 'a|b@example.com' });
-    const pythonIntegerPayload = `owner| +${timestamp} |engineer|owner@example.com`;
-    const pythonIntegerSignature = createHmac('sha256', 'parity-secret').update(pythonIntegerPayload).digest('hex');
-    assert.deepEqual(verify(`${pythonIntegerPayload}|${pythonIntegerSignature}`), { id: 'owner', role: 'engineer', email: 'owner@example.com' });
+    const referenceImplementationIntegerPayload = `owner| +${timestamp} |engineer|owner@example.com`;
+    const referenceImplementationIntegerSignature = createHmac('sha256', 'parity-secret').update(referenceImplementationIntegerPayload).digest('hex');
+    assert.deepEqual(verify(`${referenceImplementationIntegerPayload}|${referenceImplementationIntegerSignature}`), { id: 'owner', role: 'engineer', email: 'owner@example.com' });
     assert.throws(() => verify(`${payload}|${signature}|extra`), (error) => error.getStatus() === 401);
     assert.throws(() => verify(`${payload}|${signature}zz`), (error) => error.getStatus() === 401);
     assert.throws(() => verify(`${payload}|${signature.toUpperCase()}`), (error) => error.getStatus() === 401);
@@ -154,7 +154,7 @@ test('proxy authentication rejects appended or malformed signatures', () => {
   }
 });
 
-test('S3 bucket creation includes the configured non-default region like Python', async () => {
+test('S3 bucket creation includes the configured non-default region like reference implementation', async () => {
   const previous = { region: process.env.STORAGE_REGION, bucket: process.env.STORAGE_BUCKET, driver: process.env.STORAGE_DRIVER };
   process.env.STORAGE_REGION = 'eu-west-1';
   process.env.STORAGE_BUCKET = 'test-bucket';
@@ -172,7 +172,7 @@ test('S3 bucket creation includes the configured non-default region like Python'
   }
 });
 
-test('object storage deletion removes content and HTTP metadata like Python', async () => {
+test('object storage deletion removes content and HTTP metadata like reference implementation', async () => {
   const root = await mkdtemp(resolve(tmpdir(), 'ftth-storage-delete-'));
   const previous = { driver: process.env.STORAGE_DRIVER, root: process.env.STORAGE_LOCAL_ROOT };
   try {
@@ -192,7 +192,7 @@ test('object storage deletion removes content and HTTP metadata like Python', as
   }
 });
 
-test('generation options enforce Python GenerationConfig bounds', () => {
+test('generation options enforce reference implementation GenerationConfig bounds', () => {
   const generator = new GeneratorService({});
   const defaults = generator.validateOptions({});
   assert.deepEqual([
@@ -218,10 +218,10 @@ test('generation options enforce Python GenerationConfig bounds', () => {
   assert.throws(() => generator.validateOptions({ routing_strategy: 'fastest' }), (error) => error.getStatus() === 400);
 });
 
-test('generation form JSON errors and non-object colors follow Python responses', () => {
+test('generation form JSON errors and non-object colors follow reference implementation responses', () => {
   const controller = new GenerationController({}, {}, new GeneratorService({}), {}, {});
   assert.deepEqual(controller.parseOptions({ feature_colors: '[]' }).feature_colors, {});
-  assert.equal(Object.hasOwn(controller.parseOptions({ config: '{"unknown_python_ignored_field":1}' }), 'unknown_python_ignored_field'), false);
+  assert.equal(Object.hasOwn(controller.parseOptions({ config: '{"unknown_referenceImplementation_ignored_field":1}' }), 'unknown_referenceImplementation_ignored_field'), false);
   for (const config of ['{broken', '[]', '{"include_homepass":null}', '{"odp_capacity":0}']) {
     assert.throws(() => controller.parseOptions({ config }), (error) => {
       assert.equal(error.getStatus(), 400);
@@ -234,7 +234,7 @@ test('generation form JSON errors and non-object colors follow Python responses'
   assert.throws(() => controller.parseOptions({ feature_colors: '{broken' }), (error) => error.getResponse().error.code === 'INVALID_FILE');
 });
 
-test('feature color normalization matches Python defaults, legacy palettes, and invalid values', () => {
+test('feature color normalization matches reference implementation defaults, legacy palettes, and invalid values', () => {
   assert.deepEqual(normalizeFeatureColors({ odc: '#EF4444', odp: 'invalid' }), {
     pop: '#eab308', odc: '#ef4444', odp: '#0000ff', house: '#6b7280', feeder: '#ff0000', distribution: '#aa00ff',
   });
@@ -245,8 +245,8 @@ test('feature color normalization matches Python defaults, legacy palettes, and 
   });
 });
 
-test('Python version 4 cache preserves its network geometry and homepass assignments in Nest', async () => {
-  const pythonState = {
+test('reference implementation version 4 cache preserves its network geometry and homepass assignments in Nest', async () => {
+  const referenceImplementationState = {
     version: 4,
     pop: { name: 'POP Mojokerto', lat: -7.45, lon: 112.43 },
     odcs: [{ id: 'ODC-001', lat: -7.451, lon: 112.431, odps: [{ id: 'ODP-001', lat: -7.452, lon: 112.432, houses: [[-7.453, 112.433]], upstream_id: 'ODC-001' }] }],
@@ -254,7 +254,7 @@ test('Python version 4 cache preserves its network geometry and homepass assignm
     distribution_segments: { 'ODP-001': { source_id: 'ODC-001', target_id: 'ODP-001', coords: [[-7.451, 112.431], [-7.452, 112.432]], length_m: 157, connected: true } },
     boundary: { type: 'Polygon', coordinates: [[[112.42, -7.46], [112.44, -7.46], [112.44, -7.44], [112.42, -7.44], [112.42, -7.46]]] },
   };
-  const cached = normalizeCachedState(pythonState);
+  const cached = normalizeCachedState(referenceImplementationState);
   assert.deepEqual(cached.pop, [112.43, -7.45]);
   assert.deepEqual(cached.cables.map(({ type, coords }) => [type, coords]), [
     ['feeder', [[112.43, -7.45], [112.431, -7.451]]],
@@ -287,7 +287,7 @@ test('Python version 4 cache preserves its network geometry and homepass assignm
   assert.equal(regenerated.state.roads.length, 2);
   assert.equal(regenerated.state.cables.filter((cable) => cable.type === 'feeder').length, 1);
   assert.equal(regenerated.state.cables.filter((cable) => cable.type === 'distribution').length, 1);
-  const incomplete = normalizeCachedState({ ...pythonState, distribution_segments: { 'ODP-001': { ...pythonState.distribution_segments['ODP-001'], connected: false } } });
+  const incomplete = normalizeCachedState({ ...referenceImplementationState, distribution_segments: { 'ODP-001': { ...referenceImplementationState.distribution_segments['ODP-001'], connected: false } } });
   assert.equal(incomplete.networkComplete, false);
   const repairedHomepass = await regenerate.fromCache(incomplete, {}, 'homepass');
   assert.equal(repairedHomepass.state.cables.filter((cable) => cable.type === 'feeder').length, 1);
@@ -295,7 +295,7 @@ test('Python version 4 cache preserves its network geometry and homepass assignm
   assert.equal(repairedHomepass.state.cables.filter((cable) => cable.type === 'homepass').length, 1);
 });
 
-test('Nest resolves Python cache under the default project scope without masking a corrupt project cache', async () => {
+test('Nest resolves reference implementation cache under the default project scope without masking a corrupt project cache', async () => {
   const root = await mkdtemp(resolve(tmpdir(), 'ftth-parity-'));
   const scoped = (value) => createHash('sha256').update(value).digest('hex').slice(0, 32);
   const controller = new GenerationController({}, {}, {});
@@ -306,7 +306,7 @@ test('Nest resolves Python cache under the default project scope without masking
   await writeFile(resolve(defaultDir, 'design_state.json'), JSON.stringify(state));
   const resolved = await controller.resolveCacheFile('user', 'project', 'batch', 'item');
   assert.equal(resolved.path, resolve(defaultDir, 'design_state.json'));
-  assert.equal(resolved.state.pythonCache, true);
+  assert.equal(resolved.state.legacyCache, true);
   const projectDir = resolve(root, scoped('user'), scoped('project'), scoped('batch'), scoped('item'));
   await mkdir(projectDir, { recursive: true });
   await writeFile(resolve(projectDir, 'design_state.json'), '{');
@@ -314,7 +314,7 @@ test('Nest resolves Python cache under the default project scope without masking
   await rm(root, { recursive: true, force: true });
 });
 
-test('project pagination honors Python limits above 100', async () => {
+test('project pagination honors reference implementation limits above 100', async () => {
   let offset, limit;
   const query = {
     where() { return this; }, orderBy() { return this; },
@@ -327,22 +327,22 @@ test('project pagination honors Python limits above 100', async () => {
   assert.equal(limit, 250);
 });
 
-test('integer query and path parameters return FastAPI-style validation errors', () => {
-  assert.equal(fastapiInteger('0', 'query', 'limit'), 0);
-  assert.equal(fastapiInteger('250', 'query', 'limit'), 250);
-  assert.throws(() => fastapiInteger('1.5', 'query', 'skip'), (error) => {
+test('integer query and path parameters return previous API-style validation errors', () => {
+  assert.equal(integerParameter('0', 'query', 'limit'), 0);
+  assert.equal(integerParameter('250', 'query', 'limit'), 250);
+  assert.throws(() => integerParameter('1.5', 'query', 'skip'), (error) => {
     assert.equal(error.getStatus(), 422);
     assert.deepEqual(error.getResponse().detail[0].loc, ['query', 'skip']);
     return true;
   });
-  assert.throws(() => fastapiInteger(undefined, 'query', 'v1'), (error) => {
+  assert.throws(() => integerParameter(undefined, 'query', 'v1'), (error) => {
     assert.equal(error.getStatus(), 422);
     assert.deepEqual(error.getResponse().detail[0].loc, ['query', 'v1']);
     return true;
   });
 });
 
-test('version export validates artifact type before looking up the version like Python', async () => {
+test('version export validates artifact type before looking up the version like reference implementation', async () => {
   const db = { select: () => ({ from: (table) => ({ where: () => ({ async limit() { return table === projects ? [{ id: 'project-1', userId: 'user-1' }] : []; } }) }) }) };
   const controller = new VersionsController(db, {});
   await assert.rejects(controller.export('project-1', '999', 'pdf', { user: { id: 'user-1', role: 'engineer' } }, { setHeader() {} }), (error) => {
@@ -352,7 +352,7 @@ test('version export validates artifact type before looking up the version like 
   });
 });
 
-test('audit authorization failures preserve Python error envelopes', async () => {
+test('audit authorization failures preserve reference implementation error envelopes', async () => {
   const db = { select: () => ({ from: () => ({ where: () => ({ async limit() { return []; } }) }) }) };
   const controller = new AuditController(db);
   await assert.rejects(controller.projectAudit('missing', { user: { id: 'user-1', role: 'engineer' } }), (error) => {
@@ -367,7 +367,7 @@ test('audit authorization failures preserve Python error envelopes', async () =>
   });
 });
 
-test('upload and generation share Python fixed-window rate limits and Retry-After', async () => {
+test('upload and generation share reference implementation fixed-window rate limits and Retry-After', async () => {
   const oldLimit = process.env.GENERATION_RATE_LIMIT, oldWindow = process.env.GENERATION_RATE_WINDOW_SECONDS;
   process.env.GENERATION_RATE_LIMIT = '1';
   process.env.GENERATION_RATE_WINDOW_SECONDS = '60';
@@ -388,7 +388,7 @@ test('upload and generation share Python fixed-window rate limits and Retry-Afte
   }
 });
 
-test('job cancellation does not consume the Python generation rate limit', async () => {
+test('job cancellation does not consume the reference implementation generation rate limit', async () => {
   const controller = new GenerationController({}, {}, {}, { async consume() { throw new Error('should not be called'); } });
   const activeJob = new AbortController();
   controller.abortControllers.set('job-1', activeJob);
@@ -534,7 +534,7 @@ test('generation progress stream authorizes before subscribing and emits a termi
   assert.deepEqual(events, [{ user_id: 'owner', stage: 'COMPLETED', message: 'done', percent: 100, done: true }]);
 });
 
-test('capacitated clustering matches Python cluster membership and sizing', () => {
+test('capacitated clustering matches reference implementation cluster membership and sizing', () => {
   const points = Array.from({ length: 25 }, (_, index) => [index, index]);
   const normalize = (clusters) => clusters.map((cluster) => [...cluster].sort((a, b) => a - b));
   assert.deepEqual(normalize(capacitatedClusters(points, 10)), [[15, 16, 17, 18, 19, 20, 21, 22, 23, 24], [5, 6, 7, 8, 9, 10, 11, 12, 13, 14], [0, 1, 2, 3, 4]]);
@@ -548,6 +548,13 @@ test('capacitated clustering matches Python cluster membership and sizing', () =
     [1, 27, 6, 32, 36, 18, 5, 23, 9, 14],
   ]);
   assert.throws(() => capacitatedClusters(points.slice(0, 4), 10, 5), (error) => error.getStatus() === 400);
+});
+
+test('road assignment costs use reference implementation half-to-even rounding', () => {
+  assert.equal(roundHalfEven(2.5), 2);
+  assert.equal(roundHalfEven(3.5), 4);
+  assert.equal(roundHalfEven(3.5000001), 4);
+  assert.equal(roundHalfEven(-2.5), -2);
 });
 
 test('road rebalancing keeps feasible global assignments when other ODPs need recovery ODCs', () => {
@@ -575,7 +582,24 @@ test('road rebalancing keeps feasible global assignments when other ODPs need re
   assert.equal(odcs.filter((odc) => odc.label.startsWith('ODC-RECOVERY-')).length, 1);
 });
 
-test('road rebalancing creates a recovery ODC when every existing route exceeds the Python limit', () => {
+test('road assignment keeps reference implementation ODC-grouped ODP order for equal-cost ties', () => {
+  const graph = new Map();
+  addEdge(graph, [0, 0], [1, 0], 'residential', 'shortest', false, 100);
+  const odps = [
+    { label: 'ODP-001', at: [0.5, 0], members: [] },
+    { label: 'ODP-002', at: [0.5, 0], members: [] },
+  ];
+  const odcs = [
+    { label: 'ODC-A', at: [0.5, 0], members: ['ODP-002'] },
+    { label: 'ODC-B', at: [0.5, 0], members: ['ODP-001'] },
+  ];
+  rebalanceOdpsByRoadConnectivity(graph, odcs, odps, 500, 1, new Map());
+  assert.deepEqual(odcs.map(({ label, members }) => [label, members]), [
+    ['ODC-A', ['ODP-001']], ['ODC-B', ['ODP-002']],
+  ]);
+});
+
+test('road rebalancing creates a recovery ODC when every existing route exceeds the reference implementation limit', () => {
   const from = [0, 0], to = [0.01, 0];
   const graph = new Map([
     [from.join(','), { id: from.join(','), at: from, edges: [{ to: to.join(','), weight: 1112, highway: 'residential', coords: [from, to], oneway: false }] }],
@@ -591,7 +615,7 @@ test('road rebalancing creates a recovery ODC when every existing route exceeds 
   assert.ok(recovery.at.some((coordinate, index) => coordinate !== odp.at[index]));
 });
 
-test('batch status keeps one latest retry per item and matches Python aggregate counts', () => {
+test('batch status keeps one latest retry per item and matches reference implementation aggregate counts', () => {
   const rows = latestBatchRows([
     { id: 'old-failed', itemId: 'item-1', status: 'FAILED', createdAt: new Date('2026-01-01T00:00:00Z') },
     { id: 'completed', itemId: 'item-2', status: 'COMPLETED', createdAt: new Date('2026-01-01T00:01:00Z') },
@@ -603,7 +627,7 @@ test('batch status keeps one latest retry per item and matches Python aggregate 
   assert.deepEqual(summarizeBatchJobs(rows.map((row) => row.id === 'retry-queued' ? { ...row, status: 'CANCELED' } : row)), { total: 3, completed: 1, failed: 2, status: 'COMPLETED' });
 });
 
-test('batch retry preserves the item metadata and Python output filenames', async () => {
+test('batch retry preserves the item metadata and reference implementation output filenames', async () => {
   const old = {
     id: 'old-job', userId: 'user-1', projectId: 'project-1', status: 'FAILED', itemId: 'item-1',
     result: {
@@ -627,7 +651,7 @@ test('batch retry preserves the item metadata and Python output filenames', asyn
   assert.equal(queued.input.persistedInput.kmzName, 'FTTH_area-a_core.kmz');
 });
 
-test('custom ODC/ODP mapping groups follow Python labels and preserve leading zeroes', () => {
+test('custom ODC/ODP mapping groups follow reference implementation labels and preserve leading zeroes', () => {
   assert.equal(customMappingGroup('ODC004.ODP003', 'odp'), '004');
   assert.equal(customMappingGroup('ODP 17/01', 'odp'), '17');
   assert.equal(customMappingGroup('ODC 17', 'odc'), '17');
@@ -636,7 +660,7 @@ test('custom ODC/ODP mapping groups follow Python labels and preserve leading ze
   assert.equal(outputOdpLabel('ODP-001', 2, 4), 'ODC002.ODP004');
 });
 
-test('custom KML point roles follow Python placemark, description, folder, and POP fallback order', () => {
+test('custom KML point roles follow reference implementation placemark, description, folder, and POP fallback order', () => {
   const at = [106, -6];
   const points = classifyCustomPoints([
     { name: 'ODC-01', point: at, folderContext: 'OLT Sites' },
@@ -653,7 +677,7 @@ test('custom KML point roles follow Python placemark, description, folder, and P
   assert.equal(fallback.pop.label, 'SENTRAL-02');
 });
 
-test('custom generation uses Python defaults and buffered road coverage', async () => {
+test('custom generation uses reference implementation defaults and buffered road coverage', async () => {
   const generator = new GeneratorService({});
   let strategy, queried, refresh;
   generator.fetchOsm = async (rings, forceRefresh) => { queried = rings[0].outer; refresh = forceRefresh; return { elements: [], metadata: {} }; };
@@ -680,7 +704,7 @@ test('custom generation uses Python defaults and buffered road coverage', async 
   assert.match(kmlOutput, /Splitter: 1:4/);
 });
 
-test('custom generation assigns ODPs before snapping like Python', async () => {
+test('custom generation assigns ODPs before snapping like reference implementation', async () => {
   const generator = new GeneratorService({});
   generator.fetchOsm = async () => ({
     elements: [{ type: 'way', id: 1, tags: { highway: 'residential' }, geometry: [[106, -6], [106.006, -6]] }],
@@ -703,7 +727,7 @@ test('custom generation assigns ODPs before snapping like Python', async () => {
   ]);
 });
 
-test('road snapping matches Python edge selection at a shared-node tie', async () => {
+test('road snapping matches reference implementation edge selection at a shared-node tie', async () => {
   const generator = new GeneratorService({});
   generator.fetchOsm = async () => ({ elements: [
     { type: 'way', id: 1, tags: { highway: 'residential' }, geometry: [[7.4202779, 43.7371818], [7.4203277, 43.7371604]] },
@@ -726,7 +750,7 @@ test('multipart boundaries use the PostGIS union before generation', async () =>
   assert.deepEqual(result, [{ outer: merged.coordinates[0], holes: [] }]);
 });
 
-test('OSM dataset timestamps match Python direct import and updater paths', () => {
+test('OSM dataset timestamps match reference implementation direct import and updater paths', () => {
   const modified = new Date('2025-01-01T00:00:00Z');
   assert.equal(datasetSourceTimestamp({ source_timestamp: '2025-02-01T00:00:00Z', downloaded_at: '2025-03-01T00:00:00Z' }, modified).toISOString(), '2025-02-01T00:00:00.000Z');
   assert.equal(datasetSourceTimestamp({ downloaded_at: '2025-03-01T00:00:00Z' }, modified), modified);
@@ -735,7 +759,7 @@ test('OSM dataset timestamps match Python direct import and updater paths', () =
   assert.equal(datasetSourceTimestamp({}, modified), modified);
 });
 
-test('PBF download timeout resets when data keeps arriving like Python socket timeout', async () => {
+test('PBF download timeout resets when data keeps arriving like reference implementation socket timeout', async () => {
   const originalFetch = global.fetch;
   const root = await mkdtemp(resolve(tmpdir(), 'ftth-pbf-download-'));
   let timer, streamController;
@@ -770,7 +794,7 @@ test('PBF download timeout resets when data keeps arriving like Python socket ti
   }
 });
 
-test('PBF importer worker count follows Python integer parsing and osm2pgsql bounds', () => {
+test('PBF importer worker count follows reference implementation integer parsing and osm2pgsql bounds', () => {
   assert.equal(importWorkerCount(undefined), 1);
   assert.equal(importWorkerCount(' 2 '), 2);
   assert.equal(importWorkerCount('1_5'), 15);
@@ -781,7 +805,7 @@ test('PBF importer worker count follows Python integer parsing and osm2pgsql bou
   assert.equal(importWorkerCount('100'), 32);
 });
 
-test('PBF importer matches Pyrosm POI filtering and captures multipolygon buildings', () => {
+test('PBF importer matches reference OSM importer POI filtering and captures multipolygon buildings', () => {
   assert.match(flexStyle, /function osm2pgsql\.process_relation\(object\)[\s\S]*?object:as_multipolygon\(\)[\s\S]*?buildings:insert/);
   assert.doesNotMatch(flexStyle, /building_nodes/);
   assert.match(flexStyle, /building_members:insert\(\{ way_id = member\.ref \}\)/);
@@ -794,13 +818,18 @@ test('PBF importer matches Pyrosm POI filtering and captures multipolygon buildi
   assert.match(flexStyle, /ipairs\(\{'motorcar', 'motor_vehicle', 'vehicle', 'access'\}\)/);
   assert.match(flexStyle, /value:gmatch\('\[\^;\]\+'\)/);
   assert.match(flexStyle, /drive\[tags\.highway\] and tags\.area ~= 'yes' and has_driving_access\(tags\)/);
+  assert.match(flexStyle, /emergency_access_point=true, bridge=true/);
 });
 
-test('OSM source selection keeps Python area thresholds and fixed tile size', async () => {
+test('auto OSM source uses online providers instead of requiring a local PBF dataset', async () => {
   const names = ['OSM_SOURCE_MODE', 'OSM_ONLINE_MAX_AREA_KM2', 'OSM_ONLINE_MAX_TILES', 'OSM_TILE_SIZE_DEG'];
   const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   const generator = new GeneratorService({});
   let localCalls = 0;
+  generator.fetchNativeOsm = async () => ({ elements: [
+    { type: 'way', id: 1, tags: { building: 'yes' } },
+    { type: 'node', id: 2, tags: { railway: 'station' } },
+  ], metadata: { source: 'osm_native' } });
   generator.fetchLocal = async () => { localCalls++; return { elements: [], metadata: { source: 'osm_local' } }; };
   process.env.OSM_SOURCE_MODE = 'auto';
   process.env.OSM_ONLINE_MAX_AREA_KM2 = 'invalid';
@@ -808,14 +837,100 @@ test('OSM source selection keeps Python area thresholds and fixed tile size', as
   process.env.OSM_TILE_SIZE_DEG = '0.15';
   try {
     const result = await generator.fetchOsm([{ outer: [[0, 0], [0.15, 0], [0.15, 0.02], [0, 0.02], [0, 0]], holes: [] }]);
-    assert.equal(result.metadata.source, 'osm_local');
-    assert.equal(localCalls, 1);
+    assert.equal(result.metadata.source, 'osm_native');
+    assert.equal(localCalls, 0);
   } finally {
     for (const name of names) previous[name] === undefined ? delete process.env[name] : process.env[name] = previous[name];
   }
 });
 
-test('OSM source thresholds accept Python numeric underscores', () => {
+test('auto OSM source does not query PostGIS before online providers for large boundaries', async () => {
+  const names = ['OSM_SOURCE_MODE', 'OSM_ONLINE_MAX_AREA_KM2', 'OSM_ONLINE_MAX_TILES', 'OSM_NATIVE_URL', 'OSM_NATIVE_RETRIES', 'OSM_CACHE_MAX_AGE_SECONDS'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  const requests = [];
+  process.env.OSM_SOURCE_MODE = 'auto';
+  process.env.OSM_ONLINE_MAX_AREA_KM2 = '0.1';
+  process.env.OSM_ONLINE_MAX_TILES = '1';
+  process.env.OSM_NATIVE_URL = 'https://native.test/api/0.6/map';
+  process.env.OSM_NATIVE_RETRIES = '1';
+  process.env.OSM_CACHE_MAX_AGE_SECONDS = '0';
+  global.fetch = async (url) => {
+    requests.push(String(url));
+    return new Response('<osm version="0.6"><node id="1" lat="-6" lon="106"><tag k="building" v="yes"/></node><node id="2" lat="-6.001" lon="106.001"><tag k="railway" v="station"/></node></osm>', { status: 200 });
+  };
+  try {
+    const generator = new GeneratorService({});
+    const order = [];
+    generator.fetchLocal = async () => { order.push('local'); throw new Error('no active local dataset'); };
+    const fetchNative = generator.fetchNativeOsm.bind(generator);
+    generator.fetchNativeOsm = async (...args) => { order.push('online'); return fetchNative(...args); };
+    const result = await generator.fetchOsm([{ outer: [[106, -6], [106.01, -6], [106.01, -5.99], [106, -5.99], [106, -6]], holes: [] }]);
+    assert.deepEqual(order, ['online']);
+    assert.equal(result.metadata.source, 'osm_native');
+    assert.ok(requests.length > 0);
+  } finally {
+    global.fetch = originalFetch;
+    for (const [key, value] of Object.entries(previous)) value === undefined ? delete process.env[key] : process.env[key] = value;
+  }
+});
+
+test('auto OSM source uses online providers without querying PostGIS when buildings are required', async () => {
+  const names = ['OSM_SOURCE_MODE', 'OSM_ONLINE_MAX_AREA_KM2', 'OSM_ONLINE_MAX_TILES'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  process.env.OSM_SOURCE_MODE = 'auto';
+  process.env.OSM_ONLINE_MAX_AREA_KM2 = '0.1';
+  process.env.OSM_ONLINE_MAX_TILES = '1';
+  try {
+    const generator = new GeneratorService({});
+    let localCalls = 0, onlineCalls = 0;
+    generator.fetchLocal = async () => { localCalls++; return { elements: [], metadata: { source: 'osm_postgis' } }; };
+    generator.fetchNativeOsm = async () => {
+      onlineCalls++;
+      return { elements: [{ tags: { building: 'yes' } }, { tags: { railway: 'station' } }], metadata: { source: 'osm_native' } };
+    };
+    const result = await generator.fetchOsm([{ outer: [[106, -6], [106.01, -6], [106.01, -5.99], [106, -5.99], [106, -6]], holes: [] }], false, undefined, undefined, undefined, true);
+    assert.equal(localCalls, 0);
+    assert.equal(onlineCalls, 1);
+    assert.equal(result.metadata.source, 'osm_native');
+  } finally {
+    for (const [key, value] of Object.entries(previous)) value === undefined ? delete process.env[key] : process.env[key] = value;
+  }
+});
+
+test('auto CORE cache signature uses online OSM without requiring a local dataset', async () => {
+  const names = ['OSM_SOURCE_MODE', 'OSM_ONLINE_MAX_AREA_KM2', 'OSM_ONLINE_MAX_TILES'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  process.env.OSM_SOURCE_MODE = 'auto';
+  process.env.OSM_ONLINE_MAX_AREA_KM2 = '0.1';
+  process.env.OSM_ONLINE_MAX_TILES = '1';
+  try {
+    const generator = new GeneratorService({ async execute() { throw new Error('auto mode must not query local datasets'); } });
+    assert.equal(await generator.coreSourceSignature(await readFile(sample('boundary.kml')), 'boundary.kml'), 'osm_online');
+  } finally {
+    for (const [key, value] of Object.entries(previous)) value === undefined ? delete process.env[key] : process.env[key] = value;
+  }
+});
+
+test('auto CORE cache signature falls back to online when no local dataset covers the boundary', async () => {
+  const names = ['OSM_SOURCE_MODE', 'OSM_ONLINE_MAX_AREA_KM2', 'OSM_ONLINE_MAX_TILES'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  process.env.OSM_SOURCE_MODE = 'auto';
+  process.env.OSM_ONLINE_MAX_AREA_KM2 = '0.1';
+  process.env.OSM_ONLINE_MAX_TILES = '1';
+  try {
+    let query = 0;
+    const generator = new GeneratorService({ async execute() {
+      query++;
+      return { rows: query === 1 ? [] : [] };
+    } });
+    assert.equal(await generator.coreSourceSignature(await readFile(sample('boundary.kml')), 'boundary.kml'), 'osm_online');
+  } finally {
+    for (const [key, value] of Object.entries(previous)) value === undefined ? delete process.env[key] : process.env[key] = value;
+  }
+});
+
+test('OSM source thresholds accept reference implementation numeric underscores', () => {
   const names = ['OSM_SOURCE_MODE', 'OSM_ONLINE_MAX_AREA_KM2', 'OSM_ONLINE_MAX_TILES'];
   const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   process.env.OSM_SOURCE_MODE = 'auto';
@@ -831,7 +946,7 @@ test('OSM source thresholds accept Python numeric underscores', () => {
   }
 });
 
-test('online OSM roads become two-way while local PostGIS preserves one-way tags like Python', async () => {
+test('online OSM roads become two-way while local PostGIS preserves one-way tags like reference implementation', async () => {
   const root = await mkdtemp(resolve(tmpdir(), 'ftth-road-direction-'));
   const previous = process.env.ROAD_GRAPH_CACHE_ROOT;
   process.env.ROAD_GRAPH_CACHE_ROOT = root;
@@ -851,13 +966,13 @@ test('online OSM roads become two-way while local PostGIS preserves one-way tags
   }
 });
 
-test('online OSM fallback flag uses the same accepted values as Python', () => {
+test('online OSM fallback flag uses the same accepted values as reference implementation', () => {
   for (const value of ['1', 'true', 'yes', 'on', ' TRUE ']) assert.equal(localFallbackEnabled(value), true, value);
   for (const value of ['0', 'false', 'no', 'off', '', 'unexpected']) assert.equal(localFallbackEnabled(value), false, value);
   assert.equal(localFallbackEnabled(undefined), true);
 });
 
-test('OSM request timeout uses Python integer parsing and lower bound', () => {
+test('OSM request timeout uses reference implementation integer parsing and lower bound', () => {
   assert.equal(osmRequestTimeoutSeconds(undefined), 15);
   assert.equal(osmRequestTimeoutSeconds(' 20 '), 20);
   assert.equal(osmRequestTimeoutSeconds('1_5'), 15);
@@ -867,7 +982,7 @@ test('OSM request timeout uses Python integer parsing and lower bound', () => {
   assert.equal(osmRequestTimeoutSeconds('invalid'), 15);
 });
 
-test('strategic POP preserves Python OSM feature names and fallback labels', () => {
+test('strategic POP preserves reference implementation OSM feature names and fallback labels', () => {
   const center = [106, -6];
   assert.deepEqual(strategicPop([
     { type: 'node', lon: 106.1, lat: -6.1, tags: { highway: 'primary', name: 'Jalan Utama Baru' } },
@@ -878,7 +993,7 @@ test('strategic POP preserves Python OSM feature names and fallback labels', () 
   ], center), { name: 'Kantor POP', at: [106.1, -6.1] });
 });
 
-test('local PostGIS POP fallback labels match Python', () => {
+test('local PostGIS POP fallback labels match reference implementation', () => {
   assert.equal(localOsmPopName('station', null), 'POP OSM lokal (station)');
   assert.equal(localOsmPopName('office', ''), 'POP OSM lokal (office)');
   assert.equal(localOsmPopName('main_road', 'Jalan Asia Afrika'), 'Jalan Asia Afrika');
@@ -909,7 +1024,26 @@ test('local PostGIS POP falls back to the boundary centroid when POI lookup fail
   }
 });
 
-test('strategic POP recognizes building=office without an office tag like Python', () => {
+test('PostGIS building point lookup preserves each building index', async () => {
+  const boundary = { outer: [[116, -8.6], [116.2, -8.6], [116.2, -8.4], [116, -8.4], [116, -8.6]], holes: [] };
+  let returnedIndices;
+  const generator = new GeneratorService({ execute: async (statement) => {
+    const query = new PgDialect().sqlToQuery(statement);
+    if (query.sql.includes('jsonb_to_recordset')) {
+      assert.match(query.sql, /ST_AsGeoJSON\(CASE[\s\S]*?END, 15\)/);
+      const inputs = JSON.parse(query.params.find((value) => typeof value === 'string' && value.startsWith('[{"idx"')));
+      returnedIndices = inputs.map((input) => input.idx);
+      return { rows: inputs.map(({ idx }) => ({ idx, geometry: JSON.stringify({ type: 'Point', coordinates: [116 + idx / 100, -8.575] }) })) };
+    }
+    return { rows: [] };
+  } });
+  const elements = [0, 1].map((id) => ({ id, tags: { building: 'yes' }, geometry: [[116.01, -8.58], [116.02, -8.58], [116.02, -8.57], [116.01, -8.57], [116.01, -8.58]] }));
+  const points = await generator.postgisBuildingPoints(elements, [boundary]);
+  assert.deepEqual(returnedIndices, [0, 1]);
+  assert.deepEqual([...points], [[0, [116, -8.575]], [1, [116.01, -8.575]]]);
+});
+
+test('strategic POP recognizes building=office without an office tag like reference implementation', () => {
   const candidate = strategicPop([
     { type: 'way', id: 7, tags: { building: 'office' }, geometry: [[106, -6], [106.002, -6], [106.002, -5.998], [106, -5.998], [106, -6]] },
   ], [106.001, -5.999]);
@@ -918,7 +1052,7 @@ test('strategic POP recognizes building=office without an office tag like Python
   assert.ok(Math.abs(candidate.at[1] + 5.999) < 1e-9);
 });
 
-test('strategic POP uses the length centroid for linear office features like Python', () => {
+test('strategic POP uses the length centroid for linear office features like reference implementation', () => {
   const candidate = strategicPop([
     { type: 'way', id: 8, tags: { office: 'yes' }, geometry: [[106, -6], [106.001, -6], [106.003, -6]] },
   ], [106, -6]);
@@ -989,6 +1123,39 @@ test('empty Native OSM tiles are retried instead of becoming permanent checkpoin
   }
 });
 
+test('small auto OSM boundaries use a fresh local tile cache before making online requests', async () => {
+  const root = await mkdtemp(resolve(tmpdir(), 'ftth-osm-local-tile-cache-'));
+  const names = ['OSM_SOURCE_MODE', 'OSM_ONLINE_MAX_AREA_KM2', 'OSM_ONLINE_MAX_TILES', 'OSM_CACHE_ROOT', 'OSM_CACHE_MAX_AGE_SECONDS'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  const rings = [{ outer: [[106, -6], [106.01, -6], [106.01, -5.99], [106, -5.99], [106, -6]], holes: [] }];
+  const pop = [106.005, -5.995];
+  let requests = 0, localDatabaseCalls = 0;
+  try {
+    process.env.OSM_SOURCE_MODE = 'auto';
+    process.env.OSM_ONLINE_MAX_AREA_KM2 = '25';
+    process.env.OSM_ONLINE_MAX_TILES = '4';
+    process.env.OSM_CACHE_ROOT = root;
+    process.env.OSM_CACHE_MAX_AGE_SECONDS = '3600';
+    const key = [105.998, -6.002, 106.052, -5.948].map((value) => value.toFixed(6)).join(',');
+    const tileId = createHash('sha256').update(`osm-native-tile-v1:${key}`).digest('hex');
+    const elements = parseNativeOsmXml('<osm><node id="1" lon="106.001" lat="-5.999"><tag k="building" v="yes"/></node><node id="2" lon="106.002" lat="-5.998"><tag k="railway" v="station"/></node></osm>');
+    await writeFile(resolve(root, `${tileId}.json`), JSON.stringify({ savedAt: Date.now(), elements }));
+    global.fetch = async () => { requests++; throw new Error('fresh online request should not run'); };
+    const generator = new GeneratorService({});
+    generator.fetchLocal = async () => { localDatabaseCalls++; throw new Error('small area should use tile cache'); };
+    const result = await generator.fetchOsm(rings, false, pop);
+    assert.equal(result.metadata.source, 'osm_native');
+    assert.equal(result.elements.length, 2);
+    assert.equal(requests, 0);
+    assert.equal(localDatabaseCalls, 0);
+  } finally {
+    global.fetch = originalFetch;
+    for (const [key, value] of Object.entries(previous)) value === undefined ? delete process.env[key] : process.env[key] = value;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('Overpass remains the fallback when Native OSM is unavailable', async () => {
   const originalFetch = global.fetch, previous = Object.fromEntries(['OSM_SOURCE_MODE', 'OSM_NATIVE_URL', 'OSM_NATIVE_RETRIES', 'OSM_CACHE_MAX_AGE_SECONDS'].map((key) => [key, process.env[key]]));
   const requests = [];
@@ -1055,7 +1222,7 @@ test('Nest falls back to Overpass when Native OSM has roads but no buildings', a
   }
 });
 
-test('automatic generation retries locally when online OSM returns no buildings like Python', async () => {
+test('automatic generation does not require local PostGIS when online OSM returns no buildings', async () => {
   const generator = new GeneratorService({});
   generator.sourceDecision = () => ({ mode: 'auto', tileSize: 0.05, local: false });
   generator.fetchNativeOsm = async () => ({ elements: [{ type: 'way', id: 1, tags: { highway: 'primary' }, geometry: [[106, -6], [106.01, -6]] }] });
@@ -1073,9 +1240,8 @@ test('automatic generation retries locally when online OSM returns no buildings 
   };
   global.fetch = async () => ({ ok: true, json: async () => ({ elements: [] }) });
   try {
-    const result = await generator.fetchOsm([{ outer: [[106, -6], [106.01, -6], [106.01, -5.99], [106, -5.99], [106, -6]], holes: [] }], false, [106.001, -5.999], undefined, undefined, true);
-    assert.equal(localCalls, 1);
-    assert.equal(result.metadata.source, 'osm_postgis');
+    await assert.rejects(generator.fetchOsm([{ outer: [[106, -6], [106.01, -6], [106.01, -5.99], [106, -5.99], [106, -6]], holes: [] }], false, [106.001, -5.999], undefined, undefined, true), (error) => error.getResponse().error.code === 'OSM_UNAVAILABLE');
+    assert.equal(localCalls, 0);
   } finally {
     global.fetch = originalFetch;
     for (const [name, value] of Object.entries(previous)) value === undefined ? delete process.env[name] : process.env[name] = value;
@@ -1123,7 +1289,7 @@ test('PostGIS local routing preserves topology instead of joining at shape verti
   assert.equal(graph.get('osm-node:20').at[0], 106.201);
 });
 
-test('PostGIS local road window matches the Python convex-hull and 0.002-degree query', () => {
+test('PostGIS local road window matches the reference implementation convex-hull and 0.002-degree query', () => {
   const dialect = new PgDialect();
   const boundary = 'MULTIPOLYGON(((106 -6,106.01 -6,106.01 -5.99,106 -5.99,106 -6)))';
   const withPop = dialect.sqlToQuery(localRoadWindow(boundary, [106.02, -6.01]));
@@ -1135,14 +1301,14 @@ test('PostGIS local road window matches the Python convex-hull and 0.002-degree 
   assert.deepEqual(withoutPop.params, [boundary]);
 });
 
-test('PostGIS local POP search matches the Python buffered-boundary geometry', () => {
+test('PostGIS local POP search matches the reference implementation buffered-boundary geometry', () => {
   const boundary = 'MULTIPOLYGON(((106 -6,106.01 -6,106.01 -5.99,106 -5.99,106 -6)))';
   const searchArea = new PgDialect().sqlToQuery(localPopSearchArea(boundary));
   assert.equal(searchArea.sql, "ST_Buffer(ST_GeomFromText($1,4326),0.01,'quad_segs=16')");
   assert.deepEqual(searchArea.params, [boundary]);
 });
 
-test('road routing keeps Python multi-value highway edges and uses the best allowed priority', async () => {
+test('road routing keeps reference implementation multi-value highway edges and uses the best allowed priority', async () => {
   const generator = new GeneratorService({});
   const cacheRoot = await mkdtemp(resolve(tmpdir(), 'ftth-multi-highway-'));
   const previous = { root: process.env.ROAD_GRAPH_CACHE_ROOT, age: process.env.OSM_CACHE_MAX_AGE_SECONDS };
@@ -1190,7 +1356,7 @@ test('auto POP checks Overpass for stations and offices missing from Native OSM'
   }
 });
 
-test('CSV rows match Python numeric formatting, lengths, and feeder IDs', () => {
+test('CSV rows match reference implementation numeric formatting, lengths, and feeder IDs', () => {
   const csv = buildCsv(
     { label: 'OLT', at: [106, -6] },
     [{ label: 'ODC-001', at: [106.001, -6.001], members: ['ODP-001'] }],
@@ -1235,7 +1401,7 @@ test('CSV rows match Python numeric formatting, lengths, and feeder IDs', () => 
   assert.ok(reordered.indexOf('ODP,01/01,1,pcs,-6.0,106.002') < reordered.indexOf('ODP,01/02,1,pcs,-6.0,106.001'));
 });
 
-test('design length stats round total kilometers like Python', () => {
+test('design length stats round total kilometers like reference implementation', () => {
   const stats = designStats([], [], [], [
     { type: 'feeder', source: 'POP', target: 'ODC-001', coords: [], length: 1005 },
     { type: 'distribution', source: 'ODC-001', target: 'ODP-001', coords: [], length: 1005 },
@@ -1244,7 +1410,7 @@ test('design length stats round total kilometers like Python', () => {
   assert.equal(stats.distribution_length_km, 1);
 });
 
-test('Nest generation supports the Python CLI manual-house and straight-line path', async () => {
+test('Nest generation supports the reference implementation CLI manual-house and straight-line path', async () => {
   const generator = new GeneratorService({});
   generator.fetchOsm = async () => { throw new Error('manual houses with no-road mode must not query OSM'); };
   const boundary = Buffer.from('<kml><Document><Placemark><name>Boundary</name><Polygon><outerBoundaryIs><LinearRing><coordinates>106.0,-6.0 106.01,-6.0 106.01,-5.99 106.0,-5.99 106.0,-6.0</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark></Document></kml>');
@@ -1279,6 +1445,7 @@ test('Nest generation supports the Python CLI manual-house and straight-line pat
   const kmz = await JSZip.loadAsync(result.kmz);
   const kml = await kmz.file('doc.kml').async('string');
   assert.match(kml, /<name>BOUNDARY<\/name>/);
+  assert.match(kml, /<PolyStyle><color>46ff0000<\/color><\/PolyStyle>/);
   const cliResult = await generator.generate(boundary, 'boundary.kml', pop, 'pop.kml', {
     no_road_feeder: true, manual_houses: [{ label: 'HOUSE-1', at: [106.002, -5.998] }], include_boundary: false,
   });
@@ -1314,7 +1481,41 @@ test('Nest generation supports the Python CLI manual-house and straight-line pat
   }), (error) => error.getStatus() === 400 && error.getResponse().error.code === 'POP_TOO_FAR' && error.getResponse().error.details.limit_m === 3000);
 });
 
-test('manual houses on outer and hole boundaries follow Python polygon covers semantics', async () => {
+test('Surabaya manual-input KMZ matches Python reference feature names and geometry', async () => {
+  const generator = new GeneratorService({});
+  const boundary = Buffer.from('<kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark><name>Surabaya Boundary</name><Polygon><outerBoundaryIs><LinearRing><coordinates>112.7,-7.25,0 112.71,-7.25,0 112.71,-7.24,0 112.7,-7.24,0 112.7,-7.25,0</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark></Document></kml>');
+  const pop = Buffer.from('<kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark><name>OLT Surabaya</name><Point><coordinates>112.705,-7.245,0</coordinates></Point></Placemark></Document></kml>');
+  const houses = [[112.701, -7.249], [112.702, -7.248], [112.703, -7.247], [112.704, -7.246], [112.706, -7.244], [112.709, -7.241]];
+  const result = await generator.generate(boundary, 'boundary.kml', pop, 'pop.kml', {
+    no_road_feeder: true, odp_capacity: 2, odc_capacity: 2, include_homepass: true, include_boundary: false,
+    manual_houses: houses.map((at, index) => ({ label: `HC-${index + 1}`, at })),
+  });
+  const zip = await JSZip.loadAsync(result.kmz), kml = await zip.file('doc.kml').async('string');
+  const features = [...kml.matchAll(/<Placemark>([\s\S]*?)<\/Placemark>/g)].map(([, body]) => ({
+    name: body.match(/<name>([\s\S]*?)<\/name>/)?.[1] ?? '',
+    coordinates: [...body.matchAll(/<coordinates>([\s\S]*?)<\/coordinates>/g)].map(([, coordinates]) => coordinates.trim()),
+  }));
+  const pythonReference = [
+    ['OLT001', ['112.705,-7.245,0.0']],
+    ['ODC001', ['112.70249999999999,-7.2475000000000005,0.0']],
+    ['ODC002', ['112.70750000000001,-7.2425,0.0']],
+    ['ODC001.ODP001', ['112.7015,-7.2485,0.0']],
+    ['ODC001.ODP002', ['112.70349999999999,-7.2465,0.0']],
+    ['ODC002.ODP001', ['112.70750000000001,-7.2425,0.0']],
+    ['ODC001.ODP001-01', ['112.702,-7.248,0.0']],
+    ['ODC001.ODP001-02', ['112.701,-7.249,0.0']],
+    ['ODC001.ODP002-01', ['112.704,-7.246,0.0']],
+    ['ODC001.ODP002-02', ['112.703,-7.247,0.0']],
+    ['ODC002.ODP001-01', ['112.709,-7.241,0.0']],
+    ['ODC002.ODP001-02', ['112.706,-7.244,0.0']],
+    ['OLT Surabaya-ODC-001-ODC-002', ['112.705,-7.245,0.0 112.70249999999999,-7.2475000000000005,0.0 112.70750000000001,-7.2425,0.0']],
+    ['Distribution Route', ['112.70249999999999,-7.2475000000000005,0.0 112.7015,-7.2485,0.0', '112.70249999999999,-7.2475000000000005,0.0 112.70349999999999,-7.2465,0.0', '112.70750000000001,-7.2425,0.0 112.70750000000001,-7.2425,0.0']],
+    ['Drop Route', ['112.7015,-7.2485,0.0 112.702,-7.248,0.0', '112.7015,-7.2485,0.0 112.701,-7.249,0.0', '112.70349999999999,-7.2465,0.0 112.704,-7.246,0.0', '112.70349999999999,-7.2465,0.0 112.703,-7.247,0.0', '112.70750000000001,-7.2425,0.0 112.709,-7.241,0.0', '112.70750000000001,-7.2425,0.0 112.706,-7.244,0.0']],
+  ].map(([name, coordinates]) => ({ name, coordinates }));
+  assert.deepEqual(features, pythonReference);
+});
+
+test('manual houses on outer and hole boundaries follow reference implementation polygon covers semantics', async () => {
   const generator = new GeneratorService({});
   generator.fetchOsm = async () => { throw new Error('manual houses with no-road mode must not query OSM'); };
   const boundary = Buffer.from('<kml><Document><Placemark><name>Boundary</name><Polygon><outerBoundaryIs><LinearRing><coordinates>106,-6 106.01,-6 106.01,-5.99 106,-5.99 106,-6</coordinates></LinearRing></outerBoundaryIs><innerBoundaryIs><LinearRing><coordinates>106.004,-5.996 106.006,-5.996 106.006,-5.994 106.004,-5.994 106.004,-5.996</coordinates></LinearRing></innerBoundaryIs></Polygon></Placemark></Document></kml>');
@@ -1330,7 +1531,7 @@ test('manual houses on outer and hole boundaries follow Python polygon covers se
   assert.deepEqual(result.state.customers.map((house) => house.label), ['OUTER-EDGE', 'HOLE-EDGE']);
 });
 
-test('straight-line ODC spacing matches Python Earth radius and coordinates', async () => {
+test('straight-line ODC spacing matches reference implementation Earth radius and coordinates', async () => {
   const generator = new GeneratorService({});
   const boundary = Buffer.from('<kml><Document><Placemark><name>Boundary</name><Polygon><outerBoundaryIs><LinearRing><coordinates>105.99,-6.01 106.01,-6.01 106.01,-5.99 105.99,-5.99 105.99,-6.01</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark></Document></kml>');
   const pop = Buffer.from('<kml><Document><Placemark><name>OLT</name><Point><coordinates>106,-6,0</coordinates></Point></Placemark></Document></kml>');
@@ -1358,7 +1559,7 @@ test('cached CORE export preserves KMZ, CSV, statistics, and validation', async 
   assert.deepEqual(reused.validation, generated.validation);
 });
 
-test('manual-house routing follows the Python road fixture geometry', async () => {
+test('manual-house routing follows the reference implementation road fixture geometry', async () => {
   const generator = new GeneratorService({});
   generator.fetchOsm = async () => ({
     elements: [{ type: 'way', id: 1, tags: { highway: 'residential' }, geometry: [112.746, 112.748, 112.75, 112.752, 112.754].map((lon) => [lon, -7.25]) }],
@@ -1418,7 +1619,7 @@ test('generation SSE sends a separate heartbeat while progress is unchanged', as
   }
 });
 
-test('batch merges disconnected boundary files into one Python-style core job', async () => {
+test('batch merges disconnected boundary files into one reference implementation-style core job', async () => {
   const root = await mkdtemp(resolve(tmpdir(), 'ftth-batch-parity-'));
   try {
     const controller = new GenerationController({}, {}, { validateOptions: (options) => options }, {}, {});
@@ -1447,7 +1648,7 @@ test('batch merges disconnected boundary files into one Python-style core job', 
   }
 });
 
-test('new generation removes only stale temporary inputs like the Python cleanup', async () => {
+test('new generation removes only stale temporary inputs like the reference implementation cleanup', async () => {
   const root = await mkdtemp(resolve(tmpdir(), 'ftth-input-cleanup-'));
   try {
     const controller = new GenerationController({}, {}, {}, {}, {});
@@ -1479,7 +1680,32 @@ test('Homepass and Regenerate retain the frontend job ID for SSE', async () => {
   assert.equal(regenerate.data.job_id, request.body.job_id);
 });
 
-test('only core generation creates a design version like the Python worker', async () => {
+test('Homepass and Regenerate rebuild from saved batch inputs when the network cache is missing', async () => {
+  const root = await mkdtemp(resolve(tmpdir(), 'ftth-cache-recovery-'));
+  try {
+    const boundary = resolve(root, 'boundary.kml'), pop = resolve(root, 'pop.kml');
+    await writeFile(boundary, '<kml/>'); await writeFile(pop, '<kml/>');
+    const row = { result: { input_paths: { boundary, boundaryName: 'boundary.kml', pop, popName: 'pop.kml' } } };
+    const query = { where() { return this; }, orderBy() { return this; }, async limit() { return [row]; } };
+    const controller = new GenerationController({ select: () => ({ from: () => query }) }, {}, {}, {}, {});
+    controller.generationUser = async () => ({ id: 'owner' });
+    controller.requireProject = async () => {};
+    controller.resolveCacheFile = async () => { throw new BadRequestException('Cache Network Core belum tersedia. Jalankan Generate Design terlebih dahulu.'); };
+    controller.parseOptions = () => ({});
+    const queued = [];
+    controller.enqueue = async (_user, input) => { queued.push(input); return input.jobId; };
+    for (const operation of ['homepass', 'regenerate']) {
+      await controller.cachedOperation({ body: { project_id: 'project', batch_id: 'batch', item_id: 'item', job_id: `job-${operation}` } }, operation);
+    }
+    assert.deepEqual(queued.map(({ operation, rebuildFromInputs, inputPaths }) => [operation, rebuildFromInputs, inputPaths.boundary]), [
+      ['homepass', true, boundary], ['regenerate', true, boundary],
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('only core generation creates a design version like the reference implementation worker', async () => {
   const root = await mkdtemp(resolve(tmpdir(), 'ftth-version-parity-'));
   try {
     const result = { kmz: Buffer.from('kmz'), csv: Buffer.from('csv'), state: {}, stats: {}, validation: {} };
@@ -1540,7 +1766,7 @@ test('identical Nest CORE jobs reuse the validated network cache', async () => {
   }
 });
 
-test('project creation keeps FastAPI required fields and exact name value', async () => {
+test('project creation keeps previous API required fields and exact name value', async () => {
   const inserted = [];
   const db = { transaction: async (run) => run({ insert: () => ({ values: (value) => {
     inserted.push(value);
@@ -1562,7 +1788,7 @@ test('project creation keeps FastAPI required fields and exact name value', asyn
   assert.equal(inserted[0].name, ' X ');
 });
 
-test('project updates reject the same invalid field types as Pydantic', async () => {
+test('project updates reject invalid field types with a validation response', async () => {
   const controller = new ProjectsController({});
   const req = { user: { id: 'owner', role: 'engineer' } };
   await assert.rejects(controller.update('project', { layers: 'not a list', generation_config: [] }, req), (error) => {
@@ -1572,7 +1798,105 @@ test('project updates reject the same invalid field types as Pydantic', async ()
   });
 });
 
-test('Nest includes OSM buildings mapped as point nodes like the Python provider', async () => {
+test('project list keeps viewer visibility and owner-scoped admin visibility', async () => {
+  const whereValues = [];
+  const query = {
+    where(value) { whereValues.push(value); return this; }, orderBy() { return this; },
+    offset() { return this; }, async limit() { return []; },
+  };
+  const controller = new ProjectsController({ select: () => ({ from: () => query }) });
+  await controller.list({ user: { id: 'viewer-1', role: 'viewer' } });
+  await controller.list({ user: { id: 'admin-2', role: 'admin' } });
+  assert.equal(whereValues[0], undefined);
+  assert.deepEqual(new PgDialect().sqlToQuery(whereValues[1]).params, ['admin-2']);
+});
+
+test('project access and deletion stay owner-scoped for administrators', async () => {
+  const foreign = { id: 'project-1', name: 'Private', userId: 'admin-1' };
+  const db = { select: () => ({ from: () => ({ where: () => ({ limit: async () => [foreign] }) }) }) };
+  const controller = new ProjectsController(db);
+  await assert.rejects(controller.get('project-1', { user: { id: 'admin-2', role: 'admin' } }), (error) => error.getStatus() === 403);
+  await assert.rejects(controller.remove('project-1', { user: { id: 'admin-2', role: 'admin' } }), (error) => error.getStatus() === 403);
+  await assert.rejects(controller.remove('project-1', { user: { id: 'engineer-1', role: 'engineer' } }), (error) => error.getStatus() === 403);
+});
+
+test('project creation stores generation config compatibly and hides its legacy filter key', async () => {
+  const config = { odc_capacity: 8, max_distribution_length_m: 750 };
+  let inserted, audit;
+  const db = { transaction: async (run) => run({ insert: () => ({ values: (value) => {
+    if (value.action === 'CREATE_PROJECT') { audit = value; return Promise.resolve(); }
+    inserted = value;
+    return { returning: async () => [{ ...value }] };
+  } }) }) };
+  const result = await new ProjectsController(db).create({ name: 'Design', layers: [], filters: {}, feature_colors: {}, generation_config: config }, { user: { id: 'engineer-1', role: 'engineer' } });
+  assert.deepEqual(inserted.filters.__generation_config__, config);
+  assert.deepEqual(inserted.generation_config, config);
+  assert.deepEqual(result.data.filters, {});
+  assert.deepEqual(result.data.generation_config, config);
+  assert.equal(audit.action, 'CREATE_PROJECT');
+});
+
+test('project update audits the previous and saved values', async () => {
+  const old = { id: 'project-1', name: 'Old name', layers: [], filters: {}, feature_colors: {}, generation_config: {}, userId: 'engineer-1', created_at: new Date(0), updated_at: new Date(0) };
+  let audit;
+  const db = {
+    select: () => ({ from: () => ({ where: () => ({ limit: async () => [old] }) }) }),
+    transaction: async (run) => run({
+      update: () => ({ set: (value) => ({ where: () => ({ returning: async () => [{ ...old, ...value, name: 'New name' }] }) }) }),
+      insert: () => ({ values: async (value) => { audit = value; } }),
+    }),
+  };
+  await new ProjectsController(db).update('project-1', { name: 'New name' }, { user: { id: 'engineer-1', role: 'engineer' } });
+  assert.equal(audit.action, 'UPDATE_PROJECT');
+  assert.equal(audit.details.old.name, 'Old name');
+  assert.equal(audit.details.new.name, 'New name');
+});
+
+test('viewers cannot mutate versions and engineers cannot delete them', async () => {
+  const controller = new VersionsController({}, {});
+  await assert.rejects(controller.remove('project-1', '1', { user: { id: 'viewer-1', role: 'viewer' } }), (error) => error.getStatus() === 403);
+  await assert.rejects(controller.duplicate('project-1', '1', { user: { id: 'viewer-1', role: 'viewer' } }), (error) => error.getStatus() === 403);
+  await assert.rejects(controller.rollback('project-1', '1', { user: { id: 'viewer-1', role: 'viewer' } }), (error) => error.getStatus() === 403);
+  await assert.rejects(controller.remove('project-1', '1', { user: { id: 'engineer-1', role: 'engineer' } }), (error) => error.getStatus() === 403);
+});
+
+test('administrators cannot list versions for another owner’s project', async () => {
+  let reads = 0;
+  const db = { select: () => ({ from: () => ({ where: () => ({ limit: async () => { reads++; return [{ id: 'project-1', userId: 'owner-1' }]; } }) }) }) };
+  await assert.rejects(new VersionsController(db, {}).list('project-1', { user: { id: 'admin-1', role: 'admin' } }), (error) => error.getStatus() === 404);
+  assert.equal(reads, 1);
+});
+
+test('version duplicate and rollback copy spatial records and audit in one transaction', async () => {
+  const source = { id: 'version-1', projectId: 'project-1', version: 1, config: {}, metadata: {}, validation: {}, stats: {}, status: 'COMPLETED', createdAt: new Date(0) };
+  const executions = [], audits = [];
+  for (const [operation, action] of [['duplicate', 'DUPLICATE_VERSION'], ['rollback', 'ROLLBACK_VERSION']]) {
+    let selection = 0;
+    const tx = {
+      async execute(statement) { executions.push(new PgDialect().sqlToQuery(statement).sql); },
+      select: () => ({ from: () => {
+        selection++;
+        const query = { where() { return this; }, orderBy() { return this; }, async limit() { return selection === 1 ? [source] : [{ version: 1 }]; } };
+        return query;
+      } }),
+      insert: () => ({ values: (value) => {
+        if (value.action) { audits.push(value); return Promise.resolve(); }
+        return { returning: async () => [{ ...value }] };
+      } }),
+    };
+    const db = {
+      select: () => ({ from: () => ({ where: () => ({ limit: async () => [{ id: 'project-1', userId: 'owner-1' }] }) }) }),
+      transaction: async (run) => run(tx),
+    };
+    const controller = new VersionsController(db, {});
+    const result = await controller[operation]('project-1', '1', { user: { id: 'owner-1', role: 'engineer' } });
+    assert.equal(result.data.version, 2);
+  }
+  assert.equal(executions.filter((sql) => sql.startsWith('INSERT INTO')).length, 6);
+  assert.deepEqual(audits.map((audit) => audit.action), ['DUPLICATE_VERSION', 'ROLLBACK_VERSION']);
+});
+
+test('Nest includes OSM buildings mapped as point nodes like the reference implementation provider', async () => {
   const generator = new GeneratorService({});
   generator.fetchOsm = async () => ({
     elements: [{ type: 'node', id: 123, lon: 106.004, lat: -5.996, tags: { building: 'yes', name: 'Node House' } }],
@@ -1584,7 +1908,7 @@ test('Nest includes OSM buildings mapped as point nodes like the Python provider
   assert.deepEqual(result.state.customers.map((house) => house.label), ['Node House']);
 });
 
-test('OSM multipolygon building points use the area-weighted centroid of every component like Python', async () => {
+test('OSM multipolygon building points use the area-weighted centroid of every component like reference implementation', async () => {
   const generator = new GeneratorService({});
   const first = [[106.001, -6.001], [106.002, -6.001], [106.002, -6], [106.001, -6], [106.001, -6.001]];
   const second = [[106.004, -6.001], [106.007, -6.001], [106.007, -6], [106.004, -6], [106.004, -6.001]];
@@ -1595,7 +1919,7 @@ test('OSM multipolygon building points use the area-weighted centroid of every c
   assert.deepEqual(result.state.customers[0].at, [106.0045, -6.0005]);
 });
 
-test('generation rejects an incomplete distribution tree like the Python pipeline', () => {
+test('generation rejects an incomplete distribution tree like the reference implementation pipeline', () => {
   const assigned = [{ label: 'ODP-001' }, { label: 'ODP-002' }];
   assert.throws(
     () => requireCompleteDistributionTree('ODC-001', assigned, [{ target: 'ODP-001' }]),
@@ -1607,7 +1931,7 @@ test('generation rejects an incomplete distribution tree like the Python pipelin
   assert.doesNotThrow(() => requireCompleteDistributionTree('ODC-001', assigned, assigned.map((odp) => ({ target: odp.label }))));
 });
 
-test('generation aggregates disconnected ODPs across distribution trees like Python', () => {
+test('generation aggregates disconnected ODPs across distribution trees like reference implementation', () => {
   const odcs = [
     { label: 'ODC-001', members: ['ODP-001'] },
     { label: 'ODC-002', members: ['ODP-002'] },
@@ -1622,7 +1946,7 @@ test('generation aggregates disconnected ODPs across distribution trees like Pyt
   );
 });
 
-test('same-edge fiber route follows the edge in reverse like Python, even when a directed detour exists', () => {
+test('same-edge fiber route follows the edge in reverse like reference implementation, even when a directed detour exists', () => {
   const graph = new Map();
   const a = [7.42521, 43.7374505], b = [7.4237917, 43.7375487];
   const c = [7.4238, 43.738], d = [7.42522, 43.738];
@@ -1637,7 +1961,7 @@ test('same-edge fiber route follows the edge in reverse like Python, even when a
   assert.deepEqual(path.at(-1), [7.424744473, 43.737482732]);
 });
 
-test('fiber routes may use either endpoint of one-way road edges like Python', () => {
+test('fiber routes may use either endpoint of one-way road edges like reference implementation', () => {
   const graph = new Map();
   const a = [7.42, 43.73], b = [7.421, 43.73], c = [7.42, 43.731], d = [7.421, 43.731];
   addEdge(graph, a, b, 'residential', 'priority_road', true, 100, ['a', 'b']);
@@ -1650,7 +1974,7 @@ test('fiber routes may use either endpoint of one-way road edges like Python', (
   assert.ok(!path.some((point) => point[0] === d[0] && point[1] === d[1]));
 });
 
-test('road spacing keeps Python edge orientation when node IDs sort differently as strings', () => {
+test('road spacing keeps reference implementation edge orientation when node IDs sort differently as strings', () => {
   const graph = new Map();
   const a = [7.42, 43.73], b = [7.421, 43.73];
   addEdge(graph, a, b, 'residential', 'shortest', false, 81, ['6696261618', '25191508']);
@@ -1660,7 +1984,7 @@ test('road spacing keeps Python edge orientation when node IDs sort differently 
   assert.ok(Math.abs(point[1] - 43.73) < 1e-10);
 });
 
-test('road spacing cannot reverse an incoming one-way edge like Python', () => {
+test('road spacing cannot reverse an incoming one-way edge like reference implementation', () => {
   const graph = new Map();
   const a = [7.42, 43.73], b = [7.421, 43.73], c = [7.42, 43.731];
   addEdge(graph, a, b, 'residential', 'shortest', true, 81, ['a', 'b']);
@@ -1668,7 +1992,7 @@ test('road spacing cannot reverse an incoming one-way edge like Python', () => {
   assert.equal(walkAlongRoad(graph, b, 20, 1, 0), undefined);
 });
 
-test('road spacing uses Python edge length at the exact movement boundary', () => {
+test('road spacing uses reference implementation edge length at the exact movement boundary', () => {
   const graph = new Map();
   const a = [7.4200543, 43.7330672], b = [7.421227, 43.7331634], lengthM = 94.827, fraction = 40 / lengthM;
   addEdge(graph, a, b, 'residential', 'shortest', false, lengthM, ['from', 'to']);
@@ -1678,7 +2002,7 @@ test('road spacing uses Python edge length at the exact movement boundary', () =
   assert.ok(Math.hypot(point[0] - a[0], point[1] - a[1]) < 1e-10);
 });
 
-test('HTTP exceptions keep FastAPI response shapes', () => {
+test('HTTP exceptions keep previous API response shapes', () => {
   let actual;
   const filter = new ApiExceptionFilter({ httpAdapter: { reply: (_response, body, status) => { actual = { body, status }; } } });
   const host = { switchToHttp: () => ({ getResponse: () => ({}) }) };

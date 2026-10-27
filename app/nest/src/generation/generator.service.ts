@@ -121,7 +121,7 @@ export function normalizeCachedState(state: any) {
   return {
     pop: [Number(state.pop.lon), Number(state.pop.lat)] as Coord,
     pop_label: String(state.pop.name ?? 'POP'), odcs, odps, customers, cables, boundaries, roads: [],
-    pythonCache: true,
+    legacyCache: true,
     networkComplete,
   };
 }
@@ -516,7 +516,7 @@ const OVERPASS_ENDPOINTS = [...new Set([
   'https://overpass.kumi.systems/api/interpreter',
   'https://overpass.osm.ch/api/interpreter',
 ])];
-export function pythonBoolean(value: unknown, key: string): boolean {
+export function parseBooleanInput(value: unknown, key: string): boolean {
   if (typeof value === 'boolean') return value;
   if (value === 1 || value === 0) return value === 1;
   if (typeof value === 'string' && /^(true|1|on|yes|y|t|false|0|off|no|n|f)$/i.test(value)) return /^(true|1|on|yes|y|t)$/i.test(value);
@@ -562,7 +562,7 @@ function generationConfig(options: any) {
   if (!['shortest', 'priority_road'].includes(config.routing_strategy ?? 'shortest')) throw new BadRequestException('routing_strategy harus shortest atau priority_road.');
   config.routing_strategy ??= 'shortest';
   for (const [key, fallback] of [['include_homepass', true], ['force_refresh_osm', false]] as const) {
-    config[key] = pythonBoolean(config[key] === undefined ? fallback : config[key], key);
+    config[key] = parseBooleanInput(config[key] === undefined ? fallback : config[key], key);
   }
   return config;
 }
@@ -710,7 +710,7 @@ export function walkAlongRoad(graph: Map<string, Node>, origin: Coord, distanceM
     }
     if (!candidates.length) return at;
     const chosen = candidates[branchChoice % candidates.length];
-    // Python cannot walk an incoming edge unless its reverse record exists.
+    // reference implementation cannot walk an incoming edge unless its reverse record exists.
     if (!chosen.from.edges.some((edge) => edge.to === chosen.to.id)) return undefined;
     from = chosen.from;
     to = chosen.to;
@@ -764,17 +764,27 @@ function enforceStraightLineOdcSpacing(odcs: Point[], minimumM: number) {
   }
 }
 
+export function roundHalfEven(value: number) {
+  const lower = Math.floor(value), fraction = value - lower;
+  return fraction === 0.5 ? (lower % 2 === 0 ? lower : lower + 1) : Math.round(value);
+}
+
 export function rebalanceOdpsByRoadConnectivity(graph: Map<string, Node>, odcs: Point[], odps: Point[], maxLengthM: number, capacity: number, routeCache: Map<string, Coord[]>) {
+  const odpByLabel = new Map(odps.map((odp) => [odp.label, odp]));
+  const orderedLabels = odcs.flatMap((odc) => odc.members ?? []);
+  const orderedOdps = orderedLabels.map((label) => odpByLabel.get(label)).filter((odp): odp is Point => Boolean(odp));
+  const orderedSet = new Set(orderedOdps.map((odp) => odp.label));
+  orderedOdps.push(...odps.filter((odp) => !orderedSet.has(odp.label)));
   const routedLength = (odc: Point, odp: Point) => {
     try { return pathLength(route(graph, odc.at, odp.at, routeCache)); }
     catch { return undefined; }
   };
-  const assignment = assignOdpsGloballyByRoad(graph, odcs, odps, maxLengthM, capacity, routeCache, routedLength);
+  const assignment = assignOdpsGloballyByRoad(graph, odcs, orderedOdps, maxLengthM, capacity, routeCache, routedLength);
   if (assignment) {
     odcs.forEach((odc) => { odc.members = []; });
-    assignment.forEach((odcIndex, odpIndex) => { odcs[odcIndex].members!.push(odps[odpIndex].label); });
+    assignment.forEach((odcIndex, odpIndex) => { odcs[odcIndex].members!.push(orderedOdps[odpIndex].label); });
   } else {
-    for (const odp of odps) {
+    for (const odp of orderedOdps) {
       const current = odcs.find((odc) => odc.members?.includes(odp.label));
       if (!current) continue;
       const currentLength = routedLength(current, odp);
@@ -804,7 +814,7 @@ export function rebalanceOdpsByRoadConnectivity(graph: Map<string, Node>, odcs: 
     }
   }
   let recoveryIndex = 1;
-  for (const odp of odps) {
+  for (const odp of orderedOdps) {
     const current = odcs.find((odc) => odc.members?.includes(odp.label));
     const length = current && routedLength(current, odp);
     if (length !== undefined && length <= maxLengthM) continue;
@@ -826,6 +836,157 @@ export function rebalanceOdpsByRoadConnectivity(graph: Map<string, Node>, odcs: 
     while (odcs.some((odc) => odc.label === `ODC-RECOVERY-${String(recoveryIndex).padStart(3, '0')}`)) recoveryIndex++;
     odcs.push({ label: `ODC-RECOVERY-${String(recoveryIndex++).padStart(3, '0')}`, at: location, members: [odp.label] });
   }
+}
+
+function networkSimplex(nodeCount: number, demands: number[], sources: number[], targets: number[], capacities: number[], weights: number[]) {
+  const edgeCount = sources.length;
+  const fauxInfinity = 3 * Math.max(capacities.reduce((sum, value) => sum + value, 0), weights.reduce((sum, value) => sum + Math.abs(value), 0), demands.reduce((sum, value) => sum + Math.abs(value), 0)) || 1;
+  for (let node = 0; node < nodeCount; node++) {
+    if (demands[node] > 0) { sources.push(nodeCount); targets.push(node); }
+    else { sources.push(node); targets.push(nodeCount); }
+    capacities.push(fauxInfinity);
+    weights.push(fauxInfinity);
+  }
+  const flow = [...Array(edgeCount).fill(0), ...demands.map(Math.abs)];
+  const potential = demands.map((demand) => demand <= 0 ? fauxInfinity : -fauxInfinity);
+  const parent: (number | null)[] = [...Array(nodeCount).fill(nodeCount), null];
+  const parentEdge: (number | null)[] = Array.from({ length: nodeCount }, (_, index) => edgeCount + index);
+  const parentEdgeAt = (node: number) => parentEdge[node === nodeCount ? nodeCount - 1 : node];
+  const setParentEdge = (node: number, edge: number | null) => { parentEdge[node === nodeCount ? nodeCount - 1 : node] = edge; };
+  const subtreeSize = [...Array(nodeCount).fill(1), nodeCount + 1];
+  const nextNode = [...Array.from({ length: nodeCount - 1 }, (_, index) => index + 1), nodeCount, 0];
+  const previousNode = [nodeCount, ...Array.from({ length: nodeCount }, (_, index) => index)];
+  const lastDescendant = [...Array.from({ length: nodeCount }, (_, index) => index), nodeCount - 1];
+
+  const reducedCost = (edge: number) => {
+    const cost = weights[edge] - potential[sources[edge]] + potential[targets[edge]];
+    return flow[edge] === 0 ? cost : -cost;
+  };
+  const residualCapacity = (edge: number, from: number) => sources[edge] === from ? capacities[edge] - flow[edge] : flow[edge];
+  const findApex = (leftStart: number, rightStart: number) => {
+    let left = leftStart, right = rightStart, leftSize = subtreeSize[left], rightSize = subtreeSize[right];
+    for (let steps = 0; steps <= nodeCount; steps++) {
+      while (leftSize < rightSize) { left = parent[left]!; if (left === null) throw new Error('Network simplex tree is disconnected.'); leftSize = subtreeSize[left]; }
+      while (leftSize > rightSize) { right = parent[right]!; if (right === null) throw new Error('Network simplex tree is disconnected.'); rightSize = subtreeSize[right]; }
+      if (leftSize !== rightSize) continue;
+      if (left !== right) {
+        left = parent[left]!; right = parent[right]!;
+        if (left === null || right === null) throw new Error('Network simplex tree is disconnected.');
+        leftSize = subtreeSize[left]; rightSize = subtreeSize[right];
+      } else return left;
+    }
+    throw new Error('Network simplex spanning tree contains a parent cycle.');
+  };
+  const tracePath = (start: number, ancestor: number) => {
+    const nodes = [start], edges: number[] = [];
+    while (start !== ancestor && edges.length <= nodeCount) { edges.push(parentEdgeAt(start)!); start = parent[start]!; nodes.push(start); }
+    if (start !== ancestor) throw new Error('Network simplex path does not reach its ancestor.');
+    return { nodes, edges };
+  };
+  const findCycle = (edge: number, from: number, to: number) => {
+    const apex = findApex(from, to), left = tracePath(from, apex);
+    left.nodes.reverse(); left.edges.reverse();
+    if (left.edges.length !== 1 || left.edges[0] !== edge) left.edges.push(edge);
+    const right = tracePath(to, apex);
+    right.nodes.pop();
+    return { nodes: [...left.nodes, ...right.nodes], edges: [...left.edges, ...right.edges] };
+  };
+  const traceSubtree = (root: number) => {
+    const nodes = [root], last = lastDescendant[root];
+    while (root !== last && nodes.length <= nodeCount + 1) { root = nextNode[root]; nodes.push(root); }
+    if (root !== last) throw new Error('Network simplex depth-first thread contains a cycle.');
+    return nodes;
+  };
+  const removeEdge = (above: number, below: number) => {
+    const size = subtreeSize[below], before = previousNode[below], last = lastDescendant[below], after = nextNode[last];
+    parent[below] = null; setParentEdge(below, null);
+    nextNode[before] = after; previousNode[after] = before;
+    nextNode[last] = below; previousNode[below] = last;
+    for (let steps = 0; above !== null && steps <= nodeCount; steps++) {
+      subtreeSize[above] -= size;
+      if (lastDescendant[above] === last) lastDescendant[above] = before;
+      above = parent[above]!;
+    }
+    if (above !== null) throw new Error('Network simplex parent cycle while removing an edge.');
+  };
+  const makeRoot = (node: number) => {
+    const ancestors: number[] = [];
+    while (node !== null && ancestors.length <= nodeCount) { ancestors.push(node); node = parent[node]!; }
+    if (node !== null) throw new Error('Network simplex parent cycle while rerooting tree.');
+    ancestors.reverse();
+    for (let index = 0; index < ancestors.length - 1; index++) {
+      const p = ancestors[index], q = ancestors[index + 1], sizeP = subtreeSize[p], lastP = lastDescendant[p], prevQ = previousNode[q], lastQ = lastDescendant[q], nextLastQ = nextNode[lastQ];
+      parent[p] = q; parent[q] = null;
+      setParentEdge(p, parentEdgeAt(q) ?? null); setParentEdge(q, null);
+      subtreeSize[p] = sizeP - subtreeSize[q]; subtreeSize[q] = sizeP;
+      nextNode[prevQ] = nextLastQ; previousNode[nextLastQ] = prevQ;
+      nextNode[lastQ] = q; previousNode[q] = lastQ;
+      let newLastP = lastP;
+      if (lastP === lastQ) { lastDescendant[p] = prevQ; newLastP = prevQ; }
+      previousNode[p] = lastQ; nextNode[lastQ] = p;
+      nextNode[newLastP] = q; previousNode[q] = newLastP;
+      lastDescendant[q] = newLastP;
+    }
+  };
+  const addTreeEdge = (edge: number, from: number, to: number) => {
+    const lastFrom = lastDescendant[from], afterFrom = nextNode[lastFrom], sizeTo = subtreeSize[to], lastTo = lastDescendant[to];
+    parent[to] = from; setParentEdge(to, edge);
+    nextNode[lastFrom] = to; previousNode[to] = lastFrom;
+    previousNode[afterFrom] = lastTo; nextNode[lastTo] = afterFrom;
+    for (let steps = 0; from !== null && steps <= nodeCount; steps++) {
+      subtreeSize[from] += sizeTo;
+      if (lastDescendant[from] === lastFrom) lastDescendant[from] = lastTo;
+      from = parent[from]!;
+    }
+    if (from !== null) throw new Error('Network simplex parent cycle while adding edge.');
+  };
+  const updatePotentials = (edge: number, from: number, subtree: number) => {
+    const delta = subtree === targets[edge]
+      ? potential[from] - weights[edge] - potential[subtree]
+      : potential[from] + weights[edge] - potential[subtree];
+    for (const node of traceSubtree(subtree)) potential[node] += delta;
+  };
+
+  if (edgeCount) {
+    const blockSize = Math.ceil(Math.sqrt(edgeCount)), blockCount = Math.ceil(edgeCount / blockSize);
+    let emptyBlocks = 0, first = 0;
+    while (emptyBlocks < blockCount) {
+      let block: number[];
+      const end = first + blockSize;
+      if (end <= edgeCount) block = Array.from({ length: blockSize }, (_, i) => first + i);
+      else block = [...Array.from({ length: edgeCount - first }, (_, i) => first + i), ...Array.from({ length: end - edgeCount }, (_, i) => i)];
+      first = end % edgeCount;
+      let entering = block[0], enteringCost = reducedCost(entering);
+      for (const edge of block.slice(1)) { const cost = reducedCost(edge); if (cost < enteringCost) { entering = edge; enteringCost = cost; } }
+      if (enteringCost >= 0) { emptyBlocks++; continue; }
+      const from = flow[entering] === 0 ? sources[entering] : targets[entering];
+      const to = flow[entering] === 0 ? targets[entering] : sources[entering];
+      const cycle = findCycle(entering, from, to);
+      let leaving = cycle.edges.at(-1)!, leavingFrom = cycle.nodes.at(-1)!;
+      for (let index = cycle.edges.length - 2; index >= 0; index--) {
+        const edge = cycle.edges[index], node = cycle.nodes[index], capacity = residualCapacity(edge, node);
+        if (capacity < residualCapacity(leaving, leavingFrom)) { leaving = edge; leavingFrom = node; }
+      }
+      const amount = residualCapacity(leaving, leavingFrom);
+      for (let index = 0; index < cycle.edges.length; index++) {
+        const edge = cycle.edges[index], node = cycle.nodes[index];
+        flow[edge] += sources[edge] === node ? amount : -amount;
+      }
+      emptyBlocks = 0;
+      if (entering !== leaving) {
+        let treeFrom = leavingFrom, treeTo = targets[leaving] === leavingFrom ? sources[leaving] : targets[leaving];
+        if (parent[treeTo] !== treeFrom) [treeFrom, treeTo] = [treeTo, treeFrom];
+        let newFrom = from, newTo = to;
+        if (cycle.edges.indexOf(entering) > cycle.edges.indexOf(leaving)) [newFrom, newTo] = [newTo, newFrom];
+        removeEdge(treeFrom, treeTo);
+        makeRoot(newTo);
+        addTreeEdge(entering, newFrom, newTo);
+        updatePotentials(entering, newFrom, newTo);
+      }
+    }
+  }
+  const remainingFakeFlow = flow.slice(edgeCount);
+  return remainingFakeFlow.every((value) => value === 0) ? flow.slice(0, edgeCount) : undefined;
 }
 
 function assignOdpsGloballyByRoad(
@@ -853,63 +1014,29 @@ function assignOdpsGloballyByRoad(
   }
 
   const solve = () => {
-    type FlowEdge = { to: number; reverse: number; capacity: number; cost: number };
-    const source = 0, odpStart = 1, odcStart = odpStart + odps.length, sink = odcStart + odcs.length;
-    const network: FlowEdge[][] = Array.from({ length: sink + 1 }, () => []);
-    const addEdge = (from: number, to: number, edgeCapacity: number, cost: number) => {
-      const forward: FlowEdge = { to, reverse: network[to].length, capacity: edgeCapacity, cost };
-      const reverse: FlowEdge = { to: from, reverse: network[from].length, capacity: 0, cost: -cost };
-      network[from].push(forward);
-      network[to].push(reverse);
-    };
-    odps.forEach((_, index) => addEdge(source, odpStart + index, 1, 0));
-    odcs.forEach((_, index) => addEdge(odcStart + index, sink, capacity, 0));
+    const source = 0, sink = 1, odpStart = 2, odcStart = odpStart + odps.length, nodeCount = odcStart + odcs.length;
+    const demands = Array(nodeCount).fill(0);
+    demands[source] = -odps.length;
+    demands[sink] = odps.length;
+    const sources: number[] = [], targets: number[] = [], capacities: number[] = [], weights: number[] = [];
     const assignmentEdges: { odpIndex: number; odcIndex: number; edgeIndex: number }[] = [];
-    for (const [id, length] of routeLengths) {
-      const [odpIndex, odcIndex] = id.split(':').map(Number);
-      const penalty = length > maxLengthM ? maxLengthM * 1000 : 0;
-      const cost = Math.round((length + penalty) * 100);
-      const from = odpStart + odpIndex;
-      assignmentEdges.push({ odpIndex, odcIndex, edgeIndex: network[from].length });
-      addEdge(from, odcStart + odcIndex, 1, cost);
+    const addEdge = (from: number, to: number, edgeCapacity: number, cost: number) => {
+      sources.push(from); targets.push(to); capacities.push(edgeCapacity); weights.push(cost);
+    };
+    // NetworkX visits nodes in insertion order, then each node's outgoing edges.
+    odps.forEach((_, index) => addEdge(source, odpStart + index, 1, 0));
+    for (let odpIndex = 0; odpIndex < odps.length; odpIndex++) for (const [id, length] of routeLengths) {
+      const [edgeOdp, odcIndex] = id.split(':').map(Number);
+      if (edgeOdp !== odpIndex) continue;
+      const routePenalty = length > maxLengthM ? maxLengthM * 1000 : 0;
+      assignmentEdges.push({ odpIndex, odcIndex, edgeIndex: sources.length });
+      addEdge(odpStart + odpIndex, odcStart + odcIndex, 1, roundHalfEven((length + routePenalty) * 100));
     }
-
-    const potential = Array(network.length).fill(0), flow = Array(network.length).fill(Infinity);
-    let sent = 0;
-    while (sent < odps.length) {
-      flow.fill(Infinity);
-      const previousNode = Array(network.length).fill(-1), previousEdge = Array(network.length).fill(-1);
-      const queue: QueueItem[] = [];
-      flow[source] = 0;
-      pushMin(queue, { id: String(source), cost: 0 });
-      while (queue.length) {
-        const item = popMin(queue)!;
-        const from = Number(item.id);
-        if (item.cost !== flow[from]) continue;
-        for (let edgeIndex = 0; edgeIndex < network[from].length; edgeIndex++) {
-          const edge = network[from][edgeIndex];
-          if (!edge.capacity) continue;
-          const nextCost = flow[from] + edge.cost + potential[from] - potential[edge.to];
-          if (nextCost >= flow[edge.to]) continue;
-          flow[edge.to] = nextCost;
-          previousNode[edge.to] = from;
-          previousEdge[edge.to] = edgeIndex;
-          pushMin(queue, { id: String(edge.to), cost: nextCost });
-        }
-      }
-      if (!Number.isFinite(flow[sink])) return undefined;
-      potential.forEach((_, index) => { if (Number.isFinite(flow[index])) potential[index] += flow[index]; });
-      for (let node = sink; node !== source; node = previousNode[node]) {
-        const from = previousNode[node], edge = network[from][previousEdge[node]];
-        edge.capacity--;
-        network[node][edge.reverse].capacity++;
-      }
-      sent++;
-    }
+    odcs.forEach((_, index) => addEdge(odcStart + index, sink, capacity, 0));
+    const flows = networkSimplex(nodeCount, demands, sources, targets, capacities, weights);
+    if (!flows) return undefined;
     const assignment = Array(odps.length).fill(-1);
-    for (const edge of assignmentEdges) {
-      if (network[odpStart + edge.odpIndex][edge.edgeIndex].capacity === 0) assignment[edge.odpIndex] = edge.odcIndex;
-    }
+    for (const edge of assignmentEdges) if (flows[edge.edgeIndex] > 0) assignment[edge.odpIndex] = edge.odcIndex;
     return assignment.every((index) => index >= 0) ? assignment : undefined;
   };
 
@@ -947,8 +1074,8 @@ export function capacitatedClusters(points: Coord[], capacity: number, minSize =
   let remaining = points.map((_, index) => index), previous: Coord | undefined;
   const clusters: number[][] = [];
   // Match random.Random(42).randint(0, n - 1) so the first cluster starts at
-  // the same house index as the Python generator.
-  const pythonSeedIndex = (length: number) => {
+  // the same house index as the reference implementation generator.
+  const seededRandomIndex = (length: number) => {
     const size = 624, state = new Uint32Array(size);
     state[0] = 19650218;
     for (let i = 1; i < size; i++) state[i] = (Math.imul(1812433253, state[i - 1] ^ (state[i - 1] >>> 30)) + i) >>> 0;
@@ -986,7 +1113,7 @@ export function capacitatedClusters(points: Coord[], capacity: number, minSize =
   while (remaining.length) {
     let seedPosition: number;
     if (!previous) {
-      seedPosition = pythonSeedIndex(remaining.length);
+      seedPosition = seededRandomIndex(remaining.length);
     } else {
       seedPosition = remaining.reduce((best, index, i) => {
         const current = points[index], chosen = points[remaining[best]];
@@ -1098,7 +1225,7 @@ function routeOnGraph(graph: Map<string, Node>, start: Coord, end: Coord, cache?
     if (current === sourceOption.id) best = { cost: total, startId: sourceOption.id, endId: targetOption.id, pieces: pieces.reverse() };
   }
   if (!best) throw new Error('Tidak ditemukan jalur jalan yang menghubungkan titik desain.');
-  const path: Coord[] = [start, source.point, graph.get(best.startId)!.at, ...best.pieces.flatMap((part, i) => i ? part.slice(1) : part), graph.get(best.endId)!.at, target.point, end];
+  const path: Coord[] = [start, source.point, graph.get(best.startId)!.at, ...best.pieces.flatMap((part, index) => index ? part.slice(1) : part), graph.get(best.endId)!.at, target.point, end];
   const compact = path.filter((point, index) => !index || distance(point, path[index - 1]) > 0.01);
   cache?.set(cacheKey, compact);
   return compact;
@@ -1294,8 +1421,8 @@ function buildKml(pop: Point, odcs: Point[], odps: Point[], customers: Point[], 
   const iconStyle = (id: string, hex: unknown, href: string, scale: number) => `<Style id="${id}"><IconStyle><color>${kmlColor(hex)}</color><scale>${scale}</scale><Icon><href>${href}</href></Icon><hotSpot x="0.5" y="0.5" xunits="fraction" yunits="fraction"/></IconStyle></Style>`;
   const lineStyle = (id: string, hex: unknown, width: number) => `<Style id="${id}"><LineStyle><color>${kmlColor(hex)}</color><width>${width}</width></LineStyle></Style>`;
   const data = (name: string) => `<ExtendedData><Data name="name"><value>${escape(name)}</value></Data></ExtendedData>`;
-  const pointMark = (name: string, description: string, style: string, at: Coord) => `<Placemark><name>${escape(name)}</name><description>${escape(description)}</description>${data(name)}<styleUrl>#${style}</styleUrl><Point><coordinates>${at[0]},${at[1]},0</coordinates></Point></Placemark>`;
-  const lineMark = (_name: string, coords: Coord[], _style: string) => `<LineString><tessellate>1</tessellate><coordinates>${coords.map(([lon, lat]) => `${lon},${lat},0`).join(' ')}</coordinates></LineString>`;
+  const pointMark = (name: string, description: string, style: string, at: Coord) => `<Placemark><name>${escape(name)}</name><description>${escape(description)}</description>${data(name)}<styleUrl>#${style}</styleUrl><Point><coordinates>${at[0]},${at[1]},0.0</coordinates></Point></Placemark>`;
+  const lineMark = (_name: string, coords: Coord[], _style: string) => `<LineString><tessellate>1</tessellate><coordinates>${coords.map(([lon, lat]) => `${lon},${lat},0.0`).join(' ')}</coordinates></LineString>`;
   const odcLabel = new Map(odcs.map((odc, index) => [odc.label, `ODC${String(index + 1).padStart(3, '0')}`]));
   const odpByLabel = new Map(odps.map((odp) => [odp.label, odp]));
   const orderedOdps = odcs.flatMap((odc) => (odc.members ?? []).map((label) => odpByLabel.get(label)).filter((odp): odp is Point => Boolean(odp)));
@@ -1308,9 +1435,9 @@ function buildKml(pop: Point, odcs: Point[], odps: Point[], customers: Point[], 
   const boundariesKml = boundaries.map((ring, index) => {
     const ringKml = (points: Coord[]) => {
       const closed = points[0]?.[0] === points.at(-1)?.[0] && points[0]?.[1] === points.at(-1)?.[1] ? points : [...points, points[0]];
-      return `<LinearRing><coordinates>${closed.map(([lon, lat]) => `${lon},${lat},0`).join(' ')}</coordinates></LinearRing>`;
+      return `<LinearRing><coordinates>${closed.map(([lon, lat]) => `${lon},${lat},0.0`).join(' ')}</coordinates></LinearRing>`;
     };
-    return `<Placemark><name>${boundaries.length === 1 ? 'Boundary' : `Boundary ${String(index + 1).padStart(2, '0')}`}</name><Style><LineStyle><color>ffff0000</color><width>2</width></LineStyle><PolyStyle><color>460000ff</color></PolyStyle></Style><Polygon><outerBoundaryIs>${ringKml(ring.outer)}</outerBoundaryIs>${ring.holes.map((hole) => `<innerBoundaryIs>${ringKml(hole)}</innerBoundaryIs>`).join('')}</Polygon></Placemark>`;
+    return `<Placemark><name>${boundaries.length === 1 ? 'Boundary' : `Boundary ${String(index + 1).padStart(2, '0')}`}</name><Style><LineStyle><color>ffff0000</color><width>2</width></LineStyle><PolyStyle><color>46ff0000</color></PolyStyle></Style><Polygon><outerBoundaryIs>${ringKml(ring.outer)}</outerBoundaryIs>${ring.holes.map((hole) => `<innerBoundaryIs>${ringKml(hole)}</innerBoundaryIs>`).join('')}</Polygon></Placemark>`;
   }).join('');
   const assets = [
     `<Folder><name>OLT</name>${pointMark('OLT001', 'SERVER OLT', 'pop', pop.at)}</Folder>`,
@@ -1413,40 +1540,31 @@ export class GeneratorService {
 
   validateOptions(options: any) { return generationConfig(options); }
 
-  private sourceDecision(rings: Boundary[]) {
-    const points = rings.flatMap((boundary) => boundary.outer);
-    const [minLon, maxLon] = [Math.min(...points.map((p) => p[0])), Math.max(...points.map((p) => p[0]))];
-    const [minLat, maxLat] = [Math.min(...points.map((p) => p[1])), Math.max(...points.map((p) => p[1]))];
-    const areaKm2 = Math.abs((maxLon - minLon) * 111.32 * Math.max(0.05, Math.cos(((minLat + maxLat) / 2) * Math.PI / 180)) * (maxLat - minLat) * 111.32);
+  private sourceDecision(_rings: Boundary[]) {
     const tileSize = 0.05;
-    const tileCount = (length: number) => Math.max(1, Math.ceil(Math.round((length / tileSize) * 1e8) / 1e8));
-    const tiles = tileCount(maxLon - minLon) * tileCount(maxLat - minLat);
     const mode = (process.env.OSM_SOURCE_MODE ?? 'auto').trim().toLowerCase();
-    const areaSetting = process.env.OSM_ONLINE_MAX_AREA_KM2;
-    const areaValue = areaSetting?.trim().replace(/(\d)_(?=\d)/g, '$1');
-    const parsedArea = areaSetting === undefined || !areaSetting.trim() ? 25 : Number(areaValue);
-    const maxArea = Number.isNaN(parsedArea) ? areaSetting?.trim().toLowerCase() === 'nan' ? 0.1 : 25 : Math.max(0.1, parsedArea);
-    const tileSetting = process.env.OSM_ONLINE_MAX_TILES;
-    const tileValue = tileSetting?.trim();
-    const parsedTiles = tileValue === undefined || !/^[+-]?\d(?:_?\d)*$/.test(tileValue) ? 4 : Number(tileValue.replaceAll('_', ''));
-    const maxTiles = Math.max(1, parsedTiles);
     if (mode && !['auto', 'online', 'local'].includes(mode)) throw apiError('OSM_UNAVAILABLE', 'OSM_SOURCE_MODE harus bernilai auto, online, atau local.', 503);
-    return { mode, tileSize, local: mode === 'local' || (mode !== 'online' && (areaKm2 > maxArea || tiles > maxTiles)) };
+    return { mode, tileSize, local: mode === 'local' };
   }
 
   async coreSourceSignature(boundaryBytes: Buffer, boundaryName: string) {
     let rings = (await readKml(boundaryBytes, boundaryName)).flatMap((mark) => mark.polygon ? [mark.polygon] : []);
     rings = await this.unionBoundaries(rings);
     if (!rings.length) throw new BadRequestException('Boundary KML/KMZ wajib berisi polygon.');
-    if (!this.sourceDecision(rings).local) return 'osm_online';
+    const { mode, local } = this.sourceDecision(rings);
+    if (!local) return 'osm_online';
     const closed = (ring: Coord[]) => ring[0]?.[0] === ring.at(-1)?.[0] && ring[0]?.[1] === ring.at(-1)?.[1] ? ring : [...ring, ring[0]];
     const ringWkt = (ring: Coord[]) => `(${closed(ring).map(([lon, lat]) => `${lon} ${lat}`).join(',')})`;
     const polygonWkt = (boundary: Boundary) => [boundary.outer, ...boundary.holes].map(ringWkt).join(',');
     const wkt = rings.length === 1 ? `POLYGON(${polygonWkt(rings[0])})` : `MULTIPOLYGON(${rings.map((ring) => `(${polygonWkt(ring)})`).join(',')})`;
-    const active = await this.db.execute(sql`SELECT dataset_id, ST_Covers(coverage, ST_GeomFromText(${wkt},4326)) AS covers FROM osm_data.dataset WHERE status = 'active' LIMIT 1`);
+    let active;
+    try { active = await this.db.execute(sql`SELECT dataset_id, ST_Covers(coverage, ST_GeomFromText(${wkt},4326)) AS covers FROM osm_data.dataset WHERE status = 'active' LIMIT 1`); }
+    catch (error) { if (mode === 'local') throw error; return 'osm_online'; }
     const dataset = active.rows?.[0];
-    if (!dataset) throw apiError('OSM_UNAVAILABLE', 'Belum ada dataset OSM lokal yang aktif. Import OSM PBF terlebih dahulu.', 503);
-    if (!dataset.covers) throw apiError('OSM_UNAVAILABLE', `Boundary berada di luar cakupan dataset OSM lokal ${dataset.dataset_id}.`, 503);
+    if (!dataset || !dataset.covers) {
+      if (mode === 'local') throw apiError('OSM_UNAVAILABLE', dataset ? `Boundary berada di luar cakupan dataset OSM lokal ${dataset.dataset_id}.` : 'Belum ada dataset OSM lokal yang aktif.', 503);
+      return 'osm_online';
+    }
     return `osm_postgis:${dataset.dataset_id}`;
   }
 
@@ -1467,7 +1585,7 @@ export class GeneratorService {
     for (const way of roads) {
       const coords = (way.geometry ?? []).map(asCoord);
       const geometryLength = coords.slice(1).reduce((sum: number, point: Coord, index: number) => sum + distance(coords[index], point), 0);
-      // Python's PostGIS graph keeps each imported edge directed, even when the OSM way is bidirectional.
+      // reference implementation's PostGIS graph keeps each imported edge directed, even when the OSM way is bidirectional.
       const oneway = preserveOneway;
       const hasTopology = preserveOneway && way.tags.source_node !== undefined && way.tags.target_node !== undefined;
       const edgePrefix = `osm-edge:${way.id}:${way.tags.edge_index ?? 0}`;
@@ -1505,7 +1623,7 @@ export class GeneratorService {
     if (!dataset) throw new Error('Belum ada dataset OSM lokal yang aktif. Import OSM PBF terlebih dahulu.');
     if (!dataset.covers) throw new Error(`Boundary berada di luar cakupan dataset OSM lokal ${dataset.dataset_id}.`);
     const cacheRoot = process.env.LOCAL_OSM_CACHE_ROOT ?? join(tmpdir(), 'ftth_local_osm');
-    const cachePath = join(cacheRoot, `${createHash('sha256').update(JSON.stringify([dataset.dataset_id, 'local-osm-v5', wkt, pop])).digest('hex')}.json`);
+    const cachePath = join(cacheRoot, `${createHash('sha256').update(JSON.stringify([dataset.dataset_id, 'local-osm-v6', wkt, pop])).digest('hex')}.json`);
     const ttl = Math.max(0, Number(process.env.OSM_CACHE_MAX_AGE_SECONDS ?? 86400)) * 1000;
     const forceRefresh = refresh || String(process.env.OSM_FORCE_REFRESH ?? '').toLowerCase() === 'true';
     if (!forceRefresh && ttl) {
@@ -1514,46 +1632,9 @@ export class GeneratorService {
         if (Date.now() - cached.savedAt <= ttl && Array.isArray(cached.elements)) return cached;
       } catch { /* no usable local OSM cache */ }
     }
-    const extent = rings.flatMap((ring) => ring.outer), tileSize = 0.05;
-    const minLon = Math.min(...extent.map((point) => point[0])), maxLon = Math.max(...extent.map((point) => point[0]));
-    const minLat = Math.min(...extent.map((point) => point[1])), maxLat = Math.max(...extent.map((point) => point[1]));
-    const buildingTiles: { west: number; south: number; east: number; north: number }[] = [];
-    for (let west = Math.floor(minLon / tileSize) * tileSize; west < maxLon; west += tileSize) for (let south = Math.floor(minLat / tileSize) * tileSize; south < maxLat; south += tileSize) {
-      if (rings.some((ring) => intersectsTile(ring, west, south, west + tileSize, south + tileSize))) buildingTiles.push({ west, south, east: west + tileSize, north: south + tileSize });
-    }
-    const buildingTileIds: string[][] = new Array(buildingTiles.length);
-    let nextBuildingTile = 0;
-    const loadBuildingTiles = async () => {
-      while (true) {
-        throwIfAborted(signal);
-        const index = nextBuildingTile++, tile = buildingTiles[index];
-        if (!tile) return;
-        const tileKey = [tile.west, tile.south, tile.east, tile.north].map((value) => value.toFixed(6));
-        const tilePath = join(cacheRoot, 'building_tiles', `${createHash('sha256').update(JSON.stringify([dataset.dataset_id, tileKey])).digest('hex')}.json`);
-        if (!forceRefresh && ttl) {
-          try {
-            const cached = JSON.parse(await readFile(tilePath, 'utf8'));
-            if (Date.now() - cached.savedAt <= ttl && Array.isArray(cached.ids)) { buildingTileIds[index] = cached.ids.map(String); continue; }
-          } catch { /* query this region tile */ }
-        }
-        const ids = await this.db.execute(sql`SELECT osm_id FROM osm_data.building WHERE dataset_id = ${dataset.dataset_id} AND geom && ST_MakeEnvelope(${tile.west},${tile.south},${tile.east},${tile.north},4326) AND ST_Intersects(geom,ST_MakeEnvelope(${tile.west},${tile.south},${tile.east},${tile.north},4326))`);
-        throwIfAborted(signal);
-        buildingTileIds[index] = (ids.rows ?? []).map((row: any) => String(row.osm_id));
-        try {
-          await mkdir(dirname(tilePath), { recursive: true });
-          const temporary = `${tilePath}.${randomUUID()}.tmp`;
-          await writeFile(temporary, JSON.stringify({ savedAt: Date.now(), ids: buildingTileIds[index] }));
-          await rename(temporary, tilePath);
-        } catch { /* cache writes must not block generation */ }
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(buildingTiles.length, 4) }, loadBuildingTiles));
-    throwIfAborted(signal);
-    const buildingIds = [...new Set(buildingTileIds.flat())];
-    const buildingIdList = sql.join(buildingIds.map((id) => sql`${id}`), sql`, `);
-    const buildings = buildingIds.length ? await this.db.execute(sql`SELECT osm_id, ST_AsGeoJSON(CASE WHEN ST_Covers(ST_GeomFromText(${wkt},4326),ST_Centroid(geom)) THEN ST_Centroid(geom) ELSE ST_PointOnSurface(ST_Intersection(geom,ST_GeomFromText(${wkt},4326))) END) AS geometry FROM osm_data.building WHERE dataset_id = ${dataset.dataset_id} AND osm_id::text IN (${buildingIdList}) AND geom && ST_GeomFromText(${wkt},4326) AND ST_Intersects(geom, ST_GeomFromText(${wkt},4326))`) : { rows: [] };
+    const buildings = await this.db.execute(sql`SELECT osm_id, ST_AsGeoJSON(geom) AS geometry FROM osm_data.building WHERE dataset_id = ${dataset.dataset_id} AND geom && ST_GeomFromText(${wkt},4326) AND ST_Intersects(geom, ST_GeomFromText(${wkt},4326))`);
     const roadWindow = localRoadWindow(wkt, pop);
-    const roads = await this.db.execute(sql`SELECT e.edge_id, e.edge_index, e.source_node, e.target_node, e.highway, e.oneway, e.length_m, ST_AsGeoJSON(e.geom) AS geometry FROM osm_data.road_edge e WHERE e.dataset_id = ${dataset.dataset_id} AND e.geom && ${roadWindow} AND ST_Intersects(e.geom,${roadWindow})`);
+    const roads = await this.db.execute(sql`SELECT e.edge_id, e.edge_index, e.source_node, e.target_node, e.highway, e.oneway, e.length_m, ST_AsGeoJSON(e.geom) AS geometry FROM osm_data.road_edge e WHERE e.dataset_id = ${dataset.dataset_id} AND e.geom && ${roadWindow} AND ST_Intersects(e.geom,${roadWindow}) ORDER BY e.edge_id, e.edge_index`);
     throwIfAborted(signal);
     let popCandidate: { name: string; at: Coord } | undefined;
     try {
@@ -1570,7 +1651,14 @@ export class GeneratorService {
     popCandidate ??= { name: 'Auto POP (Titik Tengah)', at: boundaryCentroid(rings) };
     const result = {
       elements: [
-        ...(buildings.rows ?? []).map((row: any) => { const at = JSON.parse(row.geometry).coordinates as Coord; return { tags: { building: 'yes' }, geometry: [at, at] }; }),
+        ...(buildings.rows ?? []).flatMap((row: any) => {
+          const geometry = JSON.parse(row.geometry);
+          const polygons = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.type === 'MultiPolygon' ? geometry.coordinates : [];
+          if (!polygons.length) return [];
+          const toPolygon = (rings: Coord[][]) => ({ outer: rings[0].map(asCoord), holes: rings.slice(1).map((ring) => ring.map(asCoord)) });
+          const parts = polygons.map(toPolygon);
+          return [{ id: String(row.osm_id), type: 'way', tags: { building: 'yes' }, geometry: parts[0].outer, holes: parts[0].holes, polygons: parts }];
+        }),
         ...(roads.rows ?? []).map((row: any) => ({ id: `${row.edge_id}:${row.edge_index}`, tags: { highway: row.highway, oneway: row.oneway, length_m: Number(row.length_m), source_node: String(row.source_node), target_node: String(row.target_node), edge_index: row.edge_index }, geometry: JSON.parse(row.geometry).coordinates })),
       ],
       popCandidate,
@@ -1671,7 +1759,7 @@ export class GeneratorService {
     const [minLon, maxLon] = [Math.min(...points.map((p) => p[0])), Math.max(...points.map((p) => p[0]))];
     const [minLat, maxLat] = [Math.min(...points.map((p) => p[1])), Math.max(...points.map((p) => p[1]))];
     const { mode, tileSize, local } = this.sourceDecision(rings);
-    if (local) return this.fetchLocal(rings, pop, refresh, signal);
+    if (mode === 'local') return this.fetchLocal(rings, pop, refresh, signal);
     const queryRings = [...rings];
     if (!pop) {
       const boundaryPoints = rings.flatMap((boundary) => boundary.outer);
@@ -1765,11 +1853,7 @@ export class GeneratorService {
       return { elements, popCandidate: strategicPop(elements, boundaryCentroid(rings)), metadata: { source: 'osm_online', timestamp: new Date().toISOString(), tile_count: tilesToFetch.length } };
     } catch (error) {
       throwIfAborted(signal);
-      if (mode !== 'auto' || !localFallbackEnabled()) throw apiError('OSM_UNAVAILABLE', `Native OSM dan Overpass gagal. Native: ${nativeError instanceof Error ? nativeError.message : 'service unavailable'}; Overpass: ${error instanceof Error ? error.message : 'service unavailable'}`, 503);
-      try {
-        const local = await this.fetchLocal(rings, pop, refresh, signal);
-        return { ...local, metadata: { ...local.metadata, reason: `fallback setelah Native OSM dan Overpass gagal: ${error instanceof Error ? error.message : 'service unavailable'}` } };
-      } catch (localError) { throw apiError('OSM_UNAVAILABLE', `Native OSM, Overpass, dan dataset lokal gagal. Native: ${nativeError instanceof Error ? nativeError.message : 'service unavailable'}; Online: ${error instanceof Error ? error.message : 'service unavailable'}; Lokal: ${localError instanceof Error ? localError.message : 'service unavailable'}`, 503); }
+      throw apiError('OSM_UNAVAILABLE', `Native OSM dan Overpass gagal. Native: ${nativeError instanceof Error ? nativeError.message : 'service unavailable'}; Overpass: ${error instanceof Error ? error.message : 'service unavailable'}`, 503);
     }
   }
 
@@ -1787,7 +1871,7 @@ export class GeneratorService {
         return rings[0]?.length >= 3 ? [`(${rings.map(ringWkt).join(',')})`] : [];
       });
       if (!polygonWkts.length) return [];
-      return [{ index, wkt: polygonWkts.length === 1 ? `POLYGON${polygonWkts[0]}` : `MULTIPOLYGON(${polygonWkts.join(',')})` }];
+      return [{ idx: index, wkt: polygonWkts.length === 1 ? `POLYGON${polygonWkts[0]}` : `MULTIPOLYGON(${polygonWkts.join(',')})` }];
     });
     if (!inputs.length) return new Map();
     try {
@@ -1805,7 +1889,7 @@ export class GeneratorService {
       SELECT idx, ST_AsGeoJSON(CASE
         WHEN ST_Covers(boundary, ST_Centroid(geom)) THEN ST_Centroid(geom)
         ELSE ST_PointOnSurface(intersection)
-      END) AS geometry FROM clipped`);
+      END, 15) AS geometry FROM clipped`);
       return new Map((result.rows ?? []).map((row: any) => [Number(row.idx), JSON.parse(row.geometry).coordinates as Coord]));
     } catch {
       return undefined;
@@ -2033,7 +2117,7 @@ export class GeneratorService {
     throwIfAborted(signal);
     options = generationConfig(options);
     state = normalizeCachedState(state);
-    const rebuildNetwork = operation === 'regenerate' || (state.pythonCache && !state.networkComplete);
+    const rebuildNetwork = operation === 'regenerate' || (state.legacyCache && !state.networkComplete);
     const graph = new Map<string, Node>();
     const routeCache = new Map<string, Coord[]>();
     const odcs: Point[] = (state.odcs ?? []).map((odc: Point) => ({ ...odc, members: [...(odc.members ?? [])] }));
@@ -2051,7 +2135,7 @@ export class GeneratorService {
         addEdge(graph, coords[i - 1], coords[i], edge.highway ?? 'residential', options.routing_strategy, edge.oneway ?? false, lengthM, nodeIds);
       }
     }
-    if (rebuildNetwork && !graph.size && state.pythonCache) {
+    if (rebuildNetwork && !graph.size && state.legacyCache) {
       const points: Coord[] = [state.pop, ...odcs.map((odc) => odc.at), ...odps.map((odp) => odp.at)];
       const padding = 0.015;
       const west = Math.min(...points.map(([lon]) => lon)) - padding, east = Math.max(...points.map(([lon]) => lon)) + padding;

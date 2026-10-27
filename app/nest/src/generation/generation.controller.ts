@@ -11,7 +11,7 @@ import { DB, PG_POOL } from '../db/database.module';
 import { auditLogs, designVersions, generationJobs, projects, users } from '../db/schema';
 import { ProxyAuthGuard } from '../auth/proxy-auth.guard';
 import { StorageService } from '../storage/storage.service';
-import { GeneratorService, normalizeCachedState, pythonBoolean, readKml } from './generator.service';
+import { GeneratorService, normalizeCachedState, parseBooleanInput, readKml } from './generator.service';
 import { invalidFile, missingFile, validateDesignUpload } from '../files/upload-validation';
 import { GenerationRateLimiter } from '../auth/generation-rate-limiter';
 
@@ -27,7 +27,7 @@ const isPopFile = (name: string) => /(pop|olt|sentral|rbs)/i.test(name);
 const isBoundaryFile = (name: string) => !isPopFile(name) && /(boundary|polygon|area)/i.test(name);
 const popMarker = /(?<![A-Z0-9])(?:POP|OLT|SENTRAL|RBS)(?:\s*[-_ ]?\s*\d+)?(?![A-Z0-9])/i;
 const xml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[char]!);
-const kmlCoords = (coords: number[][]) => coords.map(([lon, lat]) => `${lon},${lat},0`).join(' ');
+const kmlCoords = (coords: number[][]) => coords.map(([lon, lat]) => `${lon},${lat},0.0`).join(' ');
 function makeBatchKml(placemarks: any[], kind: 'boundary' | 'pop') {
   const items = placemarks.flatMap((mark) => kind === 'boundary' && mark.polygon ? [
     `<Placemark><name>${xml(mark.name || 'Boundary')}</name><Polygon><outerBoundaryIs><LinearRing><coordinates>${kmlCoords(mark.polygon.outer)}</coordinates></LinearRing></outerBoundaryIs>${mark.polygon.holes.map((ring: number[][]) => `<innerBoundaryIs><LinearRing><coordinates>${kmlCoords(ring)}</coordinates></LinearRing></innerBoundaryIs>`).join('')}</Polygon></Placemark>`,
@@ -292,8 +292,14 @@ export class GenerationController implements OnModuleInit, OnModuleDestroy {
         const custom = input.custom ?? { buffer: await readFile(input.inputPaths.boundary), originalname: input.inputPaths.boundaryName };
         result = await this.generator.generateCustom(custom.buffer, custom.originalname, options, checkpointDir, abortController.signal);
       } else if (input.operation) {
-        const cache = JSON.parse(await readFile(input.cachePath, 'utf8'));
-        result = await this.generator.fromCache(cache, options, input.operation, abortController.signal);
+        if (input.rebuildFromInputs) {
+          const boundary = { buffer: await readFile(input.inputPaths.boundary), originalname: input.inputPaths.boundaryName };
+          const pop = input.inputPaths.pop ? { buffer: await readFile(input.inputPaths.pop), originalname: input.inputPaths.popName } : undefined;
+          result = await this.generator.generate(boundary.buffer, boundary.originalname, pop?.buffer, pop?.originalname, { ...options, include_homepass: input.operation === 'homepass' }, checkpointDir, abortController.signal);
+        } else {
+          const cache = JSON.parse(await readFile(input.cachePath, 'utf8'));
+          result = await this.generator.fromCache(cache, options, input.operation, abortController.signal);
+        }
       } else {
         const boundary = input.boundary ?? { buffer: await readFile(input.inputPaths.boundary), originalname: input.inputPaths.boundaryName };
         const pop = input.pop ?? (input.inputPaths.pop ? { buffer: await readFile(input.inputPaths.pop), originalname: input.inputPaths.popName } : undefined);
@@ -323,7 +329,6 @@ export class GenerationController implements OnModuleInit, OnModuleDestroy {
             rm(corePath, { force: true }), rm(manifestPath, { force: true }),
             rm(join(dirname(corePath), 'design_state.json'), { force: true }),
             rm(join(dirname(corePath), 'core_manifest.json'), { force: true }),
-            rm(join(dirname(corePath), 'road_graph.pkl'), { force: true }),
           ]);
           await this.update(jobId, { stage: 'OSM', message: 'Mengambil data jalan dan bangunan OSM...', percent: 15 });
           result = await this.generator.generate(boundary.buffer, boundary.originalname, pop?.buffer, pop?.originalname, options, checkpointDir, abortController.signal);
@@ -334,7 +339,7 @@ export class GenerationController implements OnModuleInit, OnModuleDestroy {
       await this.storage.upload(`${userPrefix(user.id)}${kmzName}`, result.kmz, 'application/vnd.google-earth.kmz', kmzName);
       await this.storage.upload(`${userPrefix(user.id)}${csvName}`, result.csv, 'text/csv; charset=utf-8', csvName);
       if (abortController.signal.aborted || this.canceled.has(jobId)) return;
-      if (!input.operation || input.operation === 'regenerate' || input.operation === 'custom') {
+      if (!input.operation || input.operation === 'regenerate' || input.operation === 'custom' || input.rebuildFromInputs) {
         const path = this.cacheFile(user.id, input.projectId, input.batchId, input.itemId);
         await mkdir(join(path, '..'), { recursive: true });
         const stateBytes = Buffer.from(JSON.stringify(result.state));
@@ -439,7 +444,7 @@ export class GenerationController implements OnModuleInit, OnModuleDestroy {
     const batchId = randomUUID(), options = this.parseOptions(req.body);
     options.include_homepass = false;
     const forceRefresh = req.body?.force_refresh;
-    try { options.force_refresh_osm = (forceRefresh === undefined ? false : pythonBoolean(forceRefresh, 'force_refresh')) || options.force_refresh_osm; }
+    try { options.force_refresh_osm = (forceRefresh === undefined ? false : parseBooleanInput(forceRefresh, 'force_refresh')) || options.force_refresh_osm; }
     catch { throw new HttpException({ detail: [{ type: 'bool_parsing', loc: ['body', 'force_refresh'], msg: 'Input should be a valid boolean, unable to interpret input', input: forceRefresh }] }, 422); }
     const boundaryName = boundaries[0].file.originalname, name = batchSlug(boundaryName);
     const boundaryKml = makeBatchKml(boundaries.flatMap((entry) => entry.marks), 'boundary');
@@ -632,9 +637,23 @@ export class GenerationController implements OnModuleInit, OnModuleDestroy {
     const user = await this.generationUser(req), body = req.body ?? {}, projectId = body.project_id as string | undefined;
     await this.requireProject(projectId, user);
     const batchId = body.batch_id, itemId = body.item_id;
-    const { path } = await this.resolveCacheFile(user.id, projectId, batchId, itemId);
+    let cachePath: string | undefined;
+    try { cachePath = (await this.resolveCacheFile(user.id, projectId, batchId, itemId)).path; }
+    catch (error) {
+      if (!(error instanceof BadRequestException) || error.message !== 'Cache Network Core belum tersedia. Jalankan Generate Design terlebih dahulu.' || !projectId || !batchId || !itemId) throw error;
+    }
     const options = this.parseOptions(body), cacheNames = { kmzName: filename(operation === 'homepass' ? 'design_ftth_homepass' : 'design_ftth_regen', 'kmz'), csvName: filename(operation === 'homepass' ? 'design_ftth_homepass' : 'design_ftth_regen', 'csv') };
-    const jobId = await this.enqueue(user, { operation, cachePath: path, projectId, batchId, itemId, jobId: body.job_id, options, ...cacheNames, persistedInput: { operation, cachePath: path, projectId, batchId, itemId, options, ...cacheNames } }, batchId, itemId);
+    if (!cachePath && (!projectId || !batchId || !itemId)) throw new BadRequestException('Cache Network Core dan input desain tidak tersedia. Jalankan Generate Design terlebih dahulu.');
+    const [sourceJob] = cachePath ? [] : await this.db.select().from(generationJobs).where(and(
+      eq(generationJobs.userId, user.id), eq(generationJobs.projectId, projectId!),
+      eq(generationJobs.batchId, batchId), eq(generationJobs.itemId, itemId), eq(generationJobs.status, 'COMPLETED'),
+    )).orderBy(desc(generationJobs.createdAt)).limit(1);
+    const inputPaths = sourceJob?.result?.input_paths;
+    if (!cachePath && (!inputPaths?.boundary || !(await stat(inputPaths.boundary).then(() => true, () => false)))) {
+      throw new BadRequestException('Cache Network Core dan input desain tidak tersedia. Jalankan Generate Design terlebih dahulu.');
+    }
+    const jobInput = { operation, cachePath, ...(inputPaths ? { inputPaths, rebuildFromInputs: true } : {}), projectId, batchId, itemId, jobId: body.job_id, options, ...cacheNames };
+    const jobId = await this.enqueue(user, { ...jobInput, persistedInput: { ...jobInput, inputPaths: undefined, input_paths: inputPaths } }, batchId, itemId);
     return { success: true, data: { message: operation === 'homepass' ? 'Homepass generation job accepted.' : 'Regenerate cables job accepted.', job_id: jobId, kmz_url: `/api/files/${encodeURIComponent(cacheNames.kmzName)}`, csv_url: `/api/files/${encodeURIComponent(cacheNames.csvName)}` } };
   }
 }
