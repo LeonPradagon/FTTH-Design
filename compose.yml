@@ -22,7 +22,7 @@ services:
   migrate:
     build:
       context: .
-      dockerfile: app/nest/Dockerfile
+      dockerfile: app/server/Dockerfile
       target: migrate
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-ftth}:${POSTGRES_PASSWORD:-ftth-dev-password}@db:5432/${POSTGRES_DB:-ftth}?schema=public
@@ -52,14 +52,14 @@ services:
   api:
     build:
       context: .
-      dockerfile: app/nest/Dockerfile
+      dockerfile: app/server/Dockerfile
     ports:
       - "8001:8001"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-ftth}:${POSTGRES_PASSWORD:-ftth-dev-password}@db:5432/${POSTGRES_DB:-ftth}?schema=public
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-only-secret-that-is-at-least-32-characters}
       BACKEND_PROXY_SECRET: ${BACKEND_PROXY_SECRET:-dev-only-secret-that-is-at-least-32-characters}
-      USER_CACHE_ROOT: /workspace/app/nest/cache/users
+      USER_CACHE_ROOT: /workspace/app/server/cache/users
       OSM_REQUEST_TIMEOUT_SECONDS: ${OSM_REQUEST_TIMEOUT_SECONDS:-15}
       OSM_SOURCE_MODE: ${OSM_SOURCE_MODE:-auto}
       OSM_ONLINE_MAX_AREA_KM2: ${OSM_ONLINE_MAX_AREA_KM2:-25}
@@ -73,7 +73,7 @@ services:
       STORAGE_FORCE_PATH_STYLE: ${STORAGE_FORCE_PATH_STYLE:-true}
     restart: unless-stopped
     volumes:
-      - ./storage/nest-cache:/workspace/app/nest/cache
+      - ./storage/nest-cache:/workspace/app/server/cache
     depends_on:
       migrate:
         condition: service_completed_successfully

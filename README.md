@@ -43,10 +43,10 @@ NestJS API :8001 ──────── PostgreSQL/PostGIS
 | Komponen | Lokasi | Fungsi |
 |---|---|---|
 | Dashboard | `app/web/` | Next.js, React, Deck.gl, import file, map, layer/group, progress UI |
-| API | `app/nest/src/` | Endpoint generation, project, version, audit, file |
-| Generator | `app/nest/src/generation/` | Parsing KML, OSM, penempatan perangkat, routing, export |
-| Database | `app/nest/src/db/` | Schema Drizzle PostgreSQL/PostGIS dan metadata design |
-| Storage | `app/nest/src/storage/` | Object storage S3-compatible |
+| API | `app/server/src/` | Endpoint generation, project, version, audit, file |
+| Generator | `app/server/src/generation/` | Parsing KML, OSM, penempatan perangkat, routing, export |
+| Database | `app/server/src/db/` | Schema Drizzle PostgreSQL/PostGIS dan metadata design |
+| Storage | `app/server/src/storage/` | Object storage S3-compatible |
 
 > Detail alur di bawah menjelaskan penggunaan runtime NestJS saat ini.
 
@@ -238,10 +238,10 @@ atau item agar dua boundary bernama sama tidak saling menimpa.
 - S3-compatible object storage, atau mode filesystem lokal untuk development;
 - akses internet ke OpenStreetMap/Overpass; dataset PostGIS lokal bersifat opsional.
 
-Backend NestJS memakai database yang sama dengan Better Auth. Jalankan migrasi Drizzle satu kali dari folder `app/nest/`:
+Backend NestJS memakai database yang sama dengan Better Auth. Jalankan migrasi Drizzle satu kali dari folder `app/server/`:
 
 ```bash
-cd app/nest
+cd app/server
 pnpm install
 pnpm db:migrate
 ```
@@ -253,7 +253,7 @@ STORAGE_DRIVER=local pnpm dev
 ```
 
 Proxy Next.js mengarah ke `http://127.0.0.1:8001` secara default. Jika port
-berbeda, atur `BACKEND_URL` di `app/web/.env` ke alamat NestJS.
+berbeda, atur `BACKEND_URL` di `.env` root ke alamat NestJS.
 
 File tersimpan sementara di `USER_CACHE_ROOT` hanya bila menggunakan cache
 generator; file upload/download mode lokal disimpan di `${TMPDIR}/ftth_local_storage`.
@@ -320,7 +320,7 @@ Pastikan boundary/POP tidak diganti ketika generation berjalan. Dashboard mengun
 Backend test:
 
 ```bash
-cd app/nest && npm test
+cd app/server && npm test
 ```
 
 Compile check:

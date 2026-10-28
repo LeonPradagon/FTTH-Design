@@ -28,7 +28,13 @@ const MapComponent = dynamic(() => import('../components/Map'), {
   kmlTrees?: Record<string, KmlNode[]>,
   onTreeLoaded?: (layerId: string, tree: KmlNode[]) => void,
   isSidebarCollapsed?: boolean,
-  featureColors?: Record<string, string>
+  featureColors?: Record<string, string>,
+  canGenerate?: boolean,
+  onSmartGenerate?: () => void,
+  isGenerating?: boolean,
+  onGenerateHomepass?: () => void,
+  isGeneratingHomepass?: boolean,
+  hasNetworkCore?: boolean
 }>;
 
 let toastIdCounter = 0;
@@ -165,6 +171,7 @@ export default function Home() {
 
   const canEditColors = (session?.user as { role?: string } | undefined)?.role === "admin";
   const canChangeProjects = (session?.user as { role?: string } | undefined)?.role !== "viewer";
+  const canGenerate = ['admin', 'engineer', 'user'].includes((session?.user as { role?: string } | undefined)?.role || 'engineer');
   const [layers, setLayers] = useState<LayerConfig[]>(initialLayers);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<{ stage: string, message: string, percent: number } | null>(null);
@@ -182,7 +189,6 @@ export default function Home() {
   });
   const [designStats, setDesignStats] = useState<DesignStats | null>(null);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
-  const [isRegeneratingCables, setIsRegeneratingCables] = useState(false);
   const [isGeneratingHomepass, setIsGeneratingHomepass] = useState(false);
   const [hasNetworkCore, setHasNetworkCore] = useState(false);
   const [batchFiles, setBatchFiles] = useState<File[]>([]);
@@ -1520,108 +1526,6 @@ export default function Home() {
     }
   };
 
-  const handleRegenerateCables = async () => {
-    // Regenerate Kabel is a separate job type. It must not mark the primary
-    // Generate Design button as "Menganalisis..." during restore/polling.
-    setIsGenerating(false);
-    setIsRegeneratingCables(true);
-    try {
-      const formData = new FormData();
-      const jobId = `job-${Date.now()}`;
-      formData.append("job_id", jobId);
-      formData.append("feature_colors", JSON.stringify(featureColors));
-      if (currentProjectId) formData.append("project_id", currentProjectId);
-      const selectedDesign = layers.find(layer => layer.visible && (
-        layer.id === "design" ||
-        layer.id.startsWith("design:single:") ||
-        layer.id.startsWith("design:batch:")
-      ));
-      if (selectedDesign?.id.startsWith("design:batch:")) {
-        const parts = selectedDesign.id.split(":");
-        formData.append("batch_id", parts[2]);
-        formData.append("item_id", parts[3]);
-      }
-
-      let eventSource: EventSource | null = null;
-      const handleProgress = (event: MessageEvent) => {
-        const pData = JSON.parse(event.data);
-        if (pData.error) {
-          eventSource?.close();
-          setIsGenerating(false);
-          setIsRegeneratingCables(false);
-          addToast("Regenerate kabel gagal: " + pData.error, "error");
-          setGenerationProgress(null);
-          return;
-        }
-        setGenerationProgress({ stage: pData.stage, message: pData.message, percent: pData.percent });
-        if (pData.done) {
-          eventSource?.close();
-          setTimeout(() => setGenerationProgress(null), 1500);
-          setIsGenerating(false);
-          setIsRegeneratingCables(false);
-
-          if (pData.result) {
-            const result = pData.result;
-            const newDesign: LayerConfig = {
-              ...(selectedDesign || {}),
-              id: selectedDesign?.id || "design",
-              name: generatedDesignLayerName(selectedDesign?.name || projectNameRef.current),
-              url: toProxyApiUrl(result.url),
-              csvUrl: result.csv_url ? toProxyApiUrl(result.csv_url) : undefined,
-              visible: true,
-              color: selectedDesign?.color || "#22c55e",
-              status: "COMPLETED",
-            };
-            setLayers(prev => {
-              const newLayers = selectedDesign
-                ? prev.map(layer => layer.id === selectedDesign.id ? newDesign : layer)
-                : [...prev.filter(l => l.id !== 'design'), newDesign];
-              setFilters(prevFilters => {
-                const generatedFilters = { ...prevFilters, showHouse: false };
-                saveProject(
-                  projectName || "Untitled Project",
-                  newLayers,
-                  generatedFilters,
-                ).catch(console.error);
-                return generatedFilters;
-              });
-              return newLayers;
-            });
-
-            if (result.kmz_url) setKmzUrl(toProxyApiUrl(result.kmz_url));
-            if (result.csv_url) setCsvUrl(toProxyApiUrl(result.csv_url));
-            if (result.stats) setDesignStats(result.stats);
-            if (result.validation) setValidationResult(result.validation);
-            addToast("Regenerate kabel berhasil!", "success");
-          }
-        }
-      };
-
-      const response = await fetch("/api/proxy/regenerate-cables", {
-        method: "POST",
-        body: formData,
-      });
-
-      const resp = await response.json();
-      if (resp.success) {
-        eventSource = new EventSource(`/api/proxy/generate/progress/${jobId}`);
-        eventSource.onmessage = handleProgress;
-        addToast("Proses regenerate kabel sedang berjalan...", "info");
-      } else {
-        addToast("Regenerate kabel gagal: " + (resp.error?.message || resp.detail), "error");
-        setIsGenerating(false);
-        setGenerationProgress(null);
-        setIsRegeneratingCables(false);
-      }
-    } catch (error) {
-      console.error("Error regenerating cables:", error);
-      addToast("Gagal membuat ulang kabel. Apakah backend NestJS berjalan?", "error");
-      setIsGenerating(false);
-      setGenerationProgress(null);
-      setIsRegeneratingCables(false);
-    }
-  };
-
   const handleGenerateHomepass = async () => {
     if (!hasNetworkCore || isGenerating || isGeneratingHomepass) return;
     setIsGeneratingHomepass(true);
@@ -1851,26 +1755,6 @@ export default function Home() {
       />
       <Navbar
         onImportLayer={handleImportLayer}
-        // Let the handler inspect the actual KML geometry. File names are
-        // not reliable for hand-authored boundary/POP uploads.
-        onSmartGenerate={batchFiles.length > 0 || visibleLayers.length > 0 ? handleSmartGenerate : undefined}
-        isGenerating={isGenerating}
-        onRegenerateCables={visibleLayers.some((l: LayerConfig) =>
-          l.id === "design" ||
-          l.id.startsWith("design:single:") ||
-          l.id.startsWith("design:batch:")
-        ) ? handleRegenerateCables : undefined}
-        isRegeneratingCables={isRegeneratingCables}
-        hasDesign={layers.some(l =>
-          l.visible && (
-            l.id === 'design' ||
-            l.id.startsWith('design:single:') ||
-            l.id.startsWith('design:batch:')
-          )
-        )}
-        onGenerateHomepass={handleGenerateHomepass}
-        isGeneratingHomepass={isGeneratingHomepass}
-        hasNetworkCore={canGenerateHomepass}
         featureColors={featureColors}
         onConfigClick={() => setIsConfigModalOpen(true)}
         onVersionHistoryClick={() => {
@@ -1914,6 +1798,13 @@ export default function Home() {
           onTreeLoaded={handleTreeLoaded}
           isSidebarCollapsed={isSidebarCollapsed}
           featureColors={featureColors}
+          canGenerate={canGenerate && (Boolean(currentProjectId) || layers.length > 0)}
+          // KML geometry, not file names, determines generate eligibility.
+          onSmartGenerate={batchFiles.length > 0 || visibleLayers.length > 0 ? handleSmartGenerate : undefined}
+          isGenerating={isGenerating}
+          onGenerateHomepass={handleGenerateHomepass}
+          isGeneratingHomepass={isGeneratingHomepass}
+          hasNetworkCore={canGenerateHomepass}
         />
         {generationProgress && (
           <div

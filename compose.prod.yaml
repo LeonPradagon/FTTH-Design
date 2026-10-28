@@ -44,7 +44,7 @@ services:
   migrate:
     build:
       context: .
-      dockerfile: app/nest/Dockerfile
+      dockerfile: app/server/Dockerfile
       target: migrate
     restart: "no"
     environment:
@@ -58,14 +58,14 @@ services:
   api:
     build:
       context: .
-      dockerfile: app/nest/Dockerfile
+      dockerfile: app/server/Dockerfile
     restart: unless-stopped
     init: true
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-ftth}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ftth}?schema=public
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env.prod}
       BACKEND_PROXY_SECRET: ${BACKEND_PROXY_SECRET:?Set BACKEND_PROXY_SECRET in .env.prod}
-      USER_CACHE_ROOT: /workspace/app/nest/cache/users
+      USER_CACHE_ROOT: /workspace/app/server/cache/users
       OSM_SOURCE_MODE: ${OSM_SOURCE_MODE:-auto}
       OSM_ONLINE_MAX_AREA_KM2: ${OSM_ONLINE_MAX_AREA_KM2:-25}
       OSM_ONLINE_MAX_TILES: ${OSM_ONLINE_MAX_TILES:-4}
@@ -84,7 +84,7 @@ services:
     ports:
       - "8001:8001"
     volumes:
-      - nest_cache:/workspace/app/nest/cache
+      - nest_cache:/workspace/app/server/cache
     depends_on:
       migrate:
         condition: service_completed_successfully

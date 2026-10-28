@@ -25,6 +25,7 @@ dist/
 cache/
 data/osm/
 /storage/users/
+/storage/archive/
 *.kmz
 *.kml
 !samples/

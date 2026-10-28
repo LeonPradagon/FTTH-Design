@@ -1,8 +1,9 @@
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { resolve } from 'node:path';
 
-const envFile = '.env';
+const envFile = resolve(process.cwd(), '../../.env');
 for (const line of readFileSync(envFile, 'utf8').split(/\r?\n/)) {
   const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
   if (match) delete process.env[match[1]];

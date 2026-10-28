@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, X, Home, Info, Cable, User, Server, Triangle, Settings, Clock } from 'lucide-react';
+import { Upload, X, Home, Info, User, Server, Triangle, Settings, Clock } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { AccountCenterModal } from './AccountCenterModal';
 import { useSession } from '@/lib/auth-client';
@@ -7,14 +7,6 @@ import { DEFAULT_FEATURE_COLORS } from '@/lib/feature-colors';
 
 interface NavbarProps {
   onImportLayer: (files: File[]) => void;
-  onSmartGenerate?: () => void;
-  isGenerating?: boolean;
-  onRegenerateCables?: () => void;
-  isRegeneratingCables?: boolean;
-  hasDesign?: boolean;
-  onGenerateHomepass?: () => void;
-  isGeneratingHomepass?: boolean;
-  hasNetworkCore?: boolean;
   featureColors?: Record<string, string>;
   onConfigClick?: () => void;
   onVersionHistoryClick?: () => void;
@@ -22,14 +14,6 @@ interface NavbarProps {
 
 export function Navbar({
   onImportLayer,
-  onSmartGenerate,
-  isGenerating,
-  onRegenerateCables,
-  isRegeneratingCables,
-  hasDesign,
-  onGenerateHomepass,
-  isGeneratingHomepass,
-  hasNetworkCore,
   featureColors,
   onConfigClick,
   onVersionHistoryClick,
@@ -117,45 +101,6 @@ export function Navbar({
             style={{ display: 'none' }}
             onChange={handleFileChange}
           />
-          {canGenerate && onRegenerateCables && (
-            <button
-              onClick={onRegenerateCables}
-              disabled={isRegeneratingCables || !hasDesign}
-              className={`regenerate-cable-btn ${isRegeneratingCables ? 'loading' : ''}`}
-              title={!hasDesign ? "Generate design terlebih dahulu" : "Regenerate jalur kabel tanpa mengubah posisi tiang"}
-              style={{ marginLeft: '8px', cursor: (isRegeneratingCables || !hasDesign) ? 'not-allowed' : 'pointer' }}
-            >
-              <Cable size={14} style={{ marginRight: '6px' }} />
-              {isRegeneratingCables ? "..." : "Regenerate Kabel"}
-            </button>
-          )}
-
-          {canGenerate && onSmartGenerate && (
-            <div className="flex items-center">
-              <button
-                onClick={onSmartGenerate}
-                disabled={isGenerating}
-                className={`generate-btn-small ${isGenerating ? 'loading' : ''}`}
-                style={{ marginLeft: '4px', cursor: isGenerating ? 'not-allowed' : 'pointer' }}
-              >
-                {isGenerating ? "Menganalisis..." : "Generate Design"}
-              </button>
-            </div>
-          )}
-
-          {canGenerate && onGenerateHomepass && hasNetworkCore && (
-            <button
-              onClick={onGenerateHomepass}
-              disabled={isGeneratingHomepass || isGenerating}
-              className={`regenerate-cable-btn ${isGeneratingHomepass ? 'loading' : ''}`}
-              title="Tambahkan titik rumah dan kabel ODP ke rumah"
-              style={{ marginLeft: '8px', cursor: (isGeneratingHomepass || isGenerating) ? 'not-allowed' : 'pointer' }}
-            >
-              <Home size={14} style={{ marginRight: '6px' }} />
-              {isGeneratingHomepass ? "..." : "Generate Homepass"}
-            </button>
-          )}
-
           {canGenerate && onConfigClick && (
             <button onClick={onConfigClick} className="regenerate-cable-btn" title="Generation configuration">
               <Settings size={14} style={{ marginRight: '6px' }} />

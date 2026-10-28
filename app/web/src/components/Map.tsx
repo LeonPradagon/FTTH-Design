@@ -24,6 +24,9 @@ import {
   Waypoints,
   Ruler,
   Trash2,
+  ChevronDown,
+  Home,
+  Sparkles,
 } from "lucide-react";
 
 const getPinColorArray = (hex?: string): [number, number, number, number] => {
@@ -307,14 +310,21 @@ interface MapProps {
   onTreeLoaded?: (layerId: string, tree: KmlNode[]) => void;
   isSidebarCollapsed?: boolean;
   featureColors?: Record<string, string>;
+  canGenerate?: boolean;
+  onSmartGenerate?: () => void;
+  isGenerating?: boolean;
+  onGenerateHomepass?: () => void;
+  isGeneratingHomepass?: boolean;
+  hasNetworkCore?: boolean;
 }
 
-export default function MapComponent({ layers, onShowMessage, onDrawFile, filters, kmlTrees, onTreeLoaded, isSidebarCollapsed, featureColors }: MapProps) {
+export default function MapComponent({ layers, onShowMessage, onDrawFile, filters, kmlTrees, onTreeLoaded, isSidebarCollapsed, featureColors, canGenerate = false, onSmartGenerate, isGenerating = false, onGenerateHomepass, isGeneratingHomepass = false, hasNetworkCore = false }: MapProps) {
   const [geoDataMap, setGeoDataMap] = useState<Record<string, any>>({});
   const [hoverInfo, setHoverInfo] = useState<any>(null);
   const [streetViewCoords, setStreetViewCoords] = useState<[number, number] | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<any>(null);
   const [activeMapTool, setActiveMapTool] = useState("select");
+  const [showGenerateMenu, setShowGenerateMenu] = useState(false);
   const [drawingPoints, setDrawingPoints] = useState<[number, number][]>([]);
   const coordsRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1074,14 +1084,8 @@ export default function MapComponent({ layers, onShowMessage, onDrawFile, filter
       )}
 
       {/* Map Editing Toolbar */}
-      <div
-        className="map-edit-toolbar"
-        style={{
-          left: isSidebarCollapsed ? '64px' : '300px',
-        }}
-        role="toolbar"
-        aria-label="Alat peta"
-      >
+      <div className="map-tools-container" style={{ left: isSidebarCollapsed ? '64px' : '300px' }}>
+      <div className="map-edit-toolbar" role="toolbar" aria-label="Alat peta">
         <div className="map-edit-toolbar-group">
           {renderMapTool(mapTools[0])}
         </div>
@@ -1103,6 +1107,51 @@ export default function MapComponent({ layers, onShowMessage, onDrawFile, filter
         >
           <Trash2 size={20} strokeWidth={2} />
         </button>
+      </div>
+      {canGenerate && (
+        <div
+          className="map-generation-menu"
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setShowGenerateMenu(false);
+          }}
+        >
+          <button
+            type="button"
+            className="map-generation-trigger"
+            aria-haspopup="menu"
+            aria-expanded={showGenerateMenu}
+            onClick={() => setShowGenerateMenu((open) => !open)}
+          >
+            <Sparkles size={15} />
+            Generate
+            <ChevronDown size={14} />
+          </button>
+          {showGenerateMenu && (
+            <div className="map-generation-options" role="menu" aria-label="Pilihan generate">
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!onSmartGenerate || isGenerating || isGeneratingHomepass}
+                onClick={() => { setShowGenerateMenu(false); onSmartGenerate?.(); }}
+              >
+                <Sparkles size={15} />
+                {isGenerating ? 'Menganalisis...' : 'Generate Design'}
+              </button>
+              {hasNetworkCore && onGenerateHomepass && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={isGenerating || isGeneratingHomepass}
+                  onClick={() => { setShowGenerateMenu(false); onGenerateHomepass(); }}
+                >
+                  <Home size={15} />
+                  {isGeneratingHomepass ? 'Memproses...' : 'Generate Homepass'}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       </div>
 
       {/* Map Navigation Controls */}

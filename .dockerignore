@@ -11,7 +11,8 @@ app/web/.next
 
 cache
 storage/users
-app/nest/cache
+storage/archive
+app/server/cache
 
 *.sqlite
 *.sqlite3
