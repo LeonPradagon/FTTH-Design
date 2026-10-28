@@ -166,6 +166,15 @@ export default function Home() {
   useEffect(() => {
     if (!isPending && !session) {
       router.push('/login');
+      return;
+    }
+    if (!isPending && session) {
+      const appAccess = (session.user as { appAccess?: unknown }).appAccess;
+      if (!Array.isArray(appAccess) || !appAccess.includes('planner')) {
+        window.location.replace(
+          `${process.env.NEXT_PUBLIC_GEOSPATIAL_APP_URL || 'http://localhost:5173'}/apps`,
+        );
+      }
     }
   }, [session, isPending, router]);
 

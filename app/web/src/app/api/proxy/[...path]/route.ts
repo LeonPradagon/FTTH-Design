@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { request as httpRequest, type IncomingMessage } from "node:http";
 import { Readable } from "node:stream";
 import { createHmac } from "node:crypto";
-import { auth } from "@/lib/auth";
+import { ensurePlannerUser } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const maxDuration = 900;
@@ -12,6 +12,7 @@ const PROXY_TIMEOUT_MS = 15 * 60 * 1000;
 // Keep local development compatible with installations that only configured
 // BETTER_AUTH_SECRET. Production should still use a dedicated secret.
 const BACKEND_PROXY_SECRET = process.env.BACKEND_PROXY_SECRET || process.env.BETTER_AUTH_SECRET;
+const GEOSPATIAL_AUTH_ORIGIN = process.env.GEOSPATIAL_AUTH_URL || "http://localhost:3000";
 
 // These headers describe the connection between the backend and this proxy,
 // not the response sent from this proxy to the browser. Forwarding them can
@@ -81,15 +82,29 @@ async function proxy(req: NextRequest) {
     headers.delete('x-user-email');
     headers.delete('x-proxy-auth');
     
-    // Resolve the session in-process. Calling /api/auth/get-session over HTTP
-    // can lose the cookie behind a reverse proxy or when the public host is
-    // not reachable from the Next.js server itself.
+    // Geospatial owns the login session; Planner only links its existing user rows.
     if (req.headers.get('cookie')) {
       try {
-        const sessionData = await auth.api.getSession({ headers: req.headers });
+        const sessionResponse = await fetch(new URL('/api/auth/get-session', GEOSPATIAL_AUTH_ORIGIN), {
+          headers: { cookie: req.headers.get('cookie') || '' },
+          cache: 'no-store',
+        });
+        const sessionData = sessionResponse.ok
+          ? await sessionResponse.json() as { user?: Record<string, unknown> }
+          : null;
         if (sessionData?.user) {
-          const userId = String(sessionData.user.id);
-          const role = String(sessionData.user.role || 'engineer');
+          const centralUser = sessionData.user;
+          const appAccess = Array.isArray(centralUser.appAccess) ? centralUser.appAccess : [];
+          if (!appAccess.includes('planner') || centralUser.status === 'disabled') {
+            return Response.json({ message: 'This account does not have FTTH Planner access.' }, { status: 403 });
+          }
+          const userId = await ensurePlannerUser({
+            id: String(centralUser.id || ''),
+            name: typeof centralUser.name === 'string' ? centralUser.name : null,
+            email: String(centralUser.email || ''),
+            role: typeof centralUser.role === 'string' ? centralUser.role : null,
+          });
+          const role = centralUser.role === 'admin' ? 'admin' : 'engineer';
           const email = String(sessionData.user.email || '');
           headers.set('X-User-Id', userId);
           headers.set('X-User-Role', role);

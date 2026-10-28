@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, X, Home, Info, User, Server, Triangle, Settings, Clock } from 'lucide-react';
+import { ArrowLeft, Upload, X, Home, Info, User, Server, Triangle, Settings, Clock } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { AccountCenterModal } from './AccountCenterModal';
 import { useSession } from '@/lib/auth-client';
@@ -92,6 +92,18 @@ export function Navbar({
                 />
               )}
             </div>
+          )}
+
+          {userRole === 'admin' && (
+            <a
+              href={`${(process.env.NEXT_PUBLIC_GEOSPATIAL_APP_URL || 'http://localhost:5173').replace(/\/$/, '')}/apps`}
+              className="regenerate-cable-btn"
+              style={{ marginRight: '8px', textDecoration: 'none' }}
+              title="Pilih aplikasi"
+            >
+              <ArrowLeft size={14} style={{ marginRight: '6px' }} />
+              Pilih aplikasi
+            </a>
           )}
 
           <input
