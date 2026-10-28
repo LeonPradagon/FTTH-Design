@@ -1646,7 +1646,7 @@ export default function Home() {
       )}
 
       {compareVersions && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[500]">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[2000]">
           <div className="bg-white rounded-xl shadow-xl w-[600px] max-w-[90vw] max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b">
               <h3 className="font-semibold text-lg text-gray-800">Compare Versions</h3>
@@ -1828,7 +1828,7 @@ export default function Home() {
           bottom: '90px',
           left: '50%',
           transform: 'translateX(-50%)',
-          zIndex: 1000,
+          zIndex: 40,
           background: 'rgba(255, 255, 255, 0.9)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
@@ -1875,7 +1875,7 @@ export default function Home() {
             bottom: '30px',
             left: '50%',
             transform: 'translateX(-50%)',
-            zIndex: 1000,
+            zIndex: 40,
             background: showDownloadPopup ? '#f3f4f6' : 'rgba(255, 255, 255, 0.9)',
             backdropFilter: 'blur(16px)',
             WebkitBackdropFilter: 'blur(16px)',

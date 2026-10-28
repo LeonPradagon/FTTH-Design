@@ -53,6 +53,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --bg-color: #0f172a;
   --text-color: #f8fafc;
   --text-muted: #94a3b8;
@@ -454,6 +455,32 @@ button:disabled {
   color: #334155;
 }
 
+.dark .map-edit-toolbar,
+.dark .map-generation-trigger,
+.dark .map-generation-options,
+.dark .map-navigation-controls {
+  background-color: var(--card-bg) !important;
+  border-color: var(--panel-border) !important;
+  color: var(--text-color);
+}
+
+.dark .map-navigation-controls button {
+  color: var(--text-color) !important;
+  border-color: var(--panel-border) !important;
+}
+
+.dark .map-edit-tool {
+  color: var(--text-muted);
+}
+
+.dark .map-generation-options button {
+  color: var(--text-color);
+}
+
+.dark .map-generation-options button:hover:not(:disabled) {
+  background: var(--item-bg-hover);
+}
+
 .map-generation-options {
   position: absolute;
   top: calc(100% + 8px);
@@ -609,6 +636,206 @@ button:disabled {
 
 .dark .slider {
   background-color: #475569;
+}
+
+.dark .sidebar-container {
+  color: var(--text-color);
+  border-right-color: var(--panel-border) !important;
+}
+
+.dark .sidebar-container h3,
+.dark .sidebar-container p,
+.dark .sidebar-container span,
+.dark .sidebar-container button:not(.delete-btn) {
+  color: var(--text-color) !important;
+}
+
+.dark .sidebar-container button:not(.delete-btn):hover {
+  background-color: var(--item-bg-hover) !important;
+}
+
+.dark .sidebar-container .project-item,
+.dark .sidebar-container .bg-white,
+.dark .sidebar-container .bg-gray-50,
+.dark .sidebar-container .bg-gray-100 {
+  background-color: var(--card-bg) !important;
+}
+
+.dark .sidebar-container [class*="border-gray-"],
+.dark .sidebar-container .project-item {
+  border-color: var(--panel-border) !important;
+}
+
+.dark .sidebar-container .project-item > div:first-child {
+  color: var(--text-color) !important;
+}
+
+.dark .sidebar-container .project-item > div:nth-child(2) {
+  color: var(--text-muted) !important;
+}
+
+.dark .sidebar-container .text-gray-900,
+.dark .sidebar-container .text-gray-800,
+.dark .sidebar-container .text-gray-700,
+.dark .sidebar-container .text-gray-600,
+.dark .sidebar-container .text-gray-500 {
+  color: var(--text-muted) !important;
+}
+
+.dark .sidebar-container .bg-blue-50 {
+  background-color: #1e3a8a !important;
+}
+
+.dark .sidebar-container button.bg-blue-50 {
+  color: #dbeafe !important;
+}
+
+.dark .bg-white,
+.dark [class~="bg-white/95"],
+.dark .bg-gray-50,
+.dark [class~="bg-gray-50/50"],
+.dark .bg-gray-100,
+.dark .bg-gray-200 {
+  background-color: var(--card-bg) !important;
+}
+
+.dark [class*="border-gray-"],
+.dark [class*="divide-gray-"] {
+  border-color: var(--panel-border) !important;
+}
+
+.dark .text-gray-900,
+.dark .text-gray-800,
+.dark .text-gray-700,
+.dark .text-gray-600 {
+  color: var(--text-color) !important;
+}
+
+.dark .text-gray-500,
+.dark .text-gray-400 {
+  color: var(--text-muted) !important;
+}
+
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+.dark select,
+.dark textarea {
+  background-color: var(--card-bg);
+  border-color: var(--panel-border);
+  color: var(--text-color);
+}
+
+.dark .bg-blue-50 {
+  background-color: #172554 !important;
+}
+
+.dark .bg-amber-50,
+.dark .bg-yellow-50 {
+  background-color: #422006 !important;
+}
+
+.dark .bg-green-50,
+.dark .bg-emerald-50 {
+  background-color: #052e16 !important;
+}
+
+.dark .bg-red-50 {
+  background-color: #450a0a !important;
+}
+
+.dark .bg-amber-100 {
+  background-color: #422006 !important;
+}
+
+.dark .bg-red-100 {
+  background-color: #450a0a !important;
+}
+
+.dark .text-amber-700,
+.dark .text-amber-800,
+.dark .text-yellow-700,
+.dark .text-yellow-800 {
+  color: #fcd34d !important;
+}
+
+.dark .text-green-700,
+.dark .text-green-800,
+.dark .text-emerald-700,
+.dark .text-emerald-800 {
+  color: #86efac !important;
+}
+
+.dark .text-red-700,
+.dark .text-red-800 {
+  color: #fca5a5 !important;
+}
+
+.dark .account-center-card {
+  background: var(--card-bg) !important;
+  color: var(--text-color);
+}
+
+.dark .account-center-card h2,
+.dark .account-center-card h3,
+.dark .account-center-card h4,
+.dark .account-center-card p,
+.dark .account-center-card label {
+  color: var(--text-color) !important;
+}
+
+.dark .account-center-card input,
+.dark .account-center-card select {
+  background-color: var(--bg-color) !important;
+  border-color: var(--panel-border) !important;
+  color: var(--text-color) !important;
+}
+
+.dark .account-center-card button[style*="background: white"] {
+  background-color: var(--item-bg) !important;
+  border-color: var(--panel-border) !important;
+  color: var(--text-color) !important;
+}
+
+.dark .account-center-card button[style*="background: #f3f4f6"] {
+  background-color: var(--item-bg) !important;
+  color: var(--text-color) !important;
+}
+
+.dark .account-center-card .account-secondary-button {
+  background-color: var(--item-bg) !important;
+  color: var(--text-color) !important;
+}
+
+.dark .account-center-card button[style*="border-bottom: 2px solid transparent"] {
+  color: var(--text-muted) !important;
+}
+
+.dark .account-center-card > div:last-child {
+  background-color: var(--bg-color) !important;
+  border-color: var(--panel-border) !important;
+}
+
+.dark .account-center-card .account-danger-warning {
+  background: #450a0a !important;
+  border-color: #7f1d1d !important;
+}
+
+.dark .account-center-card .account-danger-warning h3,
+.dark .account-center-card .account-danger-warning p {
+  color: #fecaca !important;
+}
+
+.dark .top-navbar button.account-button {
+  background: var(--card-bg) !important;
+  border-color: var(--panel-border) !important;
+}
+
+.dark .top-navbar button.account-button span {
+  color: var(--text-color) !important;
+}
+
+.dark .top-navbar button.account-button .account-avatar {
+  background: var(--item-bg-hover) !important;
+  color: var(--text-color) !important;
 }
 
 .slider:before {

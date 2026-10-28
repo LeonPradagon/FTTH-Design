@@ -58,6 +58,7 @@ export function Navbar({
             <div style={{ display: 'flex', alignItems: 'center', marginRight: '16px', borderRight: '1px solid #e5e7eb', paddingRight: '16px', position: 'relative' }}>
               <button
                 onClick={() => setShowAccountCenter(true)}
+                className="account-button"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -74,7 +75,7 @@ export function Navbar({
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.backgroundColor = 'white'; }}
                 title="Buka Account Center"
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '50%', background: '#f3f4f6', color: '#4b5563' }}>
+                <div className="account-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '50%', background: '#f3f4f6', color: '#4b5563' }}>
                   <User size={18} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>

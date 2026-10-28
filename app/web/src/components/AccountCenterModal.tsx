@@ -195,7 +195,7 @@ export function AccountCenterModal({ onClose, userEmail, userRole }: AccountCent
 
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000 }}>
-      <div style={{ background: 'white', borderRadius: '16px', width: '450px', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+      <div className="account-center-card" style={{ background: 'white', borderRadius: '16px', width: '450px', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
         
         {/* Header */}
         <div style={{ padding: '20px 24px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -256,7 +256,7 @@ export function AccountCenterModal({ onClose, userEmail, userRole }: AccountCent
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: '#374151' }}>Ubah Password</h3>
-                <button onClick={handleGeneratePassword} style={{ background: '#f3f4f6', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 500, color: '#4b5563', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <button className="account-secondary-button" onClick={handleGeneratePassword} style={{ background: '#f3f4f6', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 500, color: '#4b5563', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <RefreshCw size={12} /> Generate
                 </button>
               </div>
@@ -384,7 +384,7 @@ export function AccountCenterModal({ onClose, userEmail, userRole }: AccountCent
                 </p>
               </div>
 
-              <div style={{ background: '#fef2f2', padding: '16px', borderRadius: '8px', border: '1px solid #fecaca' }}>
+              <div className="account-danger-warning" style={{ background: '#fef2f2', padding: '16px', borderRadius: '8px', border: '1px solid #fecaca' }}>
                 <h3 style={{ margin: '0 0 8px 0', fontSize: '15px', fontWeight: 600, color: '#b91c1c', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <AlertTriangle size={16} /> Peringatan
                 </h3>

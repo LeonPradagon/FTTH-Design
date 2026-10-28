@@ -1155,7 +1155,7 @@ export default function MapComponent({ layers, onShowMessage, onDrawFile, filter
       </div>
 
       {/* Map Navigation Controls */}
-      <div 
+      <div className="map-navigation-controls"
         style={{
           position: 'absolute',
           top: '20px',
