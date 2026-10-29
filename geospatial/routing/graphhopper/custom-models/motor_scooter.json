@@ -1,0 +1,19 @@
+{
+  "distance_influence": 200,
+  "priority": [
+    {
+      "if": "road_class == MOTORWAY",
+      "multiply_by": 0.5
+    },
+    {
+      "if": "toll == ALL || toll == HGV",
+      "multiply_by": 0.5
+    }
+  ],
+  "speed": [
+    {
+      "if": "true",
+      "limit_to": 70
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+services:
+  frontend:
+    image: ghcr.io/aidece/geospatial/frontend:${IMAGE_TAG:-dev}
+    pull_policy: always
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+      - "${FRONTEND_HTTPS_PORT:-443}:443"
+    environment:
+      BACKEND_ORIGIN: ${BACKEND_ORIGIN:-http://110.239.95.95:3000}
+      FTTH_ORIGIN: ${FTTH_ORIGIN:-http://ftth-web:3000}
+      FRONTEND_DOMAIN: ${FRONTEND_DOMAIN:-geospatial.starliteindonesia.com}
+    networks:
+      - default
+      - ftth-gateway
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  ftth-gateway:
+    external: true
+    name: geospatial-ftth-gateway

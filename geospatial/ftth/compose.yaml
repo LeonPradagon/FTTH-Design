@@ -1,0 +1,114 @@
+name: geospatial-ftth
+
+services:
+  db:
+    image: postgis/postgis:16-3.5-alpine
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ftth}
+      POSTGRES_USER: ${POSTGRES_USER:-ftth}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ftth-dev-password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${FTTH_DB_PORT:-5434}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      dockerfile: app/server/Dockerfile
+      target: migrate
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ftth}:${POSTGRES_PASSWORD:-ftth-dev-password}@db:5432/${POSTGRES_DB:-ftth}?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.34
+    command: ["mini", "-dir=/data", "-ip=seaweedfs"]
+    restart: unless-stopped
+    environment:
+      AWS_ACCESS_KEY_ID: ${SEAWEEDFS_ACCESS_KEY_ID:-ftth-local}
+      AWS_SECRET_ACCESS_KEY: ${SEAWEEDFS_SECRET_ACCESS_KEY:-ftth-local-secret}
+      S3_BUCKET: ${SEAWEEDFS_BUCKET:-ftth-designs}
+    volumes:
+      - seaweed_data:/data
+    ports:
+      - "127.0.0.1:${FTTH_STORAGE_PORT:-8334}:8333"
+    healthcheck:
+      test: ["CMD", "curl", "-sS", "-o", "/dev/null", "http://127.0.0.1:8333/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  api:
+    build:
+      context: .
+      dockerfile: app/server/Dockerfile
+    ports:
+      - "127.0.0.1:${FTTH_API_PORT:-8101}:8001"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ftth}:${POSTGRES_PASSWORD:-ftth-dev-password}@db:5432/${POSTGRES_DB:-ftth}?schema=public
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in ftth/.env}
+      BACKEND_PROXY_SECRET: ${BACKEND_PROXY_SECRET:?Set BACKEND_PROXY_SECRET in ftth/.env}
+      USER_CACHE_ROOT: /workspace/app/server/cache/users
+      OSM_REQUEST_TIMEOUT_SECONDS: ${OSM_REQUEST_TIMEOUT_SECONDS:-15}
+      OSM_SOURCE_MODE: ${OSM_SOURCE_MODE:-auto}
+      OSM_ONLINE_MAX_AREA_KM2: ${OSM_ONLINE_MAX_AREA_KM2:-25}
+      OSM_ONLINE_MAX_TILES: ${OSM_ONLINE_MAX_TILES:-4}
+      OSM_LOCAL_FALLBACK_ON_ONLINE_FAILURE: ${OSM_LOCAL_FALLBACK_ON_ONLINE_FAILURE:-true}
+      STORAGE_ENDPOINT_URL: http://seaweedfs:8333
+      STORAGE_ACCESS_KEY_ID: ${SEAWEEDFS_ACCESS_KEY_ID:-ftth-local}
+      STORAGE_SECRET_ACCESS_KEY: ${SEAWEEDFS_SECRET_ACCESS_KEY:-ftth-local-secret}
+      STORAGE_BUCKET: ${SEAWEEDFS_BUCKET:-ftth-designs}
+      STORAGE_REGION: ${STORAGE_REGION:-us-east-1}
+      STORAGE_FORCE_PATH_STYLE: ${STORAGE_FORCE_PATH_STYLE:-true}
+    restart: unless-stopped
+    volumes:
+      - ./storage/nest-cache:/workspace/app/server/cache
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      seaweedfs:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: app/web/Dockerfile
+      args:
+        NEXT_PUBLIC_BASE_PATH: /ftth
+    ports:
+      - "127.0.0.1:${FTTH_WEB_PORT:-3301}:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ftth}:${POSTGRES_PASSWORD:-ftth-dev-password}@db:5432/${POSTGRES_DB:-ftth}?schema=public
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in ftth/.env}
+      BETTER_AUTH_URL: ${FTTH_APP_URL:-http://localhost:5173/ftth}
+      BACKEND_URL: http://api:8001
+      BACKEND_PROXY_SECRET: ${BACKEND_PROXY_SECRET:?Set BACKEND_PROXY_SECRET in ftth/.env}
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      default: {}
+      ftth-gateway:
+        aliases:
+          - ftth-web
+
+volumes:
+  postgres_data:
+  seaweed_data:
+
+networks:
+  ftth-gateway:
+    name: geospatial-ftth-gateway

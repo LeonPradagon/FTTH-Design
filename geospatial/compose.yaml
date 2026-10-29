@@ -1,0 +1,128 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: dockerfile
+      target: dev
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3000}
+      VITE_FTTH_URL: ${VITE_FTTH_URL:-/ftth}
+      VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY:-}
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - geospatial-net
+
+  migrate:
+    image: geospatial-backend:dev
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: ["npm", "run", "db:migrate"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@db:5432/geospatial_app}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - geospatial-net
+
+  backend:
+    image: geospatial-backend:dev
+    build:
+      context: ./backend
+      dockerfile: dockerfile
+      target: dev
+    volumes:
+      - ./backend:/app
+      - ./.data:/app/.data
+      - /app/node_modules
+    command: npm run start:dev
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: ${PORT:-3000}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@db:5432/geospatial_app}
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+      JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key_change_me}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-168}
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-admin@example.com}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-example123}
+      INITIAL_DESIGNER_EMAIL: ${INITIAL_DESIGNER_EMAIL:-designer@example.com}
+      INITIAL_DESIGNER_PASSWORD: ${INITIAL_DESIGNER_PASSWORD:-example123}
+      GRAPHHOPPER_URL: ${GRAPHHOPPER_URL:-http://graphhopper:8989}
+      GRAPHHOPPER_TIMEOUT_MS: ${GRAPHHOPPER_TIMEOUT_MS:-15000}
+      GRAPHHOPPER_PROFILE: ${GRAPHHOPPER_PROFILE:-motor_scooter}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      graphhopper:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health >/dev/null || exit 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 3s
+    restart: unless-stopped
+    networks:
+      - geospatial-net
+
+  graphhopper:
+    build:
+      context: ./routing/graphhopper
+    volumes:
+      - ./.data/graphhopper:/data
+    environment:
+      GRAPHHOPPER_OSM_URL: ${GRAPHHOPPER_OSM_URL:-https://download.geofabrik.de/asia/indonesia-latest.osm.pbf}
+      GRAPHHOPPER_FORCE_REBUILD: ${GRAPHHOPPER_FORCE_REBUILD:-false}
+      JAVA_OPTS: ${GRAPHHOPPER_JAVA_OPTS:--Xmx4g}
+    ports:
+      - "${GRAPHHOPPER_PORT:-8989}:8989"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8989/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 120
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - geospatial-net
+
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-geospatial_app}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-geospatial_app}"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 2s
+    restart: unless-stopped
+    networks:
+      - geospatial-net
+
+networks:
+  geospatial-net:
+
+volumes:
+  postgres_data:

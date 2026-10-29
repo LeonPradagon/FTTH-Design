@@ -1,0 +1,41 @@
+server:
+  application_connectors:
+    - type: http
+      port: 8989
+      bind_host: 0.0.0.0
+  admin_connectors:
+    - type: http
+      port: 8990
+      bind_host: 0.0.0.0
+
+graphhopper:
+  datareader.file: ""
+  graph.location: /data/graph-cache
+  custom_models.directory: /opt/graphhopper/custom-models
+
+  profiles:
+    - name: motor_scooter
+      custom_model_files: [car.json, motor_scooter.json]
+
+  profiles_ch: []
+  profiles_lm: []
+
+  graph.encoded_values: car_access, car_average_speed, country, road_class, road_environment, road_access, roundabout, max_speed, toll
+
+  routing.non_ch.max_waypoint_distance: 1000000
+  routing.timeout_ms: 300000
+  routing.snap_preventions_default: tunnel, bridge, ferry
+
+  import.osm.ignored_highways: footway,construction,cycleway,path,steps
+  graph.dataaccess.default_type: RAM_STORE
+  prepare.min_network_size: 200
+  prepare.subnetworks.threads: 1
+
+logging:
+  appenders:
+    - type: console
+      threshold: INFO
+      log_format: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  loggers:
+    "com.graphhopper":
+      level: INFO

@@ -1,0 +1,43 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+build/
+backend/dist/
+*.tsbuildinfo
+
+# environment files
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# test output
+coverage/
+.nyc_output/
+.playwright-cli
+output/playwright
+
+# caches / temp
+.cache/
+.tmp/
+tmp/
+temp/
+
+# editor / OS
+.DS_Store
+.vscode/
+.idea/
+
+# agents
+.agents/
+
+# KMZ data
+.data/

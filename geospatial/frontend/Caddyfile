@@ -1,0 +1,27 @@
+(geospatial_app) {
+	root * /srv
+	encode zstd gzip
+
+	@ftth path /ftth /ftth/*
+	handle @ftth {
+		reverse_proxy {$FTTH_ORIGIN:http://ftth-web:3000}
+	}
+
+	@backend path /api/* /health /maps /maps/* /provinces /provinces/* /users /users/*
+	handle @backend {
+		reverse_proxy {$BACKEND_ORIGIN:http://110.239.95.95:3000}
+	}
+
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+:80 {
+	import geospatial_app
+}
+
+{$FRONTEND_DOMAIN:geospatial.starliteindonesia.com} {
+	import geospatial_app
+}

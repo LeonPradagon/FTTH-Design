@@ -1,0 +1,33 @@
+FROM node:20-alpine AS base
+
+WORKDIR /app
+
+COPY package*.json ./
+
+FROM base AS dev
+RUN npm ci
+
+COPY . .
+
+EXPOSE 3000
+CMD ["npm", "run", "start:dev"]
+
+FROM base AS build
+RUN npm ci
+
+COPY . .
+RUN npm run build
+
+FROM base AS production
+ENV NODE_ENV=production
+
+RUN npm ci --include=dev && npm cache clean --force
+
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/drizzle.config.ts ./drizzle.config.ts
+COPY --from=build /app/src/database/migrations ./src/database/migrations
+COPY --from=build /app/src/database/schemas ./src/database/schemas
+COPY --from=build /app/src/regions/data ./src/regions/data
+
+EXPOSE 3000
+CMD ["npm", "run", "start:prod"]

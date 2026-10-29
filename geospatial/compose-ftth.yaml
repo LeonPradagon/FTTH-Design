@@ -1,0 +1,12 @@
+services:
+  frontend:
+    environment:
+      FTTH_DEV_ORIGIN: http://ftth-web:3000
+    networks:
+      - geospatial-net
+      - ftth-gateway
+
+networks:
+  ftth-gateway:
+    external: true
+    name: geospatial-ftth-gateway
